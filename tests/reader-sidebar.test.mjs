@@ -41,11 +41,11 @@ test('ordinary document outlines preserve heading hierarchy, fold on re-click an
   const a=sidebar();a.r.outline=()=>[{node:'h1',level:1,title:'첫 장'},{node:'h2',level:2,title:'첫 절'},{node:'h3',level:3,title:'<작은 절>'},{node:'h4',level:1,title:'둘째 장'}];a.open('outline');
   const panel=a.doc.querySelector('#sidebar');assert.equal(panel.querySelectorAll('[data-outline-group]').length,2);
   assert.equal(panel.querySelector('[data-outline-group="0"] [data-outline-group="1"] [data-heading="2"]').textContent,'<작은 절>');
-  assert.equal(panel.querySelectorAll('[data-outline-group][open]').length,2);a.choose('outline');assert.equal(panel.querySelectorAll('[data-outline-group][open]').length,0);
+  assert.equal(panel.querySelectorAll('[data-outline-group][open]').length,0);a.choose('outline');assert.equal(panel.querySelectorAll('[data-outline-group][open]').length,0);
   a.choose('search');a.choose('outline');assert.equal(panel.querySelectorAll('[data-outline-group][open]').length,0);
-  let group=panel.querySelector('[data-outline-group="0"]');group.open=true;group.setAttribute('open','');group.ontoggle();panel.querySelector('[data-heading="0"]').onclick();assert.equal(group.open,true);assert.deepEqual(a.calls.headings,['h1']);
+  let group=panel.querySelector('[data-outline-group="0"]');group.open=true;group.setAttribute('open','');group.ontoggle();panel.querySelector('[data-heading="0"]').onclick();assert.equal(group.open,false);panel.querySelector('[data-heading="0"]').onclick();assert.equal(group.open,true);assert.deepEqual(a.calls.headings,['h1','h1']);
   a.choose('bookmarks');a.choose('outline');assert.equal(panel.querySelector('[data-outline-group="0"]').hasAttribute('open'),true);assert.equal(panel.querySelector('[data-outline-group="1"]').hasAttribute('open'),false);
-  const other={...a.r,outlineTreeOpen:new Map(),outlineAllCollapsed:false};a.setReader(other);a.open('outline');assert.equal(panel.querySelectorAll('[data-outline-group][open]').length,2);
+  const other={...a.r,outlineTreeOpen:new Map(),outlineAllCollapsed:false};a.setReader(other);a.open('outline');assert.equal(panel.querySelectorAll('[data-outline-group][open]').length,0);
   a.setReader(a.r);a.open('outline');assert.equal(panel.querySelectorAll('[data-outline-group][open]').length,1);assert.equal(panel.querySelector('script,img'),null);assert.equal(a.calls.saved,0);
 });
 test('source and common sidebar keys share bounds, step sizes, minimum strip, restore and reset behavior',()=>{
@@ -141,8 +141,9 @@ test('returning from search, annotations or bookmarks preserves TOC expansion un
   }
 });
 
-test('initial setup, automatic render and native sidebar restore never collapse an expanded TOC',()=>{
-  const a=collapsibleSidebar();assert.equal(a.tree.querySelectorAll('details[open]').length,2);
+test('native TOC starts folded once and preserves user expansion on automatic rendering and restore',()=>{
+  const a=collapsibleSidebar();assert.equal(a.tree.querySelectorAll('details[open]').length,0);
+  for(const id of ['part','chapter']){const group=a.doc.getElementById(id);group.open=true;group.setAttribute('open','');}
   a.r.setupDocumentSidebar();a.r.showDocumentSidebarView('outline');a.r.refreshDocumentSidebar();assert.equal(a.tree.querySelectorAll('details[open]').length,2);
 });
 
@@ -534,6 +535,7 @@ test('annotation disclosure state survives view changes and deletion without sav
 test('reselecting annotations folds every level in either sidebar without changing notes, source TOC or body details',()=>{
   for(const native of [false,true]){
     const a=native?collapsibleSidebar():sidebar(),before=structuredClone(a.r.metadata);
+    if(native)for(const id of ['part','chapter']){a.doc.getElementById(id).setAttribute('open','');}
     a.r.annotationTree=()=>[{id:'book',title:'책',count:1,annotations:[],children:[{id:'chapter',title:'장',count:1,annotations:a.r.metadata.annotations,children:[]}]}];
     if(native)a.choose('annotations');else a.open('annotations');
     const panel=native?a.r.documentSidebarUI:a.doc.querySelector('#sidebar'),groups=[...panel.querySelectorAll('[data-annotation-group]')];
@@ -563,6 +565,7 @@ test('annotation reselection folds only the document currently shown by the shar
 test('bookmark reselection folds every level in common and native sidebars and keeps annotation, TOC and data state',()=>{
   for(const native of [false,true]){
     const a=native?collapsibleSidebar():sidebar(),panel=native?a.r.documentSidebarUI:a.doc.querySelector('#sidebar'),before=structuredClone(a.r.metadata);
+    if(native)for(const id of ['part','chapter']){a.doc.getElementById(id).setAttribute('open','');}
     a.r.bookmarkTree=()=>[{id:'part',title:'1부',count:1,bookmarks:[],children:[{id:'chapter',title:'1장',count:1,bookmarks:a.r.metadata.bookmarks,children:[]}]}];
     if(native)a.choose('bookmarks');else a.open('bookmarks');
     for(const group of panel.querySelectorAll('[data-bookmark-group]')){group.open=true;group.setAttribute('open','');group.ontoggle();}
@@ -646,7 +649,7 @@ test('the visible source TOC gets inline choices without moving its tree, listen
   panel.querySelector('[data-sidebar-view=annotations]').onclick();assert.equal(panel.querySelector('[data-annotation] .annotation-main').textContent,'남겨 둔 메모');assert.equal(panel.querySelector('[data-annotation] .annotation-meta').textContent,'메모');
   panel.querySelector('[data-sidebar-view=outline]').onclick();assert.equal(toc.scrollTop,37);assert.equal(panel.querySelector('.sidebar-content').hidden,false);
   assert.equal(panel.querySelectorAll('.sidebar-bookmarks').length,0);assert.equal(panel.querySelector('#htmlmemo-native-add-bookmark'),null);assert.equal(panel.querySelector('[data-heading]'),null,'the source TOC is not duplicated');
-  assert.strictEqual(tree.parentElement,toc);tree.querySelector('summary').onclick();assert.equal(clicks,1);assert.equal(tree.hasAttribute('open'),true);
+  assert.strictEqual(tree.parentElement,toc);tree.querySelector('summary').onclick();assert.equal(clicks,1);assert.equal(tree.hasAttribute('open'),false);
   assert.equal(textIndex(doc).text,text);a.r.setupDocumentSidebar();assert.equal(toc.querySelectorAll('[data-htmlmemo-doc-sidebar-ui]').length,1);
 });
 test('native bookmark icon opens its own view and keeps navigation and editing in the same panel',()=>{

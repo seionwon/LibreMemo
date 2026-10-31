@@ -1,4 +1,4 @@
-import {revealDocumentControl,toggleDocumentSidebarFromToolbar} from './document-controls.mjs';
+import {revealDocumentControl,toggleDocumentSidebarFromToolbar,revealAppOutline} from './document-controls.mjs';
 import {chooseDocumentExport} from './export-flow.mjs';
 import {publicAppURL} from '../public/src/install.js';
 // Requires permission to bind localhost and launch a dedicated Chrome process.
@@ -867,7 +867,7 @@ test('real Chrome: Pages-only pasted reading controls default to outline and ret
     await page.click(control('next-heading'));await page.waitFor(`document.querySelector(${JSON.stringify(control('next-heading'))}).disabled`);const last=await top();assert.ok(last>second);
     await page.evaluate(`document.querySelector(${JSON.stringify(control('next-heading'))}).click()`);assert.equal(await top(),last,'the final heading never wraps around');
     await page.click(control('reading-back'));assert.equal(await top(),second);await page.click(control('reading-back'));assert.equal(await top(),0);assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(control('previous-heading'))}).disabled`),true);
-    await page.click('#sidebar [data-heading="2"]');await page.waitFor(`${host}.querySelector('.reader-viewport').scrollTop>500`);assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(control('reading-back'))}).disabled`),false);await page.click(control('reading-back'));assert.equal(await top(),0);
+    await revealAppOutline(page,'#sidebar [data-heading="2"]');await page.click('#sidebar [data-heading="2"]');await page.waitFor(`${host}.querySelector('.reader-viewport').scrollTop>500`);assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(control('reading-back'))}).disabled`),false);await page.click(control('reading-back'));assert.equal(await top(),0);
     await page.evaluate(`${doc}.querySelector('a').click()`);await page.waitFor(`${host}.querySelector('.reader-viewport').scrollTop>500`);await page.click(control('reading-back'));assert.equal(await top(),0);report.navigation=true;
     stage='font-and-annotation';await page.evaluate(`(()=>{const d=${doc},p=d.querySelector('article>p'),r=d.createRange();r.selectNodeContents(p);const s=d.getSelection();s.removeAllRanges();s.addRange(r);d.dispatchEvent(new Event('selectionchange'));})()`);await page.click('#toolbar [data-action=highlight]');await page.waitFor(ready+'&&'+saved+`&&${doc}.querySelector('[data-htmlmemo-mark]')`);
     const id=await page.evaluate(`(async()=>{const rows=await(await import('./src/storage.js')).listDocuments();return rows.find(r=>r.title==='붙여넣기 읽기 도구').id;})()`),before=await font();

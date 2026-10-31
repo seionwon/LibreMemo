@@ -48,3 +48,23 @@ test('scripted scrolling reaches only connected body targets and preserves navig
   const panel=a.doc.createElement('div');panel.setAttribute('data-htmlmemo-ui','');panel.append(target);a.doc.body.append(panel);assert.equal(a.r.navigateSourceTarget(target),false);
   a.r.preparing=true;assert.equal(a.r.navigateSourceTarget(a.doc.querySelector('main h2')),false);assert.deepEqual(a.jumps,['chapter']);
 });
+
+test('a source TOC title link toggles its disclosure even when source navigation prevents the default click',()=>{
+  const a=navigation(),group=a.doc.querySelector('details');
+  a.click('summary a');assert.equal(group.hasAttribute('open'),true);
+  a.click('summary a');assert.equal(group.hasAttribute('open'),false);
+});
+
+test('TOC navigation aligns a tall chapter start in the content pane and clears horizontal drift',()=>{
+  const r=Object.create(Reader.prototype),target={localName:'section',getBoundingClientRect:()=>({top:500,left:700,width:1400,height:1800})};
+  Object.defineProperties(r,{scrollTop:{value:400,writable:true},scrollLeft:{value:250,writable:true}});
+  Object.assign(r,{nativeScroll:true,zoom:2,viewport:{clientWidth:800,clientHeight:600},plainReadingButtons:{},layerOrigin:()=>({top:-100,left:250}),revealNestedScroll(){}});
+  r.jump(target,{align:'start'});assert.equal(r.scrollTop,1188);assert.equal(r.scrollLeft,0);
+});
+
+test('static TOC navigation uses the outer pane and frame offset rather than inner annotation coordinates',()=>{
+  const r=Object.create(Reader.prototype),target={localName:'h2',getBoundingClientRect:()=>({top:400,left:50,width:900,height:70})};
+  Object.defineProperties(r,{scrollTop:{value:0,writable:true},scrollLeft:{value:250,writable:true}});
+  Object.assign(r,{nativeScroll:false,zoom:2,viewport:{clientWidth:800,clientHeight:600,getBoundingClientRect:()=>({top:50})},frame:{getBoundingClientRect:()=>({top:75})},plainReadingButtons:{},layerOrigin:()=>({top:-1000,left:0}),revealNestedScroll(){}});
+  r.jump(target,{align:'start'});assert.equal(r.scrollTop,813);assert.equal(r.scrollLeft,0);assert.equal(r.readingHeadingCursor.node,target);
+});

@@ -47,7 +47,8 @@ const openPicker = () => typeof window.showOpenFilePicker === 'function';
 const htmlTypes = [{description:'HTML 문서',accept:{'text/html':['.html','.htm']}}];
 const importTypes = [{description:'문서 · 스프레드시트 · 슬라이드',accept:{'text/html':['.html','.htm'],'multipart/related':['.mhtml','.mht'],'application/x-mimearchive':['.mhtml','.mht'],'application/pdf':['.pdf'],'application/zip':['.librememo'],...OFFICE_MIMES}}];
 const safely = fn => (...args) => { try { Promise.resolve(fn(...args)).catch(showError); } catch(error) { showError(error); } };
-function toast(message, error = false) { const el=$('#toast'); el.textContent=message; el.classList.toggle('error',error); el.hidden=false; clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.hidden=true,error?6500:3500); }
+function isSecurityWarning(message){return /악성\s*코드.*(?:포함|감지)|malicious\s+(?:code|file)|(?:contains|detected|blocked).*malware/i.test(String(message));}
+function toast(message, error = false) { const el=$('#toast'),security=isSecurityWarning(message);el.setAttribute('role',security?'alert':'status');el.textContent=message;el.classList.toggle('error',error);el.classList.toggle('security-warning',security);el.hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.hidden=true,error||security?6500:3500); }
 function showError(error) { if (error?.name !== 'AbortError') toast(error?.message || String(error),true); }
 function setButton(selector, name, label = '') { $(selector).innerHTML=icon(name)+(label ? `<span>${label}</span>`:''); }
 function setIconButton(selector, name, label, size = 18) { const button=$(selector);button.innerHTML=icon(name,size);button.title=label;button.setAttribute('aria-label',label); }
@@ -1286,7 +1287,7 @@ function renderOutlineTree(outline,r){
     (stack.at(-1)?.children||roots).push(node);stack.push(node);
   });
   const row=item=>`<button class="outline-item" data-heading="${item.index}" title="${esc(item.title)}">${esc(item.title)}</button>`;
-  const branch=item=>item.children.length?`<details class="outline-group" data-outline-group="${item.index}"${(r.outlineTreeOpen.get(String(item.index))??!r.outlineAllCollapsed)?' open':''}><summary>${row(item)}</summary><div class="outline-group-body">${item.children.map(branch).join('')}</div></details>`:row(item);
+  const branch=item=>item.children.length?`<details class="outline-group" data-outline-group="${item.index}"${r.outlineTreeOpen.get(String(item.index))?' open':''}><summary>${row(item)}</summary><div class="outline-group-body">${item.children.map(branch).join('')}</div></details>`:row(item);
   return `<div class="sidebar-outline-tree">${roots.map(branch).join('')}</div>`;
 }
 function updateOutlineLocation(panel,r){
@@ -1390,6 +1391,8 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
     $$('[data-outline-group]',panel).forEach(group=>group.ontoggle=()=>r.outlineTreeOpen.set(group.dataset.outlineGroup,!!group.open));
     $$('[data-heading]',panel).forEach(button=>button.onclick=event=>{
       event?.preventDefault();event?.stopPropagation();
+      const group=button.parentElement?.localName==='summary'?button.parentElement.parentElement:null;
+      if(group?.matches('details[data-outline-group]')){const open=!(group.open||group.hasAttribute('open'));group.open=open;group.toggleAttribute('open',open);r.outlineTreeOpen.set(group.dataset.outlineGroup,open);}
       const node=outline[Number(button.dataset.heading)].node,result=r.navigateSourceTarget?r.navigateSourceTarget(node):r.jump(node);updateOutlineLocation(panel,r);return result;
     });
     updateOutlineLocation(panel,r);
@@ -1511,7 +1514,7 @@ async function annotationHistory(tab, selection = {}, valid = () => true) {
 }
 function documentInfo(tab) {
   const m=tab.reader.metadata;
-  modal(`<div class="dialog-heading"><h2>문서 정보</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><dl class="document-info"><dt>제목</dt><dd>${esc(m.title)}</dd><dt>파일</dt><dd>${esc(tab.record.name)}</dd><dt>원본</dt><dd>${m.source?`<a href="${esc(m.source)}" target="_blank" rel="noopener noreferrer">${esc(m.source)}</a>`:'로컬 문서 파일'}</dd><dt>저장 위치</dt><dd>앱 보관함 (원본 파일은 변경하지 않음)</dd><dt>주석</dt><dd>${m.annotations.length}개</dd></dl>${m.warnings.length?`<details class="capture-warnings"><summary>보관하지 못한 리소스 ${m.warnings.length}개</summary><ul>${m.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul></details>`:''}<p class="dialog-description small">작업은 이 기기의 서재에 자동 저장됩니다. 다른 사람에게 주석을 보내려면 내보내기에서 보관 파일·HTML·PDF 중 알맞은 형식을 선택하세요.</p>${annotationExportGuide()}`);
+  modal(`<div class="dialog-heading"><h2>문서 정보</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><dl class="document-info"><dt>제목</dt><dd>${esc(m.title)}</dd><dt>파일</dt><dd>${esc(tab.record.name)}</dd><dt>원본</dt><dd>${m.source?`<a href="${esc(m.source)}" target="_blank" rel="noopener noreferrer">${esc(m.source)}</a>`:'로컬 문서 파일'}</dd><dt>저장 위치</dt><dd>앱 보관함 (원본 파일은 변경하지 않음)</dd><dt>주석</dt><dd>${m.annotations.length}개</dd></dl>${m.warnings.length?`<details class="capture-warnings"><summary>보관하지 못한 리소스 ${m.warnings.length}개</summary><ul>${m.warnings.map(w=>`<li${isSecurityWarning(w)?' class="security-warning" role="alert"':''}>${esc(w)}</li>`).join('')}</ul></details>`:''}<p class="dialog-description small">작업은 이 기기의 서재에 자동 저장됩니다. 다른 사람에게 주석을 보내려면 내보내기에서 보관 파일·HTML·PDF 중 알맞은 형식을 선택하세요.</p>${annotationExportGuide()}`);
 }
 function pickHTMLFile() {
   if(openPicker())return window.showOpenFilePicker({types:importTypes}).then(([handle])=>handle,error=>{if(['SecurityError','NotSupportedError'].includes(error.name))return inputFile();throw error;});

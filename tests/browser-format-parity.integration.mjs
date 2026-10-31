@@ -1,3 +1,4 @@
+import {revealAppOutline,revealDocumentControl} from './document-controls.mjs';
 // Shared UI and user actions through the shipped app, in CI/trusted Chrome only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -103,12 +104,13 @@ test('real Chrome: Pages-only common outline folding and horizontal search match
     assert.equal(await page.evaluate('document.querySelectorAll("#sidebar [data-outline-group]").length'),2);
     const headingRow=await page.evaluate(`(()=>{const row=document.querySelector('#sidebar [data-outline-group] > summary');return {height:row.getBoundingClientRect().height,titleHeight:row.querySelector('[data-heading]').getBoundingClientRect().height};})()`);
     assert.ok(Math.abs(headingRow.height-35.2)<.2,JSON.stringify(headingRow));assert.ok(Math.abs(headingRow.titleHeight-19.2)<.2,JSON.stringify(headingRow));
-    await page.click('#sidebar [data-heading="2"]');assert.equal(await page.evaluate(`document.querySelector('#sidebar [data-heading="2"]').getAttribute('aria-current')`),'location');
+    assert.equal(await page.evaluate('document.querySelectorAll("#sidebar [data-outline-group][open]").length'),0);
+    await revealAppOutline(page,'#sidebar [data-heading="2"]');await page.click('#sidebar [data-heading="2"]');assert.equal(await page.evaluate(`document.querySelector('#sidebar [data-heading="2"]').getAttribute('aria-current')`),'location');
     await page.click('#sidebar [data-sidebar-view=outline]');assert.equal(await page.evaluate('document.querySelectorAll("#sidebar [data-outline-group][open]").length'),0);
     await page.click('#sidebar [data-sidebar-view=search]');await page.click('#sidebar [data-sidebar-view=outline]');assert.equal(await page.evaluate('document.querySelectorAll("#sidebar [data-outline-group][open]").length'),0);
     const arrow=await page.evaluate("(()=>{const r=document.querySelector('#sidebar [data-outline-group=\"0\"] > summary').getBoundingClientRect();return {x:r.left+8,y:r.top+r.height/2};})()");
     for(const type of ['mousePressed','mouseReleased'])await page.send('Input.dispatchMouseEvent',{type,...arrow,button:'left',clickCount:1});
-    await page.click('#sidebar [data-heading="0"]');assert.equal(await page.evaluate(`document.querySelector('#sidebar [data-outline-group="0"]').open`),true,'heading navigation does not toggle disclosure');
+    await page.click('#sidebar [data-heading="0"]');assert.equal(await page.evaluate(`document.querySelector('#sidebar [data-outline-group="0"]').open`),false,'title navigation also closes an expanded branch');
     const csv=Array.from({length:40},(_,i)=>i===39?'숨은열검색':'열'+i).join(',')+'\n'+Array.from({length:40},(_,i)=>i).join(',');await chooseFile(page,Buffer.from(csv),'가로 검색.csv');
     await page.click('#sidebar [data-sidebar-view=search]');await page.evaluate("const i=document.querySelector('#book-search');i.value='숨은열검색';i.dispatchEvent(new Event('input'))");await page.waitFor('!!document.querySelector("[data-whole-search-index]")');await page.click('[data-whole-search-index="0"]');
     await page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
@@ -116,7 +118,7 @@ test('real Chrome: Pages-only common outline folding and horizontal search match
     await writeFile(join(root,'test-results/pages-only-format-parity-search.png'),await page.screenshot());
     await writeFile(join(root,'test-results/pages-only-format-parity-search.json'),JSON.stringify(visible,null,2));
     assert.equal(visible.inside,true,JSON.stringify(visible));if(visible.scrollWidth>visible.clientWidth)assert.ok(visible.left>0,JSON.stringify(visible));
-    assert.deepEqual(chrome.errors,[]);await writeFile(join(root,'test-results/pages-only-format-parity-navigation.json'),JSON.stringify({status:'pass',hierarchicalOutline:true,collapseRetained:true,headingClickKeepsGroup:true,horizontalSearch:visible,errors:[]},null,2));
+    assert.deepEqual(chrome.errors,[]);await writeFile(join(root,'test-results/pages-only-format-parity-navigation.json'),JSON.stringify({status:'pass',hierarchicalOutline:true,collapseRetained:true,headingClickTogglesGroup:true,horizontalSearch:visible,errors:[]},null,2));
   }finally{await chrome?.close();await env.close();}
 });
 
@@ -158,5 +160,43 @@ test('real Chrome: Pages-only MemoSuite book and fallback sidebar share tab, sea
     await page.click('#sidebar [data-sidebar-view=bookmarks]');const sharedBookmarks=await sidebarMetric('document.querySelector("#sidebar")');assert.deepEqual(sharedBookmarks,nativeBookmarks);
     await writeFile(join(root,'test-results/pages-only-format-parity-sidebar-1280.png'),await page.screenshot());
     assert.deepEqual(chrome.errors,[]);await writeFile(join(root,'test-results/pages-only-format-parity-sidebar.json'),JSON.stringify({status:'pass',outline:commonOutline,search:sharedSearch,bookmarks:sharedBookmarks,sourceAndFallbackMatch:true,compactCloseAndReopen:true,scaleStates,errors:[]},null,2));
+  }finally{await chrome?.close();await env.close();}
+});
+
+test('real Chrome: Pages-only outline titles start folded, toggle on text and align the reading pane',{timeout:150000},async()=>{
+  const env=await environment();let chrome;const positions=[];
+  try{
+    chrome=await launchChrome();const page=chrome.page;await viewport(page,1280);await page.navigate(env.url);await page.click('#paste-button');
+    const text='# 첫 장\n\n'+('첫 장의 본문입니다.\n\n'.repeat(80))+'## 첫 절\n\n'+('첫 절의 본문입니다.\n\n'.repeat(80))+'### 마지막 절\n\n'+('뒤쪽 본문입니다.\n\n'.repeat(160));
+    await page.evaluate(`document.querySelector('#paste-text').value=${JSON.stringify(text)}`);await page.click('#paste-save');await page.waitFor(`${frame}?.style.visibility==='visible'&&document.querySelector('#sidebar [data-heading="2"]')`);
+    assert.equal(await page.evaluate('document.querySelectorAll("#sidebar [data-outline-group][open]").length'),0);
+    await page.click('#sidebar [data-heading="0"]');assert.equal(await page.evaluate(`document.querySelector('[data-outline-group="0"]').open`),true);
+    await page.click('#sidebar [data-heading="0"]');assert.equal(await page.evaluate(`document.querySelector('[data-outline-group="0"]').open`),false);
+    await revealAppOutline(page,'#sidebar [data-heading="2"]');
+    const zoom=async(percent,native=false)=>{if(native)await clickNative('[data-action=zoom]');else await page.click(control('zoom'));await page.evaluate(`(()=>{const i=document.querySelector('#zoom-value');i.value=${JSON.stringify(String(percent))};i.dispatchEvent(new Event('change',{bubbles:true}));})()`);await page.click('[data-popover-close]');};
+    const placement=async(selector,native)=>{await page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');return page.evaluate(`(()=>{const f=${frame},d=f.contentDocument,r=${native?'d.querySelector("#reader-main")':'document.querySelector("#sidebar").annotationReader.viewport'},target=d.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(),b=f.getBoundingClientRect(),z=b.width/f.offsetWidth,box=r.getBoundingClientRect(),reader=${native?'null':'document.querySelector("#sidebar").annotationReader'};return {native:${native},top:b.top+target.top*z,expected:${native?'b.top+box.top*z':'box.top'}+12,left:reader?reader.scrollLeft:r.scrollLeft};})()`);};
+    for(const percent of [50,100,200]){await zoom(percent);await page.click('#sidebar [data-heading="2"]');const state=await placement('h3',false);assert.ok(Math.abs(state.top-state.expected)<2,JSON.stringify(state));assert.equal(state.left,0);positions.push({percent,...state});}
+    const source='<!doctype html><html><head><title>Native navigation</title><style>html,body{margin:0;height:100%;overflow:hidden;font:18px/1.7 sans-serif}.reader-head{height:24px;display:flex}.layout{display:grid;grid-template-columns:260px 1fr;height:calc(100% - 24px)}nav,main{overflow:auto;padding:12px}article{width:1800px}article>section{height:1800px}</style></head><body><header class="reader-head"><span class="reader-title">책</span><button id="reader-smaller">A−</button><button id="reader-larger">A+</button></header><div class="layout"><nav id="reader-nav"><div id="reader-tree"><details id="part" open><summary><a href="#chapter1">첫 장</a></summary><details id="subpart" open><summary><a href="#chapter2">첫 절</a></summary><a id="last-chapter" href="#chapter3">마지막 절</a></details></details></div></nav><main id="reader-main"><article id="reader-content"><section id="chapter1"><h1>첫 장</h1>첫 장의 본문</section><section id="chapter2"><h2>첫 절</h2>첫 절의 본문</section><section id="chapter3"><h3>마지막 절</h3>마지막 절의 본문</section></article></main></div><script>for(const a of document.querySelectorAll("#reader-tree a"))a.addEventListener("click",event=>{event.preventDefault();document.querySelector(a.getAttribute("href")).scrollIntoView();});</script></body></html>';
+    await chooseFile(page,Buffer.from(source),'원래 목차 위치.html');await page.waitFor(`${doc}.querySelector('[data-htmlmemo-native-sidebar]')`);
+    const clickNative=async selector=>{await revealDocumentControl(page,selector);const point=await page.evaluate(`(async()=>{const f=${frame},e=f.contentDocument.querySelector(${JSON.stringify(selector)});e.scrollIntoView({block:'nearest'});await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));const r=e.getBoundingClientRect(),b=f.getBoundingClientRect(),z=b.width/f.offsetWidth;return {x:b.left+(r.left+r.width/2)*z,y:b.top+(r.top+r.height/2)*z};})()`);for(const type of ['mousePressed','mouseReleased'])await page.send('Input.dispatchMouseEvent',{type,...point,button:'left',clickCount:1});};
+    assert.equal(await page.evaluate(`${doc}.querySelectorAll('#reader-tree details[open]').length`),0);
+    await clickNative('#part > summary a');await page.waitFor(`${doc}.querySelector('#part').open`);await clickNative('#part > summary a');await page.waitFor(`!${doc}.querySelector('#part').open`);
+    await clickNative('#last-chapter');
+    for(const percent of [50,100,200]){await zoom(percent,true);await clickNative('#last-chapter');await page.waitFor(`${doc}.querySelector('#reader-main').scrollTop>300`);const state=await placement('#chapter3',true);assert.ok(Math.abs(state.top-state.expected)<2,JSON.stringify(state));assert.equal(state.left,0);positions.push({percent,...state});}
+    await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,'test-results/pages-only-toc-start-position.png'),await page.screenshot());assert.deepEqual(chrome.errors,[]);
+    await writeFile(join(root,'test-results/pages-only-toc-start-position.json'),JSON.stringify({status:'pass',initiallyFolded:true,titleClickToggles:true,positions,errors:[]},null,2));
+  }catch(error){if(chrome){await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,'test-results/pages-only-toc-start-failure.png'),await chrome.page.screenshot());}throw error;}
+  finally{await chrome?.close();await env.close();}
+});
+
+test('real Chrome: Pages-only malicious-file messages have a readable warning color',{timeout:60000},async()=>{
+  const env=await environment();let chrome;
+  try{
+    chrome=await launchChrome();const page=chrome.page;await viewport(page,390);await page.navigate(env.url);
+    await page.evaluate(`window.showOpenFilePicker=async()=>[{kind:'file',getFile:async()=>{throw new DOMException('악성코드가 포함되어 있는 파일입니다.','NotReadableError');}}]`);await clickLibraryImport(page);
+    await page.waitFor("!document.querySelector('#toast').hidden&&document.querySelector('#toast').textContent==='악성코드가 포함되어 있는 파일입니다.'");
+    const warning=await page.evaluate("(()=>{const n=document.querySelector('#toast'),s=getComputedStyle(n);return {role:n.getAttribute('role'),security:n.classList.contains('security-warning'),background:s.backgroundColor,color:s.color,border:s.borderColor};})()");
+    assert.equal(warning.role,'alert');assert.equal(warning.security,true);assert.equal(warning.background,'rgb(153, 27, 27)');assert.equal(warning.color,'rgb(255, 255, 255)');
+    await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,'test-results/pages-only-security-warning-390.png'),await page.screenshot());await writeFile(join(root,'test-results/pages-only-security-warning.json'),JSON.stringify({status:'pass',warning,errors:[]},null,2));assert.deepEqual(chrome.errors,[]);
   }finally{await chrome?.close();await env.close();}
 });

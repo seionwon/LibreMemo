@@ -1,6 +1,6 @@
 import {PdfTextSearch,indexPdfSearchPage,findPdfPageMatches} from './pdf/text-search.js';
 import {createSearchTextCache} from './pdf/search-cache.js';
-import {PdfPageImage,renderPdfPageImage} from './pdf/page-rendering.js';
+import {PdfPageImage,renderPdfPageImage,PDF_PREVIEW_PIXELS,PDF_DETAIL_PIXELS,pdfVisibleRasterRegion,pdfRasterDensity,pdfRasterCovers} from './pdf/page-rendering.js';
 import {exportPDFHTML,verifyPDF} from './pdf-document.js';
 import {rangeFromOffsets,resolveTextAnchor,textIndex,selectionAnchor} from './document.js';
 import {TEXT_TOOLS} from './model.js';
@@ -8,7 +8,7 @@ import {clamp} from './utils.js';
 import {PDF_SCROLL_WINDOW_HEIGHT,pdfWindowBase} from './pdf/viewport-window.js';
 import {localFileIdentity} from './local-files.js';
 
-const SCALE=4/3,WINDOW_HEIGHT=PDF_SCROLL_WINDOW_HEIGHT,MAX_PIXELS=4*1024*1024,NS='http://www.w3.org/2000/svg';
+const SCALE=4/3,WINDOW_HEIGHT=PDF_SCROLL_WINDOW_HEIGHT,NS='http://www.w3.org/2000/svg';
 const svg=(doc,tag,attrs)=>{const node=doc.createElementNS(NS,tag);for(const [key,value]of Object.entries(attrs))node.setAttribute(key,String(value));return node;};
 let library;
 async function pdfLibrary(){
@@ -56,6 +56,10 @@ export class PdfReader{
     this.searchEngine=new PdfTextSearch(this.pdf,{store:{load:async()=>(await store()).load(),save:async pages=>(await store()).save(pages)}});
     this.onScroll=()=>{if(this.disposed||this.reader.preparing)return;this.schedule();};
     this.doc.defaultView.addEventListener('scroll',this.onScroll,{passive:true});this.reader.viewport.addEventListener('scroll',this.onScroll,{passive:true});
+    this.appWindow=this.reader.host.ownerDocument.defaultView;
+    this.onResolutionChange=()=>{this.watchPixelRatio();this.schedule();};
+    this.appWindow.addEventListener('resize',this.onResolutionChange,{passive:true});this.watchPixelRatio();
+    if(this.appWindow.ResizeObserver){this.visibilityObserver=new this.appWindow.ResizeObserver(()=>{if(this.reader.host.hidden){for(const slot of this.slots.values())this.clearDetail(slot);}else this.schedule();});this.visibilityObserver.observe(this.reader.host);}
     this.schedule();
   }
   relayout(){
@@ -121,15 +125,47 @@ export class PdfReader{
       a.className='htmlmemo-pdf-link';a.setAttribute('aria-label',item.title||'문서 링크');Object.assign(a.style,{left:Math.min(x1,x2)+'px',top:Math.min(y1,y2)+'px',width:Math.abs(x2-x1)+'px',height:Math.abs(y2-y1)+'px'});slot.inner.append(a);
     }
   }
+  pixelRatio(){return this.reader.host.ownerDocument.defaultView.devicePixelRatio||1;}
+  watchPixelRatio(){
+    this.pixelRatioQuery?.removeEventListener('change',this.onResolutionChange);
+    this.pixelRatioQuery=this.appWindow.matchMedia?.('(resolution: '+this.pixelRatio()+'dppx)');
+    this.pixelRatioQuery?.addEventListener('change',this.onResolutionChange,{once:true});
+  }
+  visibleRegion(slot){
+    const frame=this.reader.frame.getBoundingClientRect(),view=this.reader.viewport.getBoundingClientRect(),box=slot.node.getBoundingClientRect(),zoom=frame.width/this.reader.frame.offsetWidth;
+    if(!(zoom>0))return null;
+    return pdfVisibleRasterRegion({left:frame.left+box.left*zoom,top:frame.top+box.top*zoom,width:box.width*zoom,height:box.height*zoom},view,this.size(slot.page));
+  }
+  clearDetail(slot){slot.detailController?.abort();slot.detail?.dispose();slot.detail?.element.remove();slot.detail=null;slot.detailFailed=null;}
   renderPage(slot){
-    if(this.disposed||slot.painting)return;
-    slot.painting=true;
-    void renderPdfPageImage({doc:this.pdf,pageNumber:slot.page,width:this.size(slot.page).width,sliceTop:0,sliceBottom:1,rasterZoom:this.reader.zoom*this.scale,maxPixels:MAX_PIXELS,priority:()=>slot.page===this.pageAt()?0:1,signal:slot.controller.signal,image:slot.image,renderOptions:()=>({annotationMode:this.pdfjs.AnnotationMode.ENABLE}),waitForIdle:async()=>{},onSize:()=>{}}).catch(error=>{if(!this.disposed&&!slot.controller.signal.aborted)this.reader.callbacks.onError?.(error);}).finally(()=>{slot.painting=false;});
+    if(this.disposed||slot.controller.signal.aborted)return;
+    const region=this.visibleRegion(slot),size=this.size(slot.page),pixelRatio=this.pixelRatio();
+    // Neighbours retain a small complete page. Every intersecting page gets its
+    // own screen-density crop, including the second page in a continuous view.
+    if(!slot.painting&&!slot.image.raster){
+      slot.painting=true;
+      void renderPdfPageImage({doc:this.pdf,pageNumber:slot.page,width:size.width,sliceTop:0,sliceBottom:1,rasterZoom:1,pixelRatio,maxPixels:PDF_PREVIEW_PIXELS,priority:()=>this.visibleRegion(slot)?0:1,signal:slot.controller.signal,image:slot.image,renderOptions:()=>({annotationMode:this.pdfjs.AnnotationMode.ENABLE}),waitForIdle:async()=>{},onSize:()=>{}}).catch(error=>{if(!this.disposed&&!slot.controller.signal.aborted)this.reader.callbacks.onError?.(error);}).finally(()=>{slot.painting=false;});
+    }
+    if(!region){this.clearDetail(slot);return;}
+    const density=pdfRasterDensity(region.width,region.height,region.rasterZoom,pixelRatio,PDF_DETAIL_PIXELS);
+    if(slot.detailPainting||pdfRasterCovers(slot.detail?.raster,region,density))return;
+    const key=[region.left,region.top,region.width,region.height,region.rasterZoom,pixelRatio].join(':');
+    if(slot.detailFailed===key)return;
+    if(!slot.detail){const layer=this.doc.createElement('div');layer.className='htmlmemo-pdf-detail';slot.inner.append(layer);slot.detail=new PdfPageImage(layer,{retainCanvas:false});}
+    const image=slot.detail,controller=new AbortController();slot.detailController=controller;slot.detailPainting=true;
+    const signal=AbortSignal.any([slot.controller.signal,controller.signal]);let refresh=true;
+    void renderPdfPageImage({doc:this.pdf,pageNumber:slot.page,width:size.width,sliceLeft:region.left/size.width,sliceRight:(region.left+region.width)/size.width,sliceTop:region.top/size.height,sliceBottom:(region.top+region.height)/size.height,rasterZoom:region.rasterZoom,pixelRatio,maxPixels:PDF_DETAIL_PIXELS,preview:false,priority:()=>this.visibleRegion(slot)?0:1,signal,image,renderOptions:()=>({annotationMode:this.pdfjs.AnnotationMode.ENABLE}),waitForIdle:async()=>{},onSize:()=>{}}).catch(error=>{
+      if(!this.disposed&&!signal.aborted){refresh=false;slot.detailFailed=key;this.reader.callbacks.onError?.(error);}
+    }).finally(()=>{slot.detailPainting=false;if(slot.detailController===controller)slot.detailController=null;
+      // A zoom, pan or density change during painting must get another turn.
+      // Once the crop covers the latest view, the next turn reuses it and stops.
+      if(refresh&&!this.disposed&&!slot.controller.signal.aborted)this.schedule();
+    });
   }
   schedule(){if(this.disposed||this.frame)return;this.frame=this.doc.defaultView.requestAnimationFrame(()=>{this.frame=null;void this.updateVisible().catch(error=>{if(!this.disposed)this.reader.callbacks.onError?.(error);});});}
   async updateVisible(){
     if(this.reader.host.hidden||this.disposed)return;
-    if(this.reader.annotationDrag||this.reader.gesture||this.reader.textMarkGesture)return;
+    if(this.reader.annotationDrag||this.reader.gesture||this.reader.textMarkGesture){for(const slot of this.slots.values())if(slot.node.dataset.pdfReady)this.renderPage(slot);return;}
     const logical=this.logicalTop,page=this.pageAt(logical),end=this.pageAt(logical+this.reader.viewport.clientHeight/this.reader.zoom),wanted=new Set();
     if(this.total*this.scale>WINDOW_HEIGHT&&(logical-this.base<WINDOW_HEIGHT*.15||logical-this.base>WINDOW_HEIGHT*.8)){const old=this.base;this.windowAt(logical);if(old!==this.base)this.doc.defaultView.scrollTo(this.reader.rootScrollLeft(),logical-this.base);}
     for(let p=Math.max(1,page-1);p<=Math.min(this.count,end+1,page+63);p++)wanted.add(p);this.wanted=wanted;
@@ -137,11 +173,11 @@ export class PdfReader{
     if(this.disposed)return;
     for(const slot of this.slots.values()){
       if(wanted.has(slot.page)){slot.used=performance.now();if(slot.node.dataset.pdfReady)this.renderPage(slot);}
-      else if(!slot.painting&&slot.image.canvas){slot.image.dispose();slot.image=new PdfPageImage(slot.inner);slot.pdfPage?.cleanup();}
+      else {this.clearDetail(slot);if(!slot.painting&&slot.image.canvas){slot.image.dispose();slot.image=new PdfPageImage(slot.inner);slot.pdfPage?.cleanup();}}
     }
     const selection=this.doc.getSelection();
     const retained=[...this.slots.values()].sort((a,b)=>b.used-a.used);
-    for(const slot of retained.slice(12)){if(wanted.has(slot.page)||slot.node.contains(selection?.anchorNode)||slot.node.contains(selection?.focusNode)||slot.node.contains(this.speechRoot))continue;slot.controller.abort();slot.textLayer?.cancel();slot.image.dispose();slot.node.remove();this.slots.delete(slot.page);}
+    for(const slot of retained.slice(12)){if(wanted.has(slot.page)||slot.node.contains(selection?.anchorNode)||slot.node.contains(selection?.focusNode)||slot.node.contains(this.speechRoot))continue;slot.controller.abort();slot.textLayer?.cancel();this.clearDetail(slot);slot.image.dispose();slot.node.remove();this.slots.delete(slot.page);}
     if(!this.reader.readAloud?.isPlaying?.()&&!this.reader.readAloud?.isPaused?.())this.setSpeechRoot(page);
     if(!this.reader.annotationDrag&&!this.reader.gesture&&!this.reader.textMarkGesture)this.reader.renderDrawingLayer();this.reader.updateReadingControls();
   }
@@ -162,7 +198,7 @@ export class PdfReader{
     else if(['FitH','FitBH'].includes(dest[1]?.name)&&Number.isFinite(dest[2]))y=view.convertToViewportPoint(0,dest[2])[1]/view.height;
     return this.go(page,clamp(y,0,1),{history});
   }
-  navigateNode(node){if(node?.dataset?.pdfDestination){try{return this.navigateDestination(JSON.parse(node.dataset.pdfDestination),true);}catch{return false;}}const page=Number(node?.dataset?.pdfPage||node?.closest?.('[data-pdf-page]')?.dataset.pdfPage);return page?this.go(page,0,{history:true}):false;}
+  navigateNode(node){this.reader.scrollLeft=0;if(node?.dataset?.pdfDestination){try{return this.navigateDestination(JSON.parse(node.dataset.pdfDestination),true);}catch{return false;}}const page=Number(node?.dataset?.pdfPage||node?.closest?.('[data-pdf-page]')?.dataset.pdfPage);return page?this.go(page,0,{history:true}):false;}
   headingState(){const nodes=this.entries.map(item=>item.node),page=this.pageAt();let current=0;for(let i=0;i<this.entries.length;i++)if(this.entries[i].page<=page)current=i;return {nodes,current};}
   applyFont(){
     if(!this.root)return;const position=this.position();this.scale=this.reader.readingFontScale();this.relayout();this.doc.body.style.width=this.width*this.scale+'px';this.reader.naturalWidth=this.width*this.scale;this.reader.frame.style.width=this.reader.naturalWidth+'px';this.reader.metadata.viewport.width=this.reader.naturalWidth;this.windowAt((this.tops[position.page-1]+this.size(position.page).height*position.y)*this.scale);this.seek(position.page,position.y,false);this.schedule();
@@ -285,7 +321,7 @@ export class PdfReader{
   }
   async nextSpeechPage(isCurrent=()=>true){let page=Number(this.speechRoot?.closest('[data-pdf-page]')?.dataset.pdfPage)||this.pageAt();while(page<this.count&&!this.disposed&&isCurrent()){page++;await this.ensure(page);if(!isCurrent()||this.disposed)return false;await this.go(page);this.setSpeechRoot(page);if(this.speechRoot?.textContent.trim())return true;}return false;}
   exportHTML(metadata){return exportPDFHTML(this.source,metadata);}
-  dispose(){this.disposed=true;this.jumpVersion++;this.searchGeneration++;this.searchAbort?.abort();this.wholeAbort?.abort();this.searchEngine?.clear();this.doc.defaultView.cancelAnimationFrame(this.frame);this.doc.defaultView.removeEventListener('scroll',this.onScroll);this.reader.viewport.removeEventListener('scroll',this.onScroll);for(const slot of this.slots.values()){slot.controller.abort();slot.textLayer?.cancel();slot.image.dispose();}this.slots.clear();void this.loading?.destroy().catch(()=>{});}
+  dispose(){this.disposed=true;this.jumpVersion++;this.searchGeneration++;this.searchAbort?.abort();this.wholeAbort?.abort();this.searchEngine?.clear();this.doc.defaultView.cancelAnimationFrame(this.frame);this.doc.defaultView.removeEventListener('scroll',this.onScroll);this.reader.viewport.removeEventListener('scroll',this.onScroll);this.appWindow?.removeEventListener('resize',this.onResolutionChange);this.pixelRatioQuery?.removeEventListener('change',this.onResolutionChange);this.visibilityObserver?.disconnect();for(const slot of this.slots.values()){slot.controller.abort();slot.textLayer?.cancel();this.clearDetail(slot);slot.image.dispose();}this.slots.clear();void this.loading?.destroy().catch(()=>{});}
 }
 
 const PDF_STYLE=`
@@ -293,6 +329,7 @@ html,body{margin:0;padding:0;min-height:100%;background:var(--htmlmemo-reader-pa
 #htmlmemo-pdf-pages{position:relative;margin:0;padding:0;overflow:hidden}
 .htmlmemo-pdf-page{position:absolute;left:0;margin:0;padding:0;background:white;contain:layout style;overflow:hidden;box-shadow:0 1px 3px #0002}
 .htmlmemo-pdf-page-inner{position:relative;transform-origin:0 0}
+.htmlmemo-pdf-detail{position:absolute;left:0;top:0;z-index:1;pointer-events:none}
 .htmlmemo-pdf-link{position:absolute;z-index:4;background:transparent;cursor:pointer}.htmlmemo-pdf-link:hover{background:#6f9eff18}.htmlmemo-pdf-link:focus-visible{outline:2px solid #557bba}
 .htmlmemo-pdf-marks{position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none;overflow:visible}
 html[data-htmlmemo-picking] [data-htmlmemo-pdf-mark]{cursor:pointer!important}html:not([data-htmlmemo-picking]) [data-htmlmemo-pdf-mark],html:not([data-htmlmemo-picking]) [data-htmlmemo-pdf-mark] *{pointer-events:none!important}
