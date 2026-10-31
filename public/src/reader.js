@@ -160,6 +160,9 @@ export class Reader {
   readerUIScaleStyle(){
     return `[data-htmlmemo-doc-topbar]{zoom:var(--htmlmemo-reader-ui-scale,1);width:var(--htmlmemo-reader-ui-width,100%)!important;translate:var(--htmlmemo-reader-ui-left,0px) 0px;overflow-x:auto!important;scrollbar-width:none;white-space:nowrap}
       [data-htmlmemo-native-sidebar],[data-htmlmemo-toc-resizer],[data-htmlmemo-toc-resizer-bound]{translate:var(--htmlmemo-reader-sidebar-left,0px) 0px}
+      :where([data-htmlmemo-native-sidebar]){position:relative}
+      [data-htmlmemo-native-sidebar]{z-index:6!important}
+      [data-htmlmemo-toc-main]{isolation:isolate}
       [data-htmlmemo-doc-topbar].reader-head{flex-wrap:nowrap!important;overflow-x:auto!important;scrollbar-width:none;min-width:0!important}
       [data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar].reader-head{gap:3.2px!important;padding-left:4.8px!important;padding-right:4.8px!important}
       [data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar].reader-head button:not([data-action]){padding-left:7.2px!important;padding-right:7.2px!important}
