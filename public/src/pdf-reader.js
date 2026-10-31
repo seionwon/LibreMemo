@@ -200,7 +200,12 @@ export class PdfReader{
     else if(['FitH','FitBH'].includes(dest[1]?.name)&&Number.isFinite(dest[2]))y=view.convertToViewportPoint(0,dest[2])[1]/view.height;
     return this.go(page,clamp(y,0,1),{history});
   }
-  navigateNode(node){this.reader.scrollLeft=0;if(node?.dataset?.pdfDestination){try{return this.navigateDestination(JSON.parse(node.dataset.pdfDestination),true);}catch{return false;}}const page=Number(node?.dataset?.pdfPage||node?.closest?.('[data-pdf-page]')?.dataset.pdfPage);return page?this.go(page,0,{history:true}):false;}
+  navigateNode(node){
+    let destination;if(node?.dataset?.pdfDestination){try{destination=JSON.parse(node.dataset.pdfDestination);}catch{return false;}}
+    const page=Number(node?.dataset?.pdfPage||node?.closest?.('[data-pdf-page]')?.dataset.pdfPage);if(!destination&&!(page>=1&&page<=this.count))return false;
+    this.reader.linkHistory.push({top:this.reader.scrollTop,left:this.reader.scrollLeft});if(this.reader.linkHistory.length>128)this.reader.linkHistory.shift();
+    this.reader.scrollLeft=0;return destination?this.navigateDestination(destination):this.go(page,0);
+  }
   headingState(){const nodes=this.entries.map(item=>item.node),page=this.pageAt();let current=0;for(let i=0;i<this.entries.length;i++)if(this.entries[i].page<=page)current=i;return {nodes,current};}
   applyFont(){
     if(!this.root)return;const position=this.position();this.scale=this.reader.readingFontScale();this.relayout();this.doc.body.style.width=this.width*this.scale+'px';this.reader.naturalWidth=this.width*this.scale;this.reader.frame.style.width=this.reader.naturalWidth+'px';this.reader.metadata.viewport.width=this.reader.naturalWidth;this.windowAt((this.tops[position.page-1]+this.size(position.page).height*position.y)*this.scale);this.seek(position.page,position.y,false);this.schedule();

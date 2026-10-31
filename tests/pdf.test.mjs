@@ -84,3 +84,9 @@ test('PDF page identity tolerates rounded scroll positions after font scaling wi
   const state={count:4,scale:1.1,tops:Float64Array.from([0,1078.6666666667,2157.3333333333,3236,4314.6666666667])};
   for(const page of [2,3,4]){const target=state.tops[page-1]*state.scale;assert.equal(PdfReader.prototype.pageAt.call(state,Math.floor(target)),page);assert.equal(PdfReader.prototype.pageAt.call(state,target-12),page-1);}
 });
+
+test('PDF outline navigation resets horizontal position after recording the complete previous view for Back',()=>{
+  const pdf=Object.create(PdfReader.prototype),r={scrollTop:240,scrollLeft:360,linkHistory:[]},visits=[];
+  Object.assign(pdf,{reader:r,count:8,go(page,y,{history=false}={}){if(history)r.linkHistory.push({top:r.scrollTop,left:r.scrollLeft});visits.push({page,y,left:r.scrollLeft});return true;}});
+  assert.equal(pdf.navigateNode({dataset:{pdfPage:'3'}}),true);assert.deepEqual(r.linkHistory,[{top:240,left:360}]);assert.deepEqual(visits,[{page:3,y:0,left:0}]);
+});

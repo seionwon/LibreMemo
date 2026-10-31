@@ -68,3 +68,9 @@ test('static TOC navigation uses the outer pane and frame offset rather than inn
   Object.assign(r,{nativeScroll:false,zoom:2,viewport:{clientWidth:800,clientHeight:600,getBoundingClientRect:()=>({top:50})},frame:{getBoundingClientRect:()=>({top:75})},plainReadingButtons:{},layerOrigin:()=>({top:-1000,left:0}),revealNestedScroll(){}});
   r.jump(target,{align:'start'});assert.equal(r.scrollTop,813);assert.equal(r.scrollLeft,0);assert.equal(r.readingHeadingCursor.node,target);
 });
+
+test('a paired reader navigation and content pane is recognized without a redundant TOC title',()=>{
+  const r=Object.create(Reader.prototype);r.doc=documentFor('<html><body><nav id="reader-nav"><details open><summary>첫 장</summary><a href="#section">절</a></details></nav><main id="reader-main"><h1 id="section">본문</h1></main></body></html>');
+  assert.equal(r.findDocumentTocParts()?.sidebar?.id,'reader-nav');
+  r.doc.getElementById('reader-main').removeAttribute('id');assert.equal(r.findDocumentTocParts(),null,'ordinary unlabelled navigation remains content');
+});

@@ -654,7 +654,7 @@ export class Reader {
   }
   findDocumentTocParts() {
     if (!this.doc?.body) return null;
-    const named = '.toc,#toc,.table-of-contents,#table-of-contents,.book-toc,#book-toc,.reader-toc,[data-toc],.toc-sidebar,#toc-sidebar,.toc-panel,#toc-panel,.toc-pane,#toc-pane';
+    const named = '.toc,#toc,.table-of-contents,#table-of-contents,.book-toc,#book-toc,.reader-toc,[data-toc],.toc-sidebar,#toc-sidebar,.toc-panel,#toc-panel,.toc-pane,#toc-pane'+(this.doc.querySelector('#reader-main,#reader-content')?',#reader-nav':'');
     const label = value => /목차|차례|table of contents|\btoc\b|contents/i.test(String(value || ''));
     const isMain = node => !!node?.closest?.('main,article,[role="main"]');
     const nodeName = node => `${node?.id || ''} ${typeof node?.className === 'string' ? node.className : ''} ${node?.getAttribute?.('role') || ''} ${node?.getAttribute?.('data-toc') || ''} ${node?.getAttribute?.('title') || ''} ${node?.getAttribute?.('aria-label') || ''}`;
