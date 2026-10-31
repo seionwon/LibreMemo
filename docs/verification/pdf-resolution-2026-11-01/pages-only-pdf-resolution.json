@@ -1,0 +1,183 @@
+{
+  "status": "pass",
+  "states": [
+    {
+      "label": "two visible pages at DPR 2",
+      "dpr": 2,
+      "zoom": 0.45,
+      "framePending": 0,
+      "densityQuery": "(resolution: 2dppx)",
+      "densityMatched": true,
+      "sourceVisible": "visible",
+      "parentVisible": "visible",
+      "visible": [
+        {
+          "page": 1,
+          "ready": true,
+          "coverage": true,
+          "density": 1.9979361777621525,
+          "pixels": 690480,
+          "scratch": 0,
+          "painting": false
+        },
+        {
+          "page": 2,
+          "ready": true,
+          "coverage": true,
+          "density": 1.9987004548408056,
+          "pixels": 553680,
+          "scratch": 0,
+          "painting": false
+        }
+      ],
+      "sharp": true
+    },
+    {
+      "label": "display density changed without zoom or scroll",
+      "dpr": 3,
+      "zoom": 0.45,
+      "framePending": 0,
+      "densityQuery": "(resolution: 3dppx)",
+      "densityMatched": true,
+      "sourceVisible": "visible",
+      "parentVisible": "visible",
+      "visible": [
+        {
+          "page": 1,
+          "ready": true,
+          "coverage": true,
+          "density": 3,
+          "pixels": 1555200,
+          "scratch": 0,
+          "painting": false
+        },
+        {
+          "page": 2,
+          "ready": true,
+          "coverage": true,
+          "density": 2.9993502274204027,
+          "pixels": 1246320,
+          "scratch": 0,
+          "painting": false
+        }
+      ],
+      "sharp": true
+    },
+    {
+      "label": "rapid zoom to 800 percent",
+      "dpr": 3,
+      "zoom": 8,
+      "framePending": 0,
+      "densityQuery": "(resolution: 3dppx)",
+      "densityMatched": true,
+      "sourceVisible": "visible",
+      "parentVisible": "visible",
+      "visible": [
+        {
+          "page": 1,
+          "ready": true,
+          "coverage": true,
+          "density": 2.998913043478261,
+          "pixels": 11386393,
+          "scratch": 0,
+          "painting": false
+        }
+      ],
+      "sharp": true
+    },
+    {
+      "label": "horizontal and vertical pan at 800 percent",
+      "dpr": 3,
+      "zoom": 8,
+      "framePending": 0,
+      "densityQuery": "(resolution: 3dppx)",
+      "densityMatched": true,
+      "sourceVisible": "visible",
+      "parentVisible": "visible",
+      "visible": [
+        {
+          "page": 1,
+          "ready": true,
+          "coverage": true,
+          "density": 3,
+          "pixels": 11459520,
+          "scratch": 0,
+          "painting": false
+        }
+      ],
+      "sharp": true
+    },
+    {
+      "label": "TOC destination",
+      "dpr": 3,
+      "zoom": 1,
+      "framePending": 0,
+      "densityQuery": "(resolution: 3dppx)",
+      "densityMatched": true,
+      "sourceVisible": "visible",
+      "parentVisible": "visible",
+      "visible": [
+        {
+          "page": 3,
+          "ready": true,
+          "coverage": true,
+          "density": 3.000966806316468,
+          "pixels": 6264000,
+          "scratch": 0,
+          "painting": false
+        }
+      ],
+      "sharp": true
+    },
+    {
+      "label": "phone DPR 3",
+      "dpr": 3,
+      "zoom": 1,
+      "framePending": 0,
+      "densityQuery": "(resolution: 3dppx)",
+      "densityMatched": true,
+      "sourceVisible": "visible",
+      "parentVisible": "visible",
+      "visible": [
+        {
+          "page": 3,
+          "ready": true,
+          "coverage": true,
+          "density": 3.000966806316468,
+          "pixels": 6264000,
+          "scratch": 0,
+          "painting": false
+        }
+      ],
+      "sharp": true
+    },
+    {
+      "label": "reopened PDF",
+      "dpr": 3,
+      "zoom": 1,
+      "framePending": 0,
+      "densityQuery": "(resolution: 3dppx)",
+      "densityMatched": true,
+      "sourceVisible": "visible",
+      "parentVisible": "visible",
+      "visible": [
+        {
+          "page": 3,
+          "ready": true,
+          "coverage": true,
+          "density": 3.000966806316468,
+          "pixels": 3303396,
+          "scratch": 0,
+          "painting": false
+        }
+      ],
+      "sharp": true
+    }
+  ],
+  "placement": {
+    "top": 49.328125,
+    "expected": 49,
+    "left": 0
+  },
+  "errors": []
+}

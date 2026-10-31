@@ -1,0 +1,212 @@
+{
+  "id": 41250232401,
+  "url": "https://github.com/seionwon/LibreMemo/actions/runs/41250232401",
+  "headSHA": "fc5f570f9219b41d1283f6fc0be964014d9760df",
+  "status": "completed",
+  "conclusion": "success",
+  "createdAt": "2026-10-31T22:54:22Z",
+  "updatedAt": "2026-10-31T23:34:48Z",
+  "jobs": [
+    {
+      "id": 124682025791,
+      "name": "build",
+      "conclusion": "success",
+      "startedAt": "2026-10-31T22:54:25Z",
+      "completedAt": "2026-10-31T23:21:50Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/configure-pages@v5",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm ci",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Korean fonts for realistic mobile layout checks",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm test",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm run check",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run mkdir -p test-results",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify visible book selection and new-edition bookmarks",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify PDF pixel density and the revised outline interactions before the full suite",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify pasted-document history after expanding the outline",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify source archives, standard PDF and self-contained offline HTML exports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify the current folder and sharing guide before the complete suite",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify original HTML outline links match common sidebar rows at every scale",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify live book search results retain their UI size when the document is zoomed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify legacy book menus and mobile word selection through visible controls",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm run test:browser",
+          "conclusion": "success"
+        },
+        {
+          "name": "Keep structured Chrome results and fixture screenshots",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm run build",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/upload-pages-artifact@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-node@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 124687898498,
+      "name": "deploy",
+      "conclusion": "success",
+      "startedAt": "2026-10-31T23:21:54Z",
+      "completedAt": "2026-10-31T23:22:03Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Publish LibreMemo",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 124687942783,
+      "name": "verify",
+      "conclusion": "success",
+      "startedAt": "2026-10-31T23:22:05Z",
+      "completedAt": "2026-10-31T23:34:48Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm ci",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Korean fonts for realistic mobile layout checks",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify the published URL-only app, sidebar, annotation tree and pen scaling in Chrome",
+          "conclusion": "success"
+        },
+        {
+          "name": "Keep published desktop and mobile verification screenshots",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-node@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 13062072256,
+      "name": "published-sidebar-screenshots",
+      "size_in_bytes": 19520114,
+      "digest": "sha256:9ddd41d34893909ff309d779c1473ba147626308cbe943827cfac2896fe90b1b",
+      "created_at": "2026-10-31T23:34:46Z",
+      "downloadedSHA256": "sha256:9ddd41d34893909ff309d779c1473ba147626308cbe943827cfac2896fe90b1b"
+    },
+    {
+      "id": 13061975581,
+      "name": "browser-verification",
+      "size_in_bytes": 21675000,
+      "digest": "sha256:f5ec1aa353bc59a83b8685d3f110e002d0d90e1e46aa075a6ba12cd6ef91153f",
+      "created_at": "2026-10-31T23:21:38Z",
+      "downloadedSHA256": "sha256:f5ec1aa353bc59a83b8685d3f110e002d0d90e1e46aa075a6ba12cd6ef91153f"
+    },
+    {
+      "id": 13061746120,
+      "name": "github-pages",
+      "size_in_bytes": 18762798,
+      "digest": "sha256:3c29c7f1425ae2ad709be2f4580a5d6b326c7d7e13ea87d0331f1af3cf077bed",
+      "created_at": "2026-10-31T23:21:46Z",
+      "downloadedSHA256": "sha256:3c29c7f1425ae2ad709be2f4580a5d6b326c7d7e13ea87d0331f1af3cf077bed"
+    }
+  ]
+}

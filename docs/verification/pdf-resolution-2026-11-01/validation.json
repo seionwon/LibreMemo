@@ -1,0 +1,65 @@
+{
+  "version": "1.7.2",
+  "commit": "fc5f570f9219b41d1283f6fc0be964014d9760df",
+  "url": "https://seionwon.github.io/LibreMemo/",
+  "verifiedAt": "2026-10-31T23:36:14.193798+00:00",
+  "status": "pass",
+  "local": {
+    "unit": {
+      "tests": 870,
+      "passed": 870,
+      "failed": 0,
+      "skipped": 0
+    },
+    "syntaxJSON": 207,
+    "build": "pass",
+    "diffCheck": "pass",
+    "PDFRelated": 21,
+    "TOCAndDocumentRelated": 100
+  },
+  "ci": {
+    "run": 41250232401,
+    "unit": {
+      "tests": 870,
+      "passed": 869,
+      "failed": 0,
+      "skipped": 1,
+      "skipReason": "macOS-only launch guard on Linux"
+    },
+    "syntaxJSON": 188,
+    "sourceChrome": {
+      "nodeTests": 116,
+      "leafCases": 114,
+      "failed": 0,
+      "skipped": 0
+    },
+    "publicChrome": {
+      "tests": 82,
+      "failed": 0,
+      "skipped": 0
+    },
+    "build": "success",
+    "deploy": "success",
+    "verify": "success"
+  },
+  "pixelVerification": "Actual decoded image pixels cover every visible page at DPR 2 and 3, including 800% zoom, pan, phone size and reopening; no retained scratch canvas after decode. See PDF report.",
+  "beforeFix": {
+    "DPR3ExpectedWidth": 1800,
+    "DPR3ActualWidth": 1200,
+    "newZoomDuringPainting": "dropped; unit test failed before fix"
+  },
+  "publishedBytes": {
+    "files": 294,
+    "bytes": 49701356,
+    "verifiedAt": "2026-10-31T23:23:38.655Z",
+    "allHTTP200ByteAndSHA256Match": true
+  },
+  "limits": {
+    "physicalAndroidTested": false,
+    "desktopMacChromeLaunched": false,
+    "browser": "Real Chrome on CI Linux; desktop/mobile emulated viewport and DPR; synthetic fixtures",
+    "malwareScanningAdded": false,
+    "warningTest": "Synthetic file handle returns the quoted browser error; verifies actual app alert color",
+    "originalScanResolution": "A low-resolution source scan cannot gain original detail from rendering."
+  }
+}

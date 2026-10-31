@@ -1,0 +1,53 @@
+{
+  "status": "pass",
+  "initiallyFolded": true,
+  "titleClickToggles": true,
+  "positions": [
+    {
+      "percent": 50,
+      "native": false,
+      "top": 60.8125,
+      "expected": 61,
+      "left": 0
+    },
+    {
+      "percent": 100,
+      "native": false,
+      "top": 60.625,
+      "expected": 61,
+      "left": 0
+    },
+    {
+      "percent": 200,
+      "native": false,
+      "top": 61.25,
+      "expected": 61,
+      "left": 0
+    },
+    {
+      "percent": 50,
+      "navigateMs": 169,
+      "native": true,
+      "top": 60.78125,
+      "expected": 61,
+      "left": 0
+    },
+    {
+      "percent": 100,
+      "navigateMs": 172,
+      "native": true,
+      "top": 60.5625,
+      "expected": 61,
+      "left": 0
+    },
+    {
+      "percent": 200,
+      "navigateMs": 169,
+      "native": true,
+      "top": 60.125,
+      "expected": 61,
+      "left": 0
+    }
+  ],
+  "errors": []
+}
