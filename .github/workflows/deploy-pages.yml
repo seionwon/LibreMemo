@@ -34,8 +34,8 @@ jobs:
       - run: mkdir -p test-results
       - name: Verify PDF pixel density and the revised outline interactions before the full suite
         run: |
-          node --test --test-concurrency=1 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-results/browser-results.xml tests/browser-pdf.integration.mjs
           node --test --test-concurrency=1 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-results/browser-results.xml --test-name-pattern='outline titles start folded|malicious-file messages|common outline folding' tests/browser-format-parity.integration.mjs
+          node --test --test-concurrency=1 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-results/browser-results.xml tests/browser-pdf.integration.mjs
       - name: Verify pasted-document history after expanding the outline
         run: node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-results/browser-results.xml --test-name-pattern='Pages-only pasted reading controls' tests/browser.integration.mjs
       - name: Verify source archives, standard PDF and self-contained offline HTML exports
