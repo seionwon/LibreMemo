@@ -59,6 +59,7 @@ export class PdfReader{
     this.appWindow=this.reader.host.ownerDocument.defaultView;
     this.onResolutionChange=()=>{this.watchPixelRatio();this.schedule();};
     this.appWindow.addEventListener('resize',this.onResolutionChange,{passive:true});this.watchPixelRatio();
+    this.densityTimer=this.appWindow.setInterval(()=>this.checkPixelRatio(),1000);
     if(this.appWindow.ResizeObserver){this.visibilityObserver=new this.appWindow.ResizeObserver(()=>{if(this.reader.host.hidden){for(const slot of this.slots.values())this.clearDetail(slot);}else this.schedule();});this.visibilityObserver.observe(this.reader.host);}
     this.schedule();
   }
@@ -126,9 +127,10 @@ export class PdfReader{
     }
   }
   pixelRatio(){return this.reader.host.ownerDocument.defaultView.devicePixelRatio||1;}
+  checkPixelRatio(){if(!this.disposed&&!this.reader.host.hidden&&!this.appWindow.document.hidden&&this.watchedPixelRatio!==this.pixelRatio())this.onResolutionChange();}
   watchPixelRatio(){
     this.pixelRatioQuery?.removeEventListener('change',this.onResolutionChange);
-    this.pixelRatioQuery=this.appWindow.matchMedia?.('(resolution: '+this.pixelRatio()+'dppx)');
+    this.watchedPixelRatio=this.pixelRatio();this.pixelRatioQuery=this.appWindow.matchMedia?.('(resolution: '+this.watchedPixelRatio+'dppx)');
     this.pixelRatioQuery?.addEventListener('change',this.onResolutionChange,{once:true});
   }
   visibleRegion(slot){
@@ -321,7 +323,7 @@ export class PdfReader{
   }
   async nextSpeechPage(isCurrent=()=>true){let page=Number(this.speechRoot?.closest('[data-pdf-page]')?.dataset.pdfPage)||this.pageAt();while(page<this.count&&!this.disposed&&isCurrent()){page++;await this.ensure(page);if(!isCurrent()||this.disposed)return false;await this.go(page);this.setSpeechRoot(page);if(this.speechRoot?.textContent.trim())return true;}return false;}
   exportHTML(metadata){return exportPDFHTML(this.source,metadata);}
-  dispose(){this.disposed=true;this.jumpVersion++;this.searchGeneration++;this.searchAbort?.abort();this.wholeAbort?.abort();this.searchEngine?.clear();(this.appWindow||this.reader.host.ownerDocument.defaultView).cancelAnimationFrame(this.frame);this.doc.defaultView.removeEventListener('scroll',this.onScroll);this.reader.viewport.removeEventListener('scroll',this.onScroll);this.appWindow?.removeEventListener('resize',this.onResolutionChange);this.pixelRatioQuery?.removeEventListener('change',this.onResolutionChange);this.visibilityObserver?.disconnect();for(const slot of this.slots.values()){slot.controller.abort();slot.textLayer?.cancel();this.clearDetail(slot);slot.image.dispose();}this.slots.clear();void this.loading?.destroy().catch(()=>{});}
+  dispose(){this.disposed=true;this.jumpVersion++;this.searchGeneration++;this.searchAbort?.abort();this.wholeAbort?.abort();this.searchEngine?.clear();(this.appWindow||this.reader.host.ownerDocument.defaultView).cancelAnimationFrame(this.frame);this.doc.defaultView.removeEventListener('scroll',this.onScroll);this.reader.viewport.removeEventListener('scroll',this.onScroll);this.appWindow?.removeEventListener('resize',this.onResolutionChange);this.appWindow?.clearInterval(this.densityTimer);this.pixelRatioQuery?.removeEventListener('change',this.onResolutionChange);this.visibilityObserver?.disconnect();for(const slot of this.slots.values()){slot.controller.abort();slot.textLayer?.cancel();this.clearDetail(slot);slot.image.dispose();}this.slots.clear();void this.loading?.destroy().catch(()=>{});}
 }
 
 const PDF_STYLE=`

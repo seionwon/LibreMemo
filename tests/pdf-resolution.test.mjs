@@ -67,3 +67,12 @@ test('PDF refresh uses the visible app frame and coalesces updates even if the s
   pdf.doc={defaultView:{requestAnimationFrame(){throw Error('source iframe frame was throttled');}}};pdf.updateVisible=async()=>updates++;
   pdf.schedule();pdf.schedule();assert.equal(pending.length,1);pending[0]();await Promise.resolve();assert.equal(updates,1);assert.equal(pdf.frame,null);
 });
+
+test('PDF catches a silent display-density change once and skips hidden or disposed readers',()=>{
+  const pdf=Object.create(PdfReader.prototype);let ratio=2,refreshes=0;
+  Object.assign(pdf,{watchedPixelRatio:2,reader:{host:{hidden:false}},appWindow:{document:{hidden:false}},pixelRatio:()=>ratio,onResolutionChange(){refreshes++;this.watchedPixelRatio=ratio;}});
+  pdf.checkPixelRatio();assert.equal(refreshes,0);ratio=3;pdf.checkPixelRatio();pdf.checkPixelRatio();assert.equal(refreshes,1);
+  pdf.reader.host.hidden=true;ratio=4;pdf.checkPixelRatio();assert.equal(refreshes,1);
+  pdf.reader.host.hidden=false;pdf.appWindow.document.hidden=true;pdf.checkPixelRatio();assert.equal(refreshes,1);
+  pdf.appWindow.document.hidden=false;pdf.checkPixelRatio();assert.equal(refreshes,2);pdf.disposed=true;ratio=2;pdf.checkPixelRatio();assert.equal(refreshes,2);
+});
