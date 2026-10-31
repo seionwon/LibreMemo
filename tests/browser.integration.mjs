@@ -1,4 +1,4 @@
-import {revealDocumentControl,toggleDocumentSidebarFromToolbar,revealAppOutline} from './document-controls.mjs';
+import {revealDocumentControl,toggleDocumentSidebarFromToolbar,revealAppOutline,clickDocumentControl} from './document-controls.mjs';
 import {chooseDocumentExport} from './export-flow.mjs';
 import {publicAppURL} from '../public/src/install.js';
 // Requires permission to bind localhost and launch a dedicated Chrome process.
@@ -605,6 +605,7 @@ test('real Chrome: toolbar mode groups preserve selected text when creating note
     const select=async(width,mode)=>{
       await page.click('#toolbar [data-action=select]');
       await hideAppSidebar();
+      await revealDocumentControl(page,'#target-'+width+' em');
       const point=await page.evaluate(`(async()=>{const f=${frame},d=f.contentDocument,e=d.querySelector(${JSON.stringify('#target-'+width+' em')});e.scrollIntoView({block:'center'});await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));const range=d.createRange();range.setStart(e.firstChild,0);range.setEnd(e.firstChild,8);const r=range.getClientRects()[0],b=f.getBoundingClientRect(),scale=b.width/f.offsetWidth;return{x:b.left+(r.left+r.width/2)*scale,y:b.top+(r.top+r.height/2)*scale};})()`);
       for(let clickCount=1;clickCount<=3;clickCount++){await page.send('Input.dispatchMouseEvent',{type:'mousePressed',x:point.x,y:point.y,button:'left',clickCount});await page.send('Input.dispatchMouseEvent',{type:'mouseReleased',x:point.x,y:point.y,button:'left',clickCount});}
       await page.waitFor(selectionAt(width));
@@ -2879,11 +2880,18 @@ function editionHTML(title, sections, annotations = null, bookmarks = []) {
     + `<script id="test-bodies" type="application/json">${JSON.stringify(bodies)}</script><script>${runtime}</script></body></html>`;
 }
 
+// Migration fixtures use the same persistent left sidebar as a reading book.
+// Its visible bookmark control must not scroll the reading position to a TOC
+// that was merely stacked above the body in the original minimal fixture.
+function sidebarEditionHTML(...args){
+  return editionHTML(...args).replace('</style>','#reader-nav{position:fixed;left:0;top:0;bottom:0;overflow:auto;width:300px;box-sizing:border-box;background:white}#reader-main{margin-left:300px}</style>');
+}
+
 test('real Chrome: Pages-only annotations and bookmarks move to a new edition without changing the old book',{timeout:120000},async()=>{
   await prepareAssets();const folder=await mkdtemp(join(tmpdir(),'htmlmemo-edition-'));await cp(join(root,'public'),folder,{recursive:true});
   const server=createServer(folder);let chrome;
   const install='에이전트를 설치하고 터미널에서 처음 실행해 봅니다.',removed='이 문단은 다음 판에서 통째로 지워집니다.',result='명령을 실행한 뒤에는 결과를 꼭 확인합니다.';
-  const oldEdition=editionHTML('편집되는 책',[
+  const oldEdition=sidebarEditionHTML('편집되는 책',[
     {key:'v0:setup',id:'setup',title:'설치',markdown:`# 설치\n${install}\n\n${removed}`,html:`<h1>설치</h1><p>${install}</p><p>${removed}</p>`},
     {key:'v0:run',id:'run',title:'실행',markdown:`# 실행\n${result}`,html:`<h1>실행</h1><p>${result}</p>`},
     {key:'v0:appendix',id:'appendix',title:'부록',markdown:'# 부록\n보충 설명입니다.',html:'<h1>부록</h1><p>보충 설명입니다.</p>'}],[
@@ -2897,7 +2905,7 @@ test('real Chrome: Pages-only annotations and bookmarks move to a new edition wi
   // New edition: a new first section, the install sentence reworded, the doomed paragraph removed,
   // and the run section replaced by a 「check」 section that carries the result sentence.
   const install2='에이전트를 먼저 설치하고 터미널에서 처음 실행해 봅니다.';
-  const newEdition=editionHTML('편집되는 책',[
+  const newEdition=sidebarEditionHTML('편집되는 책',[
     {key:'v0:intro',id:'intro',title:'들어가며',markdown:'# 들어가며\n새로 쓴 장입니다.',html:'<h1>들어가며</h1><p>새로 쓴 장입니다.</p>'},
     {key:'v0:setup',id:'setup',title:'설치',markdown:`# 설치\n${install2}`,html:`<h1>설치</h1><p>${install2}</p>`},
     {key:'v0:check',id:'check',title:'확인',markdown:`# 확인\n${result}`,html:`<h1>확인</h1><div style="height:600px">추가된 설명</div><p id="moved-bookmark">${result}</p><div style="height:1200px"></div>`},
@@ -2945,13 +2953,13 @@ test('real Chrome: Pages-only annotations and bookmarks move to a new edition wi
     await page.waitFor(`${frame}.contentDocument.querySelector('[data-htmlmemo-mark]')?.textContent===${JSON.stringify(install2)} && !!${frame}.contentDocument.querySelector('#htmlmemo-annotation-layer [data-htmlmemo-id="install-pen"]')`,15000);
     await page.evaluate(`${frame}.contentWindow.location.hash='#'+encodeURIComponent('v0:check')`);
     await page.waitFor(`${frame}.contentDocument.querySelector('[data-htmlmemo-mark]')?.textContent===${JSON.stringify(result)} && !${frame}.contentDocument.querySelector('#htmlmemo-annotation-layer [data-htmlmemo-id="install-pen"]')`,15000);
-    const doc=`${frame}.contentDocument`,clickBookmark=selector=>page.click('#sidebar '+selector);
-    await clickBookmark('[data-sidebar-view=bookmarks]');await revealBookmark(page,'document','chapter-bookmark',clickBookmark);await clickBookmark('[data-bookmark=chapter-bookmark]');await page.waitFor(`${doc}.getElementById('reader-content').dataset.section==='v0:appendix'&&document.querySelector('#toast').textContent.includes('해당 장 시작')`);
-    await revealBookmark(page,'document',movedMark.id,clickBookmark);await clickBookmark(`[data-bookmark="${movedMark.id}"]`);await page.waitFor(`${doc}.getElementById('reader-content').dataset.section==='v0:check'&&Math.abs(${doc}.getElementById('moved-bookmark').getBoundingClientRect().top)<5`);
+    const doc=`${frame}.contentDocument`,clickBookmark=selector=>clickDocumentControl(page,selector);
+    await clickBookmark('[data-sidebar-view=bookmarks]');await revealBookmark(page,doc,'chapter-bookmark',clickBookmark);await clickBookmark('[data-bookmark=chapter-bookmark]');await page.waitFor(`${doc}.getElementById('reader-content').dataset.section==='v0:appendix'&&document.querySelector('#toast').textContent.includes('해당 장 시작')`);
+    await revealBookmark(page,doc,movedMark.id,clickBookmark);await clickBookmark(`[data-bookmark="${movedMark.id}"]`);await page.waitFor(`${doc}.getElementById('reader-content').dataset.section==='v0:check'&&Math.abs(${doc}.getElementById('moved-bookmark').getBoundingClientRect().top)<5`);
     await writeFile(join(root,'test-results/pages-only-migrate-new-edition.png'),await page.screenshot());
     // Portable anchors and bookmarks survive closing and opening the new document.
     await page.waitFor('!document.querySelector(".tab-dirty:not([hidden])")');await page.navigate(url);await page.waitFor(`document.querySelector('[data-open="${next.id}"]')`);await page.click(`[data-open="${next.id}"]`);await page.waitFor(`${frame}?.style.visibility==='visible'`);
-    await clickBookmark('[data-sidebar-view=bookmarks]');await revealBookmark(page,'document',movedMark.id,clickBookmark);await clickBookmark(`[data-bookmark="${movedMark.id}"]`);await page.waitFor(`${doc}.getElementById('reader-content').dataset.section==='v0:check'&&Math.abs(${doc}.getElementById('moved-bookmark').getBoundingClientRect().top)<5`);
+    await clickBookmark('[data-sidebar-view=bookmarks]');await revealBookmark(page,doc,movedMark.id,clickBookmark);await clickBookmark(`[data-bookmark="${movedMark.id}"]`);await page.waitFor(`${doc}.getElementById('reader-content').dataset.section==='v0:check'&&Math.abs(${doc}.getElementById('moved-bookmark').getBoundingClientRect().top)<5`);
     await writeFile(join(root,'test-results/pages-only-edition-bookmarks.json'),JSON.stringify({oldPreserved:true,annotations:moved.length,bookmarksTransferred:2,embeddedBookmarkPreserved:true,collidingIDsSeparated:true,exactJump:true,chapterFallback:true,reopened:true,mobileWidth:320,errors:chrome.errors},null,2));
     assert.deepEqual(chrome.errors,[]);
   }catch(error){
@@ -2966,11 +2974,11 @@ test('real Chrome: Pages-only precise bookmarks retain the saved text point acro
   const long=Array.from({length:90},(_,i)=>`${i+1}번째 기록을 살펴보며 정확한 본문 위치를 확인합니다. 각 문장은 서로 다른 번호를 가집니다.`).join(' '),repeat='같은 문장이 반복되어도 읽던 곳을 기억합니다. 중요한 부분은 따로 확인합니다.';
   const body=(tag,id,text,font=20)=>`<${tag} id="${id}" style="max-width:640px;font:${font}px/1.8 system-ui">${text}</${tag}><div style="height:1000px"></div>`;
   const repeated=`<h1>반복 문장의 장</h1><h2>첫 번째 항목</h2>${body('p','repeat-one',repeat)}<h2>두 번째 항목</h2>${body('p','repeat-two',repeat)}<p>두 번째 항목의 마무리</p>`;
-  const oldEdition=editionHTML('정확한 북마크 예전 판',[
+  const oldEdition=sidebarEditionHTML('정확한 북마크 예전 판',[
     {key:'v0:old',id:'old',title:'긴 본문',markdown:long,html:'<h1>긴 본문</h1>'+body('p','long',long)},
     {key:'v0:repeat',id:'repeat',title:'반복 문장',markdown:repeat+' '+repeat,html:repeated},
     {key:'v0:end',id:'end',title:'끝',markdown:'마지막 장',html:'<h1>마지막 장</h1>'}],[]);
-  const newEdition=editionHTML('정확한 북마크 새 판',[
+  const newEdition=sidebarEditionHTML('정확한 북마크 새 판',[
     {key:'v0:intro',id:'intro',title:'새 머리말',markdown:'새로 쓴 머리말',html:'<h1>새로 쓴 머리말</h1>'},
     {key:'v0:moved',id:'moved',title:'옮겨진 본문',markdown:long,html:'<h1>옮겨진 본문</h1><p>앞에 추가한 문단입니다.</p>'+body('div','long',long.replaceAll(' 기록','\n  기록').replace('45번째','<strong>45번째</strong>'),26)},
     {key:'v0:repeat',id:'repeat',title:'반복 문장',markdown:repeat+' '+repeat,html:'<p>새 설명입니다.</p>'+repeated}],[]);
@@ -2981,10 +2989,10 @@ test('real Chrome: Pages-only precise bookmarks retain the saved text point acro
     const frame='document.querySelector(".document-host:not([hidden]) iframe")',doc=frame+'.contentDocument';
     await page.evaluate('window.pick("precise-old.html")');await clickLibraryImport(page);await page.waitFor(`${frame}?.style.visibility==='visible'&&${doc}.getElementById('long')`);
     const originalID=await page.evaluate(`(async()=>(await(await import('./src/storage.js')).listDocuments())[0].id)()`),record=id=>page.evaluate(`(async()=>{const r=await(await import('./src/storage.js')).getDocument(${JSON.stringify(id)});return {id:r.id,html:r.html,metadata:r.metadata};})()`);
-    await page.click('#sidebar [data-sidebar-view=bookmarks]');
+    await clickDocumentControl(page,'[data-sidebar-view=bookmarks]');
     const save=async(selector,word,title)=>{
       await page.evaluate(`(()=>{const d=${doc},n=d.querySelector(${JSON.stringify(selector)}).firstChild,r=d.createRange(),at=n.textContent.indexOf(${JSON.stringify(word)});r.setStart(n,at);r.setEnd(n,at+1);d.defaultView.scrollTo(0,d.defaultView.scrollY+r.getBoundingClientRect().top);})()`);
-      await page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');await page.click('#add-bookmark');await page.waitFor('document.querySelector("#note-text")');await page.evaluate(`document.querySelector('#note-text').value=${JSON.stringify(title)}`);await page.click('#dialog button[value=save]');await page.waitFor(`(async()=>{const r=await(await import('./src/storage.js')).getDocument(${JSON.stringify(originalID)});return r.metadata.bookmarks.some(m=>m.title===${JSON.stringify(title)});})()`);
+      await page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');await clickDocumentControl(page,'.bookmark-add-button');await page.waitFor('document.querySelector("#note-text")');await page.evaluate(`document.querySelector('#note-text').value=${JSON.stringify(title)}`);await page.click('#dialog button[value=save]');await page.waitFor(`(async()=>{const r=await(await import('./src/storage.js')).getDocument(${JSON.stringify(originalID)});return r.metadata.bookmarks.some(m=>m.title===${JSON.stringify(title)});})()`);
     };
     await save('#long','45번째','긴 문단 중간');
     await page.evaluate(`${frame}.contentWindow.location.hash='#'+encodeURIComponent('v0:repeat')`);await page.waitFor(`${doc}.getElementById('repeat-two')?.hasAttribute('data-htmlmemo-anchor')`);await save('#repeat-two','같은','두 번째 반복 문장');
@@ -2996,12 +3004,12 @@ test('real Chrome: Pages-only precise bookmarks retain the saved text point acro
     const nextID=await page.evaluate(`(async()=>(await(await import('./src/storage.js')).listDocuments()).find(d=>d.id!==${JSON.stringify(originalID)}).id)()`),next=await record(nextID),marks=next.metadata.bookmarks;
     assert.equal(marks.length,2);assert.ok(marks.every(m=>m.locationVersion===2&&m.editionPosition==='text'));assert.equal(marks[0].section,'v0:moved');assert.equal(marks[1].section,'v0:repeat');assert.deepEqual((await record(originalID)).metadata.bookmarks,original.metadata.bookmarks);assert.equal((await record(originalID)).html,original.html);
     const installPointReader=()=>page.evaluate(`(async()=>{const {textIndex,rangeFromOffsets}=await import('./src/document.js'),{findBookmarkText}=await import('./src/bookmark-location.js');window.bookmarkPoint=mark=>{const d=${doc};if(d?.getElementById('reader-content')?.dataset.section!==mark.section)return null;const index=textIndex(d),hit=findBookmarkText(index.text,mark,0,index.text.length,{sameEdition:true});if(!hit||hit.ambiguous)return null;const r=rangeFromOffsets(d,hit.point,hit.point+1,index),rect=r.getBoundingClientRect();return {top:rect.top,bottom:rect.bottom,parent:r.startContainer.parentElement.closest('[id]')?.id,word:index.text.slice(hit.point,hit.point+24)};};})()`);
-    await installPointReader();await page.click('#sidebar [data-sidebar-view=bookmarks]');
-    const click=selector=>page.click('#sidebar '+selector),jump=async mark=>{await revealBookmark(page,'document',mark.id,click);await click(`[data-bookmark="${mark.id}"]`);await page.waitFor(`(()=>{const p=window.bookmarkPoint(${JSON.stringify(mark)});return p&&p.top<3&&p.bottom>-3;})()`,20000);return page.evaluate(`window.bookmarkPoint(${JSON.stringify(mark)})`);};
+    await installPointReader();await clickDocumentControl(page,'[data-sidebar-view=bookmarks]');
+    const click=selector=>clickDocumentControl(page,selector),jump=async mark=>{await revealBookmark(page,doc,mark.id,click);await click(`[data-bookmark="${mark.id}"]`);await page.waitFor(`(()=>{const p=window.bookmarkPoint(${JSON.stringify(mark)});return p&&p.top<3&&p.bottom>-3;})()`,20000);return page.evaluate(`window.bookmarkPoint(${JSON.stringify(mark)})`);};
     const repeatedPosition=await jump(marks[1]);assert.equal(repeatedPosition.parent,'repeat-two');
     await jump(marks[0]);await page.evaluate(`${doc}.getElementById('long').style.maxWidth='300px';${doc}.getElementById('long').style.fontSize='34px';${doc}.defaultView.scrollTo(0,0)`);const reflow=await jump(marks[0]);assert.equal(reflow.parent,'long');assert.doesNotMatch(await page.evaluate('document.querySelector("#toast").textContent'),/확인하지 못/);
     await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,'test-results/pages-only-precise-bookmarks-1280.png'),await page.screenshot());
-    await page.waitFor('!document.querySelector(".tab-dirty:not([hidden])")');await page.navigate(url);await page.waitFor(`document.querySelector('[data-open="${nextID}"]')`);await page.click(`[data-open="${nextID}"]`);await page.waitFor(`${frame}?.style.visibility==='visible'`);await installPointReader();await page.click('#sidebar [data-sidebar-view=bookmarks]');const reopened=await jump(marks[0]);
+    await page.waitFor('!document.querySelector(".tab-dirty:not([hidden])")');await page.navigate(url);await page.waitFor(`document.querySelector('[data-open="${nextID}"]')`);await page.click(`[data-open="${nextID}"]`);await page.waitFor(`${frame}?.style.visibility==='visible'`);await installPointReader();await clickDocumentControl(page,'[data-sidebar-view=bookmarks]');const reopened=await jump(marks[0]);
     await page.evaluate(`window.showSaveFilePicker=async()=> (await navigator.storage.getDirectory()).getFileHandle('precise-export.html',{create:true})`);await chooseDocumentExport(page,'html');await page.waitFor(`(async()=>{try{return(await(await(await navigator.storage.getDirectory()).getFileHandle('precise-export.html')).getFile()).size>0;}catch{return false;}})()`);
     const exported=await page.evaluate(`(async()=>{const html=await(await(await(await navigator.storage.getDirectory()).getFileHandle('precise-export.html')).getFile()).text();return(await import('./src/document.js')).parseHTML(html).metadata.bookmarks;})()`);assert.deepEqual(exported,marks);
     await writeFile(join(root,'test-results/pages-only-precise-bookmarks.json'),JSON.stringify({capturedAtCreation:true,offscreenChapters:true,longParagraph:true,changedChapter:true,changedMarkup:true,whitespace:true,duplicateContext:repeatedPosition,reflow,reopened,exportPreserved:true,oldPreserved:true,approximate:0,errors:chrome.errors},null,2));assert.deepEqual(chrome.errors,[]);

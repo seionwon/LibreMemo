@@ -5,6 +5,11 @@ export async function toggleDocumentSidebarFromToolbar(page){
   if(await page.evaluate(`!!document.querySelector(${JSON.stringify(menu)})?.getClientRects().length`))await page.click(menu);
   else{await page.click('#toolbar [data-action=more]');await page.click('[data-more=sidebar]');}
 }
+export async function clickDocumentControl(page,selector){
+  await revealDocumentControl(page,selector);
+  const point=await page.evaluate(`(async()=>{const f=document.querySelector('.document-host:not([hidden]) iframe.document-frame'),d=f.contentDocument,n=d.querySelector(${JSON.stringify(selector)});if(!n)throw Error('Missing source control: '+${JSON.stringify(selector)});n.scrollIntoView({block:'nearest',inline:'nearest'});await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));const r=n.getBoundingClientRect(),b=f.getBoundingClientRect(),z=b.width/f.offsetWidth,p={x:b.left+(r.left+r.width/2)*z,y:b.top+(r.top+r.height/2)*z},inside=d.elementFromPoint(r.left+r.width/2,r.top+r.height/2),outside=document.elementFromPoint(p.x,p.y);if(outside!==f||!n.contains(inside))throw Error('Source control is obscured: '+JSON.stringify({selector:${JSON.stringify(selector)},point:p,node:r.toJSON(),frame:b.toJSON(),inside:inside?.outerHTML.slice(0,300),outside:outside?.outerHTML.slice(0,300)}));return p;})()`);
+  for(const type of ['mousePressed','mouseReleased'])await page.send('Input.dispatchMouseEvent',{type,...point,button:'left',clickCount:1});
+}
 export async function revealDocumentControl(page,selector){
   await page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
   const close=await page.evaluate(`(()=>{const f=document.querySelector('.document-host:not([hidden]) iframe.document-frame'),d=f?.contentDocument,n=d?.querySelector(${JSON.stringify(selector)}),sidebar=d?.querySelector('[data-htmlmemo-native-sidebar]');return !!n&&!n.matches('#reader-menu,[data-action=toggle-sidebar]')&&!n.closest('[data-htmlmemo-native-sidebar]')&&d.documentElement.hasAttribute('data-htmlmemo-compact-ui')&&!!sidebar?.getClientRects().length;})()`);
