@@ -1,3 +1,4 @@
+import {toggleDocumentSidebarFromToolbar} from './document-controls.mjs';
 import {chooseDocumentExport} from './export-flow.mjs';
 // Actual Chrome only in CI / trusted environments. This uses the shipped app,
 // its ordinary import, toolbar, folder autosave and export paths.
@@ -127,13 +128,13 @@ test('real Chrome: Pages-only PDF stays sharp across display density, multiple v
     await page.send('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:3,mobile:false});await page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');await record('display density changed without zoom or scroll');
     await page.click('.document-host:not([hidden]) [data-action=zoom]');await page.evaluate(`(()=>{const input=document.querySelector('#zoom-value');for(const n of [100,200,800]){input.value=String(n);input.dispatchEvent(new Event('change',{bubbles:true}));}})()`);await page.click('[data-popover-close]');await record('rapid zoom to 800 percent');
     await page.evaluate("(()=>{const r=document.querySelector('#sidebar').annotationReader;r.scrollLeft=700;r.scrollTop+=400;})()");await record('horizontal and vertical pan at 800 percent');
-    await zoom(100);await page.click('.document-host:not([hidden]) [data-action=toggle-sidebar]');await page.click('#sidebar [data-heading="1"]');
+    await zoom(100);await toggleDocumentSidebarFromToolbar(page);await page.click('#sidebar [data-heading="1"]');
     await page.waitFor("document.querySelector('#sidebar').annotationReader.pdf.position().page===3");await record('TOC destination');
     const placement=await page.evaluate("(()=>{const r=document.querySelector('#sidebar').annotationReader,f=r.frame.getBoundingClientRect(),v=r.viewport.getBoundingClientRect(),p=r.doc.querySelector('#pdf-page-3').getBoundingClientRect();return {top:f.top+p.top*r.zoom,expected:v.top,left:r.scrollLeft};})()");assert.ok(Math.abs(placement.top-placement.expected)<2,JSON.stringify(placement));assert.equal(placement.left,0);
     await page.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:3,mobile:true});await page.click('#close-sidebar');await record('phone DPR 3');
     await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,'test-results/pages-only-pdf-resolution-390.png'),await page.screenshot());await saved(page);
     await page.navigate(env.url);await page.waitFor('!!document.querySelector("[data-open='+id+']")');await page.click('[data-open='+id+']');await page.waitFor(ready,30000);await installProof();await record('reopened PDF');
     assert.deepEqual(chrome.errors,[]);await writeFile(join(root,'test-results/pages-only-pdf-resolution.json'),JSON.stringify({status:'pass',states,placement,errors:[]},null,2));
-  }catch(error){if(chrome){await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,'test-results/pages-only-pdf-resolution-failure.png'),await chrome.page.screenshot());console.error('PDF resolution:',await chrome.page.evaluate('window.__pdfQuality?.()').catch(()=>null));}throw error;}
+  }catch(error){if(chrome){await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,'test-results/pages-only-pdf-resolution-failure.json'),JSON.stringify({completed:states,error:error.message,beforeCapture:await chrome.page.evaluate('window.__pdfQuality?.()').catch(()=>null)},null,2));await writeFile(join(root,'test-results/pages-only-pdf-resolution-failure.png'),await chrome.page.screenshot());console.error('PDF resolution:',await chrome.page.evaluate('window.__pdfQuality?.()').catch(()=>null));}throw error;}
   finally{await chrome?.close();await env.close();}
 });
