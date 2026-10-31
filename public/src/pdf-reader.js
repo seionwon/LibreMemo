@@ -162,7 +162,7 @@ export class PdfReader{
       if(refresh&&!this.disposed&&!slot.controller.signal.aborted)this.schedule();
     });
   }
-  schedule(){if(this.disposed||this.frame)return;this.frame=this.doc.defaultView.requestAnimationFrame(()=>{this.frame=null;void this.updateVisible().catch(error=>{if(!this.disposed)this.reader.callbacks.onError?.(error);});});}
+  schedule(){if(this.disposed||this.frame)return;this.frame=(this.appWindow||this.reader.host.ownerDocument.defaultView).requestAnimationFrame(()=>{this.frame=null;void this.updateVisible().catch(error=>{if(!this.disposed)this.reader.callbacks.onError?.(error);});});}
   async updateVisible(){
     if(this.reader.host.hidden||this.disposed)return;
     if(this.reader.annotationDrag||this.reader.gesture||this.reader.textMarkGesture){for(const slot of this.slots.values())if(slot.node.dataset.pdfReady)this.renderPage(slot);return;}
@@ -321,7 +321,7 @@ export class PdfReader{
   }
   async nextSpeechPage(isCurrent=()=>true){let page=Number(this.speechRoot?.closest('[data-pdf-page]')?.dataset.pdfPage)||this.pageAt();while(page<this.count&&!this.disposed&&isCurrent()){page++;await this.ensure(page);if(!isCurrent()||this.disposed)return false;await this.go(page);this.setSpeechRoot(page);if(this.speechRoot?.textContent.trim())return true;}return false;}
   exportHTML(metadata){return exportPDFHTML(this.source,metadata);}
-  dispose(){this.disposed=true;this.jumpVersion++;this.searchGeneration++;this.searchAbort?.abort();this.wholeAbort?.abort();this.searchEngine?.clear();this.doc.defaultView.cancelAnimationFrame(this.frame);this.doc.defaultView.removeEventListener('scroll',this.onScroll);this.reader.viewport.removeEventListener('scroll',this.onScroll);this.appWindow?.removeEventListener('resize',this.onResolutionChange);this.pixelRatioQuery?.removeEventListener('change',this.onResolutionChange);this.visibilityObserver?.disconnect();for(const slot of this.slots.values()){slot.controller.abort();slot.textLayer?.cancel();this.clearDetail(slot);slot.image.dispose();}this.slots.clear();void this.loading?.destroy().catch(()=>{});}
+  dispose(){this.disposed=true;this.jumpVersion++;this.searchGeneration++;this.searchAbort?.abort();this.wholeAbort?.abort();this.searchEngine?.clear();(this.appWindow||this.reader.host.ownerDocument.defaultView).cancelAnimationFrame(this.frame);this.doc.defaultView.removeEventListener('scroll',this.onScroll);this.reader.viewport.removeEventListener('scroll',this.onScroll);this.appWindow?.removeEventListener('resize',this.onResolutionChange);this.pixelRatioQuery?.removeEventListener('change',this.onResolutionChange);this.visibilityObserver?.disconnect();for(const slot of this.slots.values()){slot.controller.abort();slot.textLayer?.cancel();this.clearDetail(slot);slot.image.dispose();}this.slots.clear();void this.loading?.destroy().catch(()=>{});}
 }
 
 const PDF_STYLE=`

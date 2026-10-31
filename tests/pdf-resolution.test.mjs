@@ -60,3 +60,10 @@ test('decoded PDF detail releases the scratch canvas while keeping exact raster 
   const image=new rendering.PdfPageImage(doc.querySelector('div'),{retainCanvas:false});image.publish(canvas,300,400,{left:150,top:200});images[0].onload();
   assert.equal(image.canvas,null);assert.equal(canvas.width,0);assert.equal(image.image.style.left,'150px');assert.equal(image.image.style.top,'200px');assert.equal(image.raster.pixelWidth,900);image.dispose();
 });
+
+test('PDF refresh uses the visible app frame and coalesces updates even if the source frame is throttled',async()=>{
+  const pending=[],pdf=Object.create(PdfReader.prototype);let updates=0;
+  pdf.appWindow={requestAnimationFrame:callback=>(pending.push(callback),pending.length)};
+  pdf.doc={defaultView:{requestAnimationFrame(){throw Error('source iframe frame was throttled');}}};pdf.updateVisible=async()=>updates++;
+  pdf.schedule();pdf.schedule();assert.equal(pending.length,1);pending[0]();await Promise.resolve();assert.equal(updates,1);assert.equal(pdf.frame,null);
+});
