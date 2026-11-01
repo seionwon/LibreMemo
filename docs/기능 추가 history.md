@@ -5550,3 +5550,24 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
   2. **확대·축소 시 모든 포맷에서 직전 읽기 위치 유지([`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js)):**
      - [`captureReadingAnchor`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1278-L1372)와 [`restoreReadingAnchor`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1373-L1419)를 추가해 현재 화면 상단 읽기 기준선(`focalY`)에 걸친 슬라이드·쪽·표 행·문단 블록(`node`, `offsetRatioY`, `offsetRatioX`)과 문단 내 해당 줄의 글자 범위(`textPin`)를 이진 탐색으로 포착한 뒤, `A+`/`A−`(`setReadingFontScale`, `stepSourceFont`, 자체 상단 바 `#reader-smaller`/`#reader-larger`) 및 레이아웃 리플로우가 발생하는 배율 변경(`setZoom`) 직후 해당 줄·문단·슬라이드·쪽이 화면의 동일한 위치에 오도록 스크롤을 복원합니다.
 - **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 905개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800) 실제 브라우저 검증 통과, `https://seionwon.github.io/LibreMemo/src/version.js`에서 `1.9.5` 온라인 게시 확인.
+
+<a id="hist-20261102-002"></a>
+### 2026-11-02 01:40:00 +09:00 — 글꼴 변경이 가능한 문서 포맷에서 읽기 글꼴 종류(`기본`·`고딕`·`명조`·`돋움`·`고정폭`) 선택 지원
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261102-002 |
+| 변경 종류 | 읽기 도구 모음 글꼴 종류 선택(`data-reading-font`, `supportsReadingFontFamily`, `setReadingFontFamily`, `readingFontFamilyCss`) · 문서별 글꼴 설정(`view.fontFamily`) 저장·복원 및 글꼴 변경 시 읽기 위치·주석 정위치 유지 |
+| 상태 | 로컬 검증 완료 · 1.9.6 GitHub Pages 게시 완료 |
+
+- **목적·원인:**
+  1. 문서 읽기 중 텍스트 글꼴 변경이 가능한 포맷에서 사용자가 원하는 글꼴 종류(`기본`, `고딕`, `명조`, `돋움`, `고정폭`)로 바꾸어 읽을 수 있도록 읽기 도구 모음을 확장했습니다.
+  2. 아울러 앞선 `1.9.4`·`1.9.5` 변경의 후속 점검에서 발견된 만화 전자책(`comic.cbz`, `article[data-ebook][data-ebook-layout="fixed"]` 내부 `.ebook-comic-page`)의 `drawableContainer` 판별 순서와 인라인 `<tspan>`을 포함한 단일 SVG `<text>` 요소(`Native <tspan>diagram label.</tspan>`)의 TTS 문장 결합을 함께 보정했습니다.
+- **동작·보존:**
+  1. **글꼴 종류 선택 컨트롤 및 포맷별 활성/비활성 처리([`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js), [`public/design.tailwind.css`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css), [`public/src/app.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js)):**
+     - 상단 읽기 도구 모음(`.reader-head.htmlmemo-source-toolbar` 및 자체 상단 바 `topbarNode`)의 화면 모드 선택(`data-reading-theme`) 옆에 글꼴 선택 드롭다운(`<select data-reading-font aria-label="글꼴" title="글꼴 종류">`: `기본`, `고딕`, `명조`, `돋움`, `고정폭`)을 추가했습니다.
+     - [`supportsReadingFontFamily`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1053-L1059)를 통해 텍스트 글꼴 변경이 가능한 포맷(HTML/HTM/MHTML/MHT, MemoSuite HTML 책, 마크다운·붙여넣기·TXT·JSON, DOCX/ODT/RTF, XLSX/ODS/CSV/TSV, PPTX/ODP, EPUB/FB2/MOBI/AZW3, 자막 SRT/VTT/ASS/SSA/SMI, 한글 HWP/HWPX/HML, 텍스트 본문이 있는 DjVu)에서는 컨트롤을 활성화하고, 캔버스·래스터 이미지 전용 포맷(PDF, 단독 이미지 PNG/JPG/WebP/GIF/AVIF/BMP/ICO/SVG, 만화 압축 파일 CBZ, 텍스트가 없는 스캔 이미지 DjVu)에서는 `disabled` 상태로 표시합니다.
+  2. **글꼴 적용·저장 및 읽기 위치·주석 보존([`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js), [`public/src/document.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document.js), [`public/src/document-archive.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document-archive.js)):**
+     - [`setReadingFontFamily`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1077-L1090) 호출 시 직전 읽기 기준점(`captureReadingAnchor`)을 포착한 뒤 본문 스타일(`#htmlmemo-reading-font-style` 또는 `#htmlmemo-source-font-style`)에 선택한 글꼴 패밀리 스택을 적용하고(수식 `.katex`/`math` 및 앱 UI `[data-htmlmemo-ui]` 제외, `고정폭` 외에는 `pre`/`code` 고정폭 유지), 즉시 `measure()`·`restoreReadingAnchor()`·`renderDrawingLayer()`를 수행해 글꼴 변경으로 줄바꿈이 달라져도 읽던 위치와 주석 위치가 유지되도록 했습니다.
+     - 선택한 글꼴(`view.fontFamily`: `'sans' | 'serif' | 'dotum' | 'mono'`)은 문서 메타데이터와 `.librememo` 보관 파일에 저장·복원되며, HTML 내보내기 시 임시 스타일과 컨트롤 노드는 원본에서 깨끗이 제거됩니다.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 906개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800) 실제 브라우저 검증 통과, `https://seionwon.github.io/LibreMemo/src/version.js`에서 `1.9.6` 온라인 게시 확인.

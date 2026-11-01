@@ -45,6 +45,8 @@ test('plain documents copy the HTML reader header with its title, navigation, po
   assert.equal(r.plainReadingButtons.previous.hidden,false);assert.equal(r.plainReadingButtons.next.hidden,false);
   assert.equal(r.plainReadingButtons.position.textContent,'0 / 0');assert.equal(r.plainReadingButtons.title.textContent,doc.title);
   assert.deepEqual([...r.plainReadingButtons.theme.querySelectorAll('option')].map(option=>[option.value,option.textContent]),[['system','시스템'],['light','밝게'],['dark','어둡게']]);
+  assert.deepEqual([...r.plainReadingButtons.font.querySelectorAll('option')].map(option=>[option.value,option.textContent]),[['default','기본'],['sans','고딕'],['serif','명조'],['dotum','돋움'],['mono','고정폭']]);
+  assert.equal(r.plainReadingButtons.font.disabled,false);
   assert.equal(r.speechControl.nextElementSibling,r.plainReadingButtons.smaller);
   assert.ok(r.speechControl.querySelector('svg'));assert.equal(r.speechControls.isConnected,false);
   assert.equal(r.readingControls.ownerDocument,outer);assert.equal(doc.querySelector('[data-htmlmemo-reading-controls]'),null);
@@ -244,4 +246,56 @@ test('source toolbar A+ extends 3 more steps beyond the book maximum and cleans 
   assert.equal(r.sourceFontExtraSteps,0);assert.equal(doc.querySelector('#htmlmemo-source-font-style'),null);assert.equal(bookSize,24);
   smaller.dispatchEvent(new (doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
   assert.equal(bookSize,20);
+});
+test('font family selector changes font family when possible, disables for fixed-image formats, and cleans up on export',async()=>{
+  const {archiveMetadata}=await import('../public/src/document-archive.js');
+  const {r,doc}=fixture();
+  Object.assign(r,{autoFit:false,viewport:{scrollTop:0,scrollLeft:0},cancelAnnotationDrag(){},measure(){},renderDrawingLayer(){}});
+  let writes=0;r.callbacks.onPosition=()=>writes++;
+  r.setupReadingControls();
+  assert.equal(r.supportsReadingFontFamily(),true);
+  assert.equal(r.fontControl.disabled,false);
+  assert.equal(r.fontControl.value,'default');
+  assert.equal(r.setReadingFontFamily('serif'),true);
+  assert.equal(r.metadata.view.fontFamily,'serif');
+  assert.equal(r.fontControl.value,'serif');
+  assert.match(doc.querySelector('#htmlmemo-reading-font-style').textContent,/KoPubWorldBatang/);
+  assert.equal(writes,1);
+  assert.equal(r.setReadingFontFamily('mono'),true);
+  assert.equal(r.metadata.view.fontFamily,'mono');
+  assert.match(doc.querySelector('#htmlmemo-reading-font-style').textContent,/D2Coding/);
+  assert.equal(r.setReadingFontFamily('invalid-font'),false);
+  const saved=serializeHTML(doc,r.metadata);
+  assert.doesNotMatch(saved,/htmlmemo-reading-font-style|data-htmlmemo-reading-font/);
+  assert.equal(parseHTML(saved).metadata.view.fontFamily,'mono');
+  assert.equal(archiveMetadata({version:1,title:'문서',annotations:[],bookmarks:[],view:{fontFamily:'serif'}}).view.fontFamily,'serif');
+  assert.equal(r.setReadingFontFamily('default'),true);
+  assert.equal(Object.hasOwn(r.metadata.view,'fontFamily'),false);
+  assert.equal(doc.querySelector('#htmlmemo-reading-font-style'),null);
+
+  // Source topbar document also supports font family selection and strips control on export.
+  const top=fixture('<header class="reader-head"><button id="reader-smaller">A−</button><button id="reader-larger">A+</button><select id="reader-theme"><option value="system">시스템</option></select></header>');
+  Object.assign(top.r,{autoFit:false,viewport:{scrollTop:0,scrollLeft:0},cancelAnnotationDrag(){},measure(){},renderDrawingLayer(){}});
+  top.r.setupReadingControls();
+  assert.ok(top.doc.querySelector('[data-htmlmemo-reading-font]'));
+  assert.equal(top.r.setReadingFontFamily('dotum'),true);
+  assert.equal(top.r.metadata.view.fontFamily,'dotum');
+  assert.match(top.doc.querySelector('#htmlmemo-source-font-style').textContent,/AppleGothic/);
+  const topSaved=serializeHTML(top.doc,top.r.metadata);
+  assert.doesNotMatch(topSaved,/htmlmemo-source-font-style|data-htmlmemo-reading-font/);
+  assert.equal(parseHTML(topSaved).metadata.view.fontFamily,'dotum');
+
+  // Formats where changing font family is not possible disable the control.
+  r.pdf={headingState:()=>({nodes:[],current:-1})};r.updateReadingControls();
+  assert.equal(r.supportsReadingFontFamily(),false);assert.equal(r.fontControl.disabled,true);assert.equal(r.setReadingFontFamily('sans'),false);
+  delete r.pdf;
+  doc.body.innerHTML='<article data-librememo-image><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw="></article>';
+  r.updateReadingControls();assert.equal(r.supportsReadingFontFamily(),false);assert.equal(r.fontControl.disabled,true);
+  doc.body.innerHTML='<article class="office-document ebook-document" data-ebook data-ebook-layout="fixed"><section class="office-page ebook-section ebook-comic-page"><img id="comic-img" src="data:image/gif;base64,R0lGODlhAQABAAAAACw="></section></article>';
+  r.updateReadingControls();assert.equal(r.supportsReadingFontFamily(),false);assert.equal(r.fontControl.disabled,true);
+  assert.equal(r.drawableContainer(doc.getElementById('comic-img')),doc.getElementById('comic-img'));
+  doc.body.innerHTML='<article data-office-pages data-djvu><section class="office-page"><div data-djvu-page></div></section></article>';
+  r.updateReadingControls();assert.equal(r.supportsReadingFontFamily(),false);assert.equal(r.fontControl.disabled,true);
+  doc.body.innerHTML='<article data-office-pages data-djvu><section class="office-page"><div data-djvu-page></div><div class="office-plain">텍스트</div></section></article>';
+  r.updateReadingControls();assert.equal(r.supportsReadingFontFamily(),true);assert.equal(r.fontControl.disabled,false);
 });

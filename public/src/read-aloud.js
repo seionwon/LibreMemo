@@ -394,8 +394,8 @@ export function createReadAloud(reader) {
     }
     var svgText = pe.closest('text');
     if (svgText) {
-      var standalone = !!pe.closest('.office-slide, .office-page, .ebook-fixed-page') || prevLine?.kind === 'svg-text';
-      return { kind: 'svg-text', token: standalone ? svgText : null, group: svgText.closest('g, svg'), node: svgText };
+      var standalone = !!pe.closest('.office-slide, .office-page, .ebook-fixed-page') || (prevLine?.kind === 'svg-text' && prevLine.node !== svgText);
+      return { kind: 'svg-text', token: svgText === prevLine?.node ? prevLine.token : (standalone ? svgText : null), group: svgText.closest('g, svg'), node: svgText };
     }
     return null;
   }

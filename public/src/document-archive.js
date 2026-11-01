@@ -28,6 +28,7 @@ export function archiveMetadata(value){
   for(const key of ['width','height'])if(Number.isFinite(value.viewport?.[key]))result.viewport[key]=Math.max(1,Math.min(100000,value.viewport[key]));
   for(const key of ['scrollTop','scrollLeft','zoom','fontScale','tocWidth'])if(Number.isFinite(value.view?.[key]))result.view[key]=Math.max(0,Math.min(1e12,value.view[key]));
   if(Number.isInteger(value.view?.sourceFontSteps)&&value.view.sourceFontSteps>=1&&value.view.sourceFontSteps<=3)result.view.sourceFontSteps=value.view.sourceFontSteps;
+  if(['sans','serif','dotum','mono'].includes(value.view?.fontFamily))result.view.fontFamily=value.view.fontFamily;
   if(typeof value.view?.autoFit==='boolean')result.view.autoFit=value.view.autoFit;
   if(['system','light','dark'].includes(value.view?.readingTheme))result.view.readingTheme=value.view.readingTheme;
   if(validPDFPosition(value.view?.pdfPosition))result.view.pdfPosition=structuredClone(value.view.pdfPosition);

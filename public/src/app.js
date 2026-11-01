@@ -57,7 +57,7 @@ function setupSelectLabels() {
   // parsers treat a button inside select as its end tag and lose the options.
   if(!window.CSS?.supports?.('appearance','base-select')||!window.HTMLSelectedContentElement)return;
   const enhance=select=>{
-    if(select.hasAttribute('data-reading-theme'))return;
+    if(select.hasAttribute('data-reading-theme')||select.hasAttribute('data-reading-font'))return;
     if(select.multiple||select.querySelector(':scope > button > selectedcontent'))return;
     const value=select.value,button=document.createElement('button');button.type='button';
     button.append(document.createElement('selectedcontent'));select.prepend(button);select.value=value;

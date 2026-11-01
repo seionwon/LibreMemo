@@ -261,11 +261,12 @@ test('PPTX slides, PDF text layers, HWP/DjVu pages and br-separated lines highli
     +'<section class="office-page"><svg><foreignObject><p data-office-text class="rhwp-text"><span>한글 </span><span>첫 문장입니다.\n</span></p></foreignObject><foreignObject><p data-office-text class="rhwp-text"><span>한글 둘째 문장입니다.\n</span></p></foreignObject></svg></section>'
     +'<section data-djvu-page><svg><foreignObject><p data-office-text class="djvu-text">스캔 </p></foreignObject><foreignObject><p data-office-text class="djvu-text">문장입니다.\n</p></foreignObject></svg></section>'
     +'<p>자막 첫째 줄입니다.<br>자막 둘째 줄입니다.</p>'
+    +'<svg><text id="native-label">Native <tspan>diagram label.</tspan></text></svg>'
     +'</main></body></html>';
   const b=fixture({paint:true,html:otherHtml});
-  [...b.doc.querySelectorAll('[data-pdf-text],.rhwp-text,.djvu-text,p')].forEach((el,i)=>{el.getBoundingClientRect=()=>({left:20,top:80+i*24,bottom:100+i*24,width:140,height:20});});
+  [...b.doc.querySelectorAll('[data-pdf-text],.rhwp-text,.djvu-text,p,text')].forEach((el,i)=>{el.getBoundingClientRect=()=>({left:20,top:80+i*24,bottom:100+i*24,width:140,height:20});});
   b.play();
-  const otherExpected=['첫째 줄 문장입니다.','둘째 줄 제목','셋째 줄 문장입니다.','한글 첫 문장입니다.','한글 둘째 문장입니다.','스캔 문장입니다.','자막 첫째 줄입니다.','자막 둘째 줄입니다.'];
+  const otherExpected=['첫째 줄 문장입니다.','둘째 줄 제목','셋째 줄 문장입니다.','한글 첫 문장입니다.','한글 둘째 문장입니다.','스캔 문장입니다.','자막 첫째 줄입니다.','자막 둘째 줄입니다.','Native diagram label.'];
   for(let i=0;i<otherExpected.length;i++){
     if(i>0)b.clickButton('다음 문장');
     assert.equal(b.spoken.at(-1).text,otherExpected[i]);
