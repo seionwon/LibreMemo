@@ -34,6 +34,8 @@ jobs:
       - run: mkdir -p test-results
       - name: Verify screenshots, image imports and subtitle annotations
         run: node --test --test-concurrency=1 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-results/browser-results.xml tests/browser-images-subtitles.integration.mjs
+      - name: Verify the expanded format corpus uses identical reader and sidebar controls
+        run: node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-results/browser-results.xml --test-name-pattern='every format shares' tests/browser-format-parity.integration.mjs
       - name: Verify visible book selection and new-edition bookmarks
         run: node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-results/browser-results.xml --test-name-pattern='toolbar mode groups preserve selected text|annotations and bookmarks move to a new edition|precise bookmarks retain' tests/browser.integration.mjs
       - name: Verify PDF pixel density and the revised outline interactions before the full suite

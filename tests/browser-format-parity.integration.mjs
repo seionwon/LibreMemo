@@ -12,6 +12,8 @@ import {launchChrome,clickLibraryImport} from './chrome.mjs';
 import {officeFixtures} from './office-fixtures.mjs';
 import {ebookFixtures,ebookZip,epubParts} from './ebook-fixtures.mjs';
 import {DOCUMENT_EXTENSIONS} from '../public/src/office-formats.js';
+import {IMAGE_EXTENSIONS} from '../public/src/image-formats.js';
+import {mediaFixtures} from './media-fixtures.mjs';
 
 const host='document.querySelector(".document-host:not([hidden])")',frame=host+'.querySelector("iframe")',doc=frame+'.contentDocument';
 const bar=host+'.querySelector("[data-htmlmemo-reading-controls]")';
@@ -49,14 +51,15 @@ async function installSpeech(page){
 const html='<!doctype html><html><head><title>공통 도구 검사</title></head><body><header class="header"><strong>문서 제목</strong><form><input type="search"><button type="button">사이트 검색</button></form></header><main><h1>첫 장</h1><p>검색하는 한국어 본문입니다.</p><h2>첫 절</h2><p>두 번째 문장입니다.</p><h3>작은 절</h3><p>남겨 둘 문장입니다.</p><h1>둘째 장</h1><p>마지막 본문입니다.</p></main></body></html>';
 const mhtml='MIME-Version: 1.0\r\nContent-Type: multipart/related; boundary="parity"\r\n\r\n--parity\r\nContent-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\nContent-Location: https://example.invalid/parity\r\n\r\n'+Buffer.from(html).toString('base64')+'\r\n--parity--\r\n';
 
-test('real Chrome: Pages-only every format shares MemoSuite toolbar sizes, sidebar, annotations, bookmarks and TTS',{timeout:420000},async()=>{
+test('real Chrome: Pages-only every format shares MemoSuite toolbar sizes, sidebar, annotations, bookmarks and TTS',{timeout:600000},async()=>{
   const env=await environment();let chrome;const results=[];
   try{
     chrome=await launchChrome();const page=chrome.page;await page.navigate(env.url);await installSpeech(page);
-    const fixtures={html:Buffer.from(html),htm:Buffer.from(html+'\n'),mhtml:Buffer.from(mhtml),mht:Buffer.from(mhtml),pdf:await readFile(join(root,'tests/fixtures/unified-reader.pdf')),...await officeFixtures(),...await ebookFixtures()};
+    const fixtures={html:Buffer.from(html),htm:Buffer.from(html+'\n'),mhtml:Buffer.from(mhtml),mht:Buffer.from(mhtml),pdf:await readFile(join(root,'tests/fixtures/unified-reader.pdf')),...await officeFixtures(),...await ebookFixtures(),...await mediaFixtures()};
     assert.deepEqual(Object.keys(fixtures).sort(),[...DOCUMENT_EXTENSIONS].sort());
     const baseline={};
     for(const [format,bytes] of Object.entries(fixtures)){
+      const imageOnly=format==='cbz'||IMAGE_EXTENSIONS.includes(format);
       const name='공통 화면.'+format;await viewport(page,1280);await chooseFile(page,bytes,name);
       assert.equal(await page.evaluate(`!!${bar}?.querySelector('[data-action=previous-heading]')`),true,format+' complete toolbar');
       await page.click(control('zoom'));await page.click('#zoom-reset');await saved(page,name);
@@ -70,7 +73,7 @@ test('real Chrome: Pages-only every format shares MemoSuite toolbar sizes, sideb
       const title=await page.evaluate(`${bar}.querySelector('.reader-title').textContent`);assert.ok(title);
       // Opening the same player is always silent; only Play starts reading.
       const before=await page.evaluate('window.__paritySpoken.length');await page.click(control('speak'));await page.waitFor('!!document.querySelector(".mstts-player")');assert.equal(await page.evaluate('window.__paritySpoken.length'),before);
-      if(format!=='cbz'){await page.click('.mstts-player [aria-label="소리내어 읽기"]');await page.waitFor('window.__paritySpoken.length>'+before);}
+      if(!imageOnly){await page.click('.mstts-player [aria-label="소리내어 읽기"]');await page.waitFor('window.__paritySpoken.length>'+before);}
       await page.click('.mstts-player [aria-label="플레이어 닫기"]');
       // The HTML fallback, PDF and all converted formats use the same settings.
       await page.evaluate(`(()=>{const s=${bar}.querySelector('[data-reading-theme]');s.value='dark';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);await saved(page,name,'window.__parityRecord.metadata.view.readingTheme==="dark"');
@@ -78,7 +81,7 @@ test('real Chrome: Pages-only every format shares MemoSuite toolbar sizes, sideb
       assert.equal(await page.evaluate(`${frame}.contentWindow.getComputedStyle(${doc}.body).backgroundColor`),format==='pdf'?'rgb(27, 30, 37)':'rgb(20, 22, 27)',format+' dark paper');
       await page.evaluate(`(()=>{const s=${bar}.querySelector('[data-reading-theme]');s.value='light';s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
       await page.click(control('font-larger'));await saved(page,name,'window.__parityRecord.metadata.view.fontScale===1.1');assert.equal(await page.evaluate(`${bar}.getBoundingClientRect().height`),24);
-      if(format!=='cbz'){
+      if(!imageOnly){
         const selected=await page.evaluate(`(async()=>{const d=${doc},{textIndex,rangeFromOffsets}=await import('./src/document.js'),index=textIndex(d),root=d.querySelector('[data-office-text],.textLayer span,article p,main p,main h1')||d.body,runs=index.nodes.filter(n=>root.contains(n.node)),run=runs.find(n=>{if(!n.node.textContent.trim())return false;const r=d.createRange();r.selectNodeContents(n.node);return r.getBoundingClientRect().height>0;});if(!run)throw Error('No selectable body text');const end=Math.min(run.start+8,runs.at(-1).end),range=rangeFromOffsets(d,run.start,end,index);d.getSelection().removeAllRanges();d.getSelection().addRange(range);d.dispatchEvent(new Event('selectionchange'));return d.getSelection().toString();})()`);assert.ok(selected);
         await page.click('#toolbar [data-action=highlight]');await saved(page,name,'window.__parityRecord.metadata.annotations.length===1');
         assert.equal(await page.evaluate('document.querySelector("#sidebar [data-sidebar-count=annotations]").textContent'),'1');
@@ -87,10 +90,10 @@ test('real Chrome: Pages-only every format shares MemoSuite toolbar sizes, sideb
       assert.equal(await page.evaluate('document.querySelector("#sidebar [data-sidebar-count=bookmarks]").textContent'),'1');
       await page.click('#sidebar [data-bookmark-group] > summary');assert.equal(await page.evaluate('document.querySelectorAll("#sidebar [data-bookmark-group][open]").length>0'),true);await page.click('#sidebar [data-sidebar-view=bookmarks]');assert.equal(await page.evaluate('document.querySelectorAll("#sidebar [data-bookmark-group][open]").length'),0);
       await page.click('#sidebar [data-sidebar-view=outline]');
-      if(['html','pdf','docx','xlsx','pptx','hwpx','epub','cbz','txt'].includes(format)){
+      if(['html','pdf','docx','xlsx','pptx','hwpx','epub','cbz','txt','png','srt','djvu'].includes(format)){
         await viewport(page,320);await writeFile(join(root,'test-results/pages-only-format-parity-'+format+'-320.png'),await page.screenshot());
       }
-      results.push({format,widths:[1280,390,320],toolbar:true,sidebar:true,theme:true,font:true,annotation:format==='cbz'?'existing image drawing tests':true,bookmark:true,tts:format==='cbz'?'image only; no OCR':true});
+      results.push({format,widths:[1280,390,320],toolbar:true,sidebar:true,theme:true,font:true,annotation:imageOnly?'image drawing tests in browser-images-subtitles / ebook suites':true,bookmark:true,tts:imageOnly?'image only; no OCR':true});
     }
     assert.deepEqual(chrome.errors,[]);await writeFile(join(root,'test-results/pages-only-format-parity.json'),JSON.stringify({status:'pass',formats:results,baseline,errors:[]},null,2));
   }catch(error){if(chrome){await writeFile(join(root,'test-results/pages-only-format-parity-failure.png'),await chrome.page.screenshot());await writeFile(join(root,'test-results/pages-only-format-parity-failure.json'),JSON.stringify({completed:results,error:error.stack,state:await chrome.page.evaluate('({toast:document.querySelector("#toast")?.textContent,tab:document.querySelector(".tab.document.active")?.textContent})')},null,2));}throw error;}

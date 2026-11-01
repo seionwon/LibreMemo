@@ -13,6 +13,10 @@ import {APP_FILES} from '../public/src/distribution.js';
 installDOM();
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7z8AAAAASUVORK5CYII=','base64');
 import {srt,subtitleFixtures} from './image-subtitle-fixtures.mjs';
+test('the shared Chrome parity corpus includes every new image, subtitle and DjVu extension',async()=>{
+  const {mediaFixtures}=await import('./media-fixtures.mjs'),{IMAGE_EXTENSIONS}=await import('../public/src/image-formats.js'),fixtures=await mediaFixtures();
+  assert.deepEqual(Object.keys(fixtures).sort(),[...IMAGE_EXTENSIONS,...Object.keys(subtitleFixtures),'djvu','djv'].sort());for(const bytes of Object.values(fixtures))assert.ok(bytes.length);
+});
 test('images enter the ordinary read-only import/duplicate/drop path with exact originals',async()=>{
   const file=new File([png],'캡처.png',{type:'image/png'}),local=await readLocalHTML(file,{identify:false});
   assert.equal(local.originalFile,file);assert.equal(local.snapshot.image,file);assert.equal(local.snapshot.html,undefined);assert.equal(local.handle,null);
