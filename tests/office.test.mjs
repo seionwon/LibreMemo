@@ -8,6 +8,7 @@ import {renderOffice,inspectOfficeZip} from '../public/src/office-render.js';
 import {OFFICE_FORMATS,officeFormat,verifyOffice} from '../public/src/office-formats.js';
 import {readLocalHTML,droppedHTMLFiles,findLocalDuplicates,localFileIdentity,htmlExportName} from '../public/src/local-files.js';
 import {parseHTML,textIndex,wrapOffsets,serializeHTML} from '../public/src/document.js';
+import {Reader} from '../public/src/reader.js';
 import {documentCopyName} from '../public/src/library-folders.js';
 import {APP_FILES} from '../public/src/distribution.js';
 installDOM();
@@ -29,7 +30,13 @@ test('Word headings, merged tables and rich text use the common searchable HTML'
 test('Slide body text uses HTML spans inside SVG so search and saved highlights survive reopening',async()=>{
   const parsed=parseHTML((await renderOffice(fixtures.pptx,'pptx','Slides')).html),doc=documentFor(parsed.html),index=textIndex(doc),start=index.text.indexOf('검색');assert.ok(start>=0);
   assert.equal(parsed.nativeScroll,true);
-  assert.equal(doc.querySelectorAll('.office-slide').length,2);assert.ok(doc.querySelector('foreignObject [data-office-text]'));
+  assert.equal(doc.querySelectorAll('.office-slide').length,2);assert.equal(doc.querySelector('.office-slide h2'),null);assert.ok(doc.querySelector('foreignObject [data-office-text]'));
+  const outlineFor=d=>Reader.prototype.outline.call({pdf:null,doc:d,slideOutlineTitle:Reader.prototype.slideOutlineTitle}).map(e=>e.title);
+  assert.deepEqual(outlineFor(doc),['1/2 슬라이드 검색 본문 1','2/2 슬라이드 검색 본문 2']);
+  const odpDoc=documentFor(parseHTML((await renderOffice(fixtures.odp,'odp','ODP')).html).html);
+  assert.equal(odpDoc.querySelector('.office-slide h2'),null);assert.deepEqual(outlineFor(odpDoc),['1/1 OpenDocument 슬라이드 본문']);
+  const legacyDoc=documentFor('<!doctype html><html><body><article data-office-slides><section class="office-slide" id="office-slide-1"><h2>슬라이드 1</h2><svg viewBox="0 0 960 540"><g transform="translate(48 24)"><foreignObject x="0" y="0"><span data-office-text style="font-size:13px">PART 1</span></foreignObject></g><g transform="translate(48 56)"><foreignObject x="0" y="0"><span data-office-text style="font-size:32px;font-weight:700">바이브 코딩의 핵심</span></foreignObject></g><g transform="translate(48 160)"><foreignObject x="0" y="0"><span data-office-text style="font-size:16px">본문 설명</span></foreignObject></g></svg></section></article></body></html>');
+  assert.deepEqual(outlineFor(legacyDoc),['1/1 바이브 코딩의 핵심']);
   const marks=wrapOffsets(doc,start,start+2,{'data-htmlmemo-mark':'slide-highlight'},'background:#ff0',index);assert.ok(marks.length);assert.equal(marks[0].namespaceURI,'http://www.w3.org/1999/xhtml');
   const metadata={...parsed.metadata,annotations:[{id:'m',type:'highlight',color:'#ffee00',opacity:.3,width:2,textAnchor:{start,end:start+2,quote:'검색'}}],bookmarks:[{id:'b',title:'둘째 슬라이드',top:100,left:0}]};
   const restored=parseHTML(serializeHTML(doc,metadata),{}, {includeMetadata:true});assert.deepEqual(restored.metadata.annotations,metadata.annotations);assert.equal(restored.metadata.bookmarks.length,1);assert.match(textIndex(documentFor(restored.html)).text,/슬라이드 검색 본문 2/);

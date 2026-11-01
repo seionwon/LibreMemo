@@ -82,14 +82,87 @@ function renderNode(node,paint,warnings,depth=0){
   const transform='translate('+n(b.x)+' '+n(b.y)+')'+(b.rotationDeg?' rotate('+n(b.rotationDeg)+' '+w/2+' '+h/2+')':'')+(b.flipH||b.flipV?' translate('+(b.flipH?w:0)+' '+(b.flipV?h:0)+') scale('+(b.flipH?-1:1)+' '+(b.flipV?-1:1)+')':'');
   return '<g transform="'+transform+'">'+body+'</g>';
 }
+const SKIP_PLACEHOLDERS=new Set(['dt','ftr','sldNum','hdr']);
+const cleanSlideTitle=text=>{
+  const cleaned=String(text||'').replace(/\s+/g,' ').replace(/^[•·▪▫◦‣⁃\-*]\s+/,'').trim();
+  return cleaned.length>80?cleaned.slice(0,80).trimEnd()+'…':cleaned;
+};
+const isSlideNumberText=text=>/^(?:slide|슬라이드|p|page|쪽)?\s*\d+(?:\s*[/|-]\s*\d+)?$/i.test(String(text||'').trim());
+const isBadgeOrStatText=text=>{
+  const t=String(text||'').trim();
+  if(!t||isSlideNumberText(t))return true;
+  if(/^(?:(?:part|step|chap(?:ter)?|section|sec|장|절|부)\s*)?(?:0?\d{1,3}|[IVXLCDM]{1,5})[.:)]?$/i.test(t))return true;
+  return /^[+-]?\d[\d,.\s%$₩€£¥배건명개년월일시분초pPtT+/*-]*$/.test(t);
+};
+export function formatSlideTocTitle(index,total,rawTitle=''){
+  const prefix=(index+1)+'/'+total;
+  const cleaned=cleanSlideTitle(rawTitle).replace(new RegExp('^'+(index+1)+'\\s*/\\s*'+total+'(?:\\s+|[-:.)]\\s*)?'),'').trim();
+  return cleaned?prefix+' '+cleaned:prefix;
+}
+function extractSlideTitle(slide,tree,slideNo){
+  const sources=new Map(),indexElements=list=>{for(const el of list||[]){if(el?.id)sources.set(el.id,el);if(el?.children)indexElements(el.children);}};
+  indexElements(slide?.elements);
+  const H=Math.max(1,n(tree?.heightPx,540)),W=Math.max(1,n(tree?.widthPx,960)),candidates=[];
+  const pushSegments=(lines,box,meta)=>{
+    const groups=[];
+    for(const line of lines||[]){
+      const runs=(line.runs||[]).filter(r=>!r.isBullet&&String(r.text||'').trim());
+      const text=(line.runs||[]).filter(r=>!r.isBullet).map(r=>r.text||'').join('').replace(/\s+/g,' ').trim();
+      if(!text||!runs.length)continue;
+      const fontSize=Math.max(0,...runs.map(r=>n(r.fontSizePx,16))),bold=runs.some(r=>r.bold);
+      const x=box.x+n(runs[0]?.x),y=box.y+n(line.top,n(runs[0]?.baselineY)-n(runs[0]?.ascentPx,fontSize*.8));
+      const prev=groups.at(-1);
+      if(prev&&!line.paraStart&&(prev.softBreakAfter==null||Math.abs(prev.fontSize-fontSize)<=1.5)){
+        prev.text+=(prev.trailingText||' ')+text;prev.fontSize=Math.max(prev.fontSize,fontSize);prev.bold=prev.bold||bold;
+        prev.trailingText=line.trailingText;prev.softBreakAfter=line.softBreakAfter;
+      }else groups.push({text,fontSize,bold,x,y,trailingText:line.trailingText,softBreakAfter:line.softBreakAfter});
+    }
+    let seenMainTitle=false;
+    groups.forEach(seg=>{
+      const text=cleanSlideTitle(seg.text);if(!text)return;
+      const isMain=meta.titleKind===2&&!seenMainTitle&&!isBadgeOrStatText(text);
+      if(isMain)seenMainTitle=true;
+      candidates.push({...meta,text,fontSize:seg.fontSize,bold:seg.bold,x:seg.x,y:seg.y,titleKind:meta.titleKind===2?(isMain?2:1):meta.titleKind});
+    });
+  };
+  const visit=(nodes,ox=0,oy=0)=>{
+    for(const node of nodes||[]){
+      if(!node||SKIP_PLACEHOLDERS.has(node.placeholder))continue;
+      const bx=ox+n(node.box?.x),by=oy+n(node.box?.y);
+      if(node.type==='group'){visit(node.children,bx,by);continue;}
+      const el=sources.get(node.sourceId),ph=node.placeholder||el?.placeholder||'',name=String(el?.name||node.name||'').trim();
+      const titleKind=ph==='title'||ph==='ctrTitle'||/^(?:title|ctrtitle|center\s*title|제목|표제)(?:\s+\d+)?$/i.test(name)?2:ph==='subTitle'||/^subtitle(?:\s+\d+)?$/i.test(name)?1:0;
+      const meta={decoration:!!node.decoration,titleKind};
+      if(node.text?.lines?.length)pushSegments(node.text.lines,{x:bx,y:by},meta);
+      else if(node.type==='table')for(const cell of node.cells||[])if(cell.text?.lines?.length)pushSegments(cell.text.lines,{x:bx+n(cell.x),y:by+n(cell.y)},{...meta,titleKind:0});
+      else if(node.type==='chart'&&node.labels?.length){
+        for(const l of node.labels){const text=cleanSlideTitle(l.text);if(text)candidates.push({...meta,titleKind:0,text,fontSize:n(l.fontSizePx,12),bold:!!l.bold,x:bx+n(l.x),y:by+n(l.y)});}
+      }
+    }
+  };
+  visit(tree?.nodes);
+  const active=candidates.some(c=>!c.decoration)?candidates.filter(c=>!c.decoration):candidates;
+  const score=c=>{
+    const font=Math.min(c.fontSize||16,44);
+    const topZone=c.y<=H*.28&&c.fontSize>=20?35:c.y<=H*.45&&c.fontSize>=24?15:0;
+    const penalty=isSlideNumberText(c.text)?120:isBadgeOrStatText(c.text)?60:0;
+    return (c.titleKind===2?200:c.titleKind===1?8:0)+font*2.2+topZone+(c.bold?4:0)-(c.y/H)*20-(c.x/W)*4-penalty;
+  };
+  const ranked=[...active].sort((a,b)=>score(b)-score(a));
+  const best=ranked.find(c=>!isSlideNumberText(c.text))||ranked[0];
+  if(!best||isSlideNumberText(best.text)&&String(best.text).replace(/\D+/g,'')===String(slideNo))return '';
+  return best.text;
+}
 export function renderSlides(opened,warnings){
-  const media=mediaResolver(opened.archive),issues=new Set(),metrics=new BrowserMetrics();
-  if(opened.deck.slides.length>2000)throw Error('슬라이드가 2,000장을 넘는 문서는 나누어 가져와 주세요.');
+  const media=mediaResolver(opened.archive),issues=new Set(),metrics=new BrowserMetrics(),total=opened.deck.slides.length;
+  if(total>2000)throw Error('슬라이드가 2,000장을 넘는 문서는 나누어 가져와 주세요.');
+  const outline=[];
   const body=opened.deck.slides.map((slide,index)=>{
     const tree=buildRenderSlide(slide,opened.deck.size,{fitWidthPx:960,media,metrics,slideNo:index+1}),paint=paintFactory('office-slide-'+index);
     const bg=paint.fill(tree.background),content=tree.nodes.map(node=>renderNode(node,paint,issues)).join('');
-    const title='슬라이드 '+(index+1);
-    return '<section class="office-slide" id="office-slide-'+(index+1)+'" style="width:60em"><h2>'+esc(title)+'</h2><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+tree.widthPx+' '+tree.heightPx+'" role="group" aria-label="'+esc(title)+'"><defs>'+paint.definitions.join('')+'</defs><rect width="100%" height="100%" fill="'+esc(bg==='none'?'white':bg)+'"/>'+content+'</svg></section>';
+    const title=formatSlideTocTitle(index,total,extractSlideTitle(slide,tree,index+1));
+    outline.push('<a href="#office-slide-'+(index+1)+'" data-level="1">'+esc(title)+'</a>');
+    return '<section class="office-slide" id="office-slide-'+(index+1)+'" data-slide-title="'+esc(title)+'" style="width:60em"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+tree.widthPx+' '+tree.heightPx+'" role="group" aria-label="'+esc(title)+'"><defs>'+paint.definitions.join('')+'</defs><rect width="100%" height="100%" fill="'+esc(bg==='none'?'white':bg)+'"/>'+content+'</svg></section>';
   }).join('');
-  warnings.push(...issues);return '<article data-office-slides>'+body+'</article>';
+  warnings.push(...issues);return '<article data-office-slides><template data-ebook-outline>'+outline.join('')+'</template>'+body+'</article>';
 }
