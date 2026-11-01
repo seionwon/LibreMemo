@@ -159,7 +159,7 @@ export class Reader {
     });
   }
   baseEditorStyle() {
-    return 'article[data-office-slides]>.office-slide>h2{display:none!important}html[data-htmlmemo-picking] [data-htmlmemo-mark],html[data-htmlmemo-picking] [data-htmlmemo-mark] *{cursor:pointer!important}html[data-htmlmemo-picking] [data-htmlmemo-hit]{pointer-events:stroke!important;cursor:pointer!important}html[data-htmlmemo-picking="select"] #htmlmemo-annotation-layer,html[data-htmlmemo-picking="select"] [data-htmlmemo-id],html[data-htmlmemo-picking="select"] [data-htmlmemo-hit]{touch-action:none!important}[data-htmlmemo-preview],[data-htmlmemo-preview] *{pointer-events:none!important}[data-htmlmemo-drag-source]{opacity:.25!important;pointer-events:none!important}html[data-htmlmemo-moving],html[data-htmlmemo-moving][data-htmlmemo-picking] *{cursor:grabbing!important;user-select:none!important;-webkit-user-select:none!important}' + this.layoutEditorStyle() + this.textMarkingStyle() + this.readerUIScaleStyle();
+    return 'article[data-office-slides]>.office-slide>h2{display:none!important}html[data-htmlmemo-drawing] #htmlmemo-annotation-layer,html[data-htmlmemo-drawing] #htmlmemo-annotation-layer *{pointer-events:none!important}html[data-htmlmemo-picking] [data-htmlmemo-mark],html[data-htmlmemo-picking] [data-htmlmemo-mark] *{cursor:pointer!important}html[data-htmlmemo-picking] [data-htmlmemo-hit]{pointer-events:stroke!important;cursor:pointer!important}html[data-htmlmemo-picking="select"] #htmlmemo-annotation-layer,html[data-htmlmemo-picking="select"] [data-htmlmemo-id],html[data-htmlmemo-picking="select"] [data-htmlmemo-hit]{touch-action:none!important}[data-htmlmemo-preview],[data-htmlmemo-preview] *{pointer-events:none!important}[data-htmlmemo-drag-source]{opacity:.25!important;pointer-events:none!important}html[data-htmlmemo-moving],html[data-htmlmemo-moving][data-htmlmemo-picking] *{cursor:grabbing!important;user-select:none!important;-webkit-user-select:none!important}' + this.layoutEditorStyle() + this.textMarkingStyle() + this.readerUIScaleStyle();
   }
   readerUIScaleStyle(){
     return `[data-htmlmemo-doc-topbar]{zoom:var(--htmlmemo-reader-ui-scale,1);width:var(--htmlmemo-reader-ui-width,100%)!important;translate:var(--htmlmemo-reader-ui-left,0px) 0px;overflow-x:auto!important;scrollbar-width:none;white-space:nowrap}
@@ -2097,6 +2097,7 @@ export class Reader {
     if(this.autoFit)this.zoom=this.fitZoom();
     if(this.nativeScroll || this.autoFit)this.applyZoom();
     this.scrollTop=top*this.zoom;this.scrollLeft=left*this.zoom;
+    if(!this.preparing&&this.layer?.isConnected)this.renderDrawingLayer();
   }
   fitZoom() { const focused=!!this.host.closest('.reader-focus'); return clamp(this.viewport.clientWidth / this.naturalWidth, .2, focused ? 8 : 2); }
   applyZoom() {
@@ -2252,6 +2253,7 @@ export class Reader {
     const centerY = (this.scrollTop + this.viewport.clientHeight / 2) / this.zoom;
     this.autoFit = fit; this.zoom = clamp(fit ? this.fitZoom() : value, .2, 8); this.applyZoom();
     this.scrollLeft = centerX * this.zoom - this.viewport.clientWidth / 2; this.scrollTop = centerY * this.zoom - this.viewport.clientHeight / 2;
+    if(!this.preparing&&this.layer?.isConnected)this.renderDrawingLayer();
     this.rememberPosition(); this.callbacks.onView?.();
   }
   rememberPosition() {
@@ -2385,12 +2387,88 @@ export class Reader {
     if (node) this.resolvedDrawingTargets.set(annotation,node);
     return node;
   }
+  fixedPageContainer(target) {
+    const node = target?.nodeType === 1 ? target : target?.parentElement;
+    if (!node?.closest) return null;
+    return node.closest('.htmlmemo-pdf-page,[data-djvu-page],.office-slide,.ebook-fixed-page')
+      || node.closest('.ebook-comic-page')?.querySelector?.('img')
+      || node.closest('.ebook-comic-page')
+      || node.closest('article[data-librememo-image]')?.querySelector?.('img')
+      || node.closest('article[data-librememo-image]')
+      || node.closest('.office-page > svg')
+      || (node.closest('.office-page') && (node.closest('.office-page').querySelector?.(':scope > [data-djvu-page], :scope > svg') || node.closest('.office-page')))
+      || null;
+  }
+  drawableContainer(target) {
+    const node = target?.nodeType === 1 ? target : target?.parentElement;
+    if (!node || !this.doc?.body?.contains(node) || this.isInsideTocOrTopbar(node)) return null;
+    if (this.pdf) return node.closest?.('.htmlmemo-pdf-page') || null;
+    if (this.doc.querySelector('article[data-office-slides]')) return node.closest?.('.office-slide') || null;
+    if (this.doc.querySelector('article[data-office-pages][data-rhwp]')) {
+      return node.closest?.('.office-page > svg') || (node.closest?.('.office-page') && !node.closest('.office-page').querySelector?.(':scope > svg') ? node.closest('.office-page') : null);
+    }
+    if (this.doc.querySelector('article[data-office-pages][data-djvu]')) return node.closest?.('[data-djvu-page],.office-plain') || null;
+    if (this.doc.querySelector('article[data-office-pages]')) return node.closest?.('.office-page') || null;
+    if (this.doc.querySelector('article[data-ebook][data-ebook-layout="fixed"]')) return node.closest?.('.ebook-fixed-page') || null;
+    if (this.doc.querySelector('article[data-ebook]')) {
+      const comic = node.closest?.('.ebook-comic-page');
+      if (comic) return comic.querySelector?.('img') || comic;
+      return node.closest?.('.ebook-section') || null;
+    }
+    if (this.doc.querySelector('article[data-librememo-image]')) {
+      const imageDoc = node.closest?.('article[data-librememo-image]');
+      return imageDoc ? (imageDoc.querySelector?.('img') || imageDoc) : null;
+    }
+    if (this.doc.querySelector('.office-word,.office-subtitles,.office-sheet,.office-plain')) {
+      return node.closest?.('.office-word,.office-subtitles,.office-sheet,.office-plain') || null;
+    }
+    if (this.doc.getElementById('reader-content')) return node.closest?.('#reader-content') || null;
+    if (this.doc.querySelector('main,[role="main"],article')) return node.closest?.('main,[role="main"],article') || null;
+    return this.findAnnotationScrollHost() || this.doc.body;
+  }
+  drawingBounds(container, anchor = null, origin = this.layerOrigin()) {
+    const r = container?.getBoundingClientRect?.();
+    if (r && r.width > 0 && r.height > 0) {
+      return {x:r.left - origin.left, y:r.top - origin.top, width:r.width, height:r.height, measured:true};
+    }
+    if (anchor && (anchor.width > 1 || anchor.height > 1)) {
+      return {x:anchor.x, y:anchor.y, width:anchor.width, height:anchor.height, measured:false};
+    }
+    return null;
+  }
+  clampDrawingPoint(point, bounds, type = this.tool, width = this.width) {
+    if (!bounds || !(bounds.width > 0 && bounds.height > 0)) return point;
+    const rawPad = ['area','note','text'].includes(type) ? 0 : Math.max(0, (Number(width) || 0) / 2);
+    const padX = Math.min(rawPad, Math.max(0, bounds.width / 2 - .5));
+    const padY = Math.min(rawPad, Math.max(0, bounds.height / 2 - .5));
+    return {
+      x:clamp(point.x, bounds.x + padX, bounds.x + bounds.width - padX),
+      y:clamp(point.y, bounds.y + padY, bounds.y + bounds.height - padY),
+    };
+  }
   elementAnchor(target, describe = false) {
     const origin = this.layerOrigin();
     const scrollHost = origin.scrollHost;
-    let element = target?.closest?.('[data-djvu-page]') || target?.closest?.('[data-htmlmemo-anchor]') || scrollHost || this.doc.body;
-    if (element.namespaceURI === NS || element.closest?.('#' + LAYER_ID)) element = scrollHost || this.doc.body;
-    while (element !== this.doc.body && element !== scrollHost && ['span','a','b','strong','em','i','small','mark'].includes(element.localName)) element = element.parentElement || this.doc.body;
+    const node = target?.nodeType === 1 ? target : target?.parentElement;
+    const fixed = this.fixedPageContainer(node);
+    let element = fixed || node?.closest?.('[data-djvu-page]') || null;
+    if (!element) {
+      const svgRoot = node?.closest?.('svg');
+      if (svgRoot && !svgRoot.closest?.('#' + LAYER_ID + ',[data-htmlmemo-ui]')) {
+        element = svgRoot.hasAttribute?.('data-htmlmemo-anchor') ? svgRoot : (svgRoot.closest?.('[data-htmlmemo-anchor]') || svgRoot);
+      }
+    }
+    if (!element) element = node?.closest?.('[data-htmlmemo-anchor]') || scrollHost || this.doc.body;
+    if (element.closest?.('#' + LAYER_ID) || (element.namespaceURI === NS && element.localName !== 'svg')) {
+      element = fixed || this.drawableContainer(node) || scrollHost || this.doc.body;
+    }
+    if (!fixed) {
+      while (element !== this.doc.body && element !== scrollHost && ['span','a','b','strong','em','i','small','mark'].includes(element.localName)) element = element.parentElement || this.doc.body;
+    }
+    const container = this.drawableContainer(node);
+    if (container && element && (element === this.doc.body || element === scrollHost || (element.contains?.(container) && element !== container))) {
+      element = container;
+    }
     const win = this.doc?.defaultView;
     if (typeof win?.getComputedStyle === 'function') {
       while (element && element !== this.doc.body && element !== scrollHost && /^(?:fixed|sticky)$/i.test(win.getComputedStyle(element)?.position || '')) {
@@ -2399,13 +2477,14 @@ export class Reader {
     }
     if (scrollHost && !scrollHost.contains(element)) element = scrollHost;
     const box = this.anchorBox(element, origin);
-    return {key:element.dataset?.htmlmemoAnchor || 'body', ...box, ...(describe ? {target:this.describeDrawingTarget(element),fontSize:this.drawingFontSize(element)} : {})};
+    const key = element.dataset?.htmlmemoAnchor || element.getAttribute?.('data-htmlmemo-anchor') || 'body';
+    return {key, ...box, ...(describe ? {target:this.describeDrawingTarget(element),fontSize:this.drawingFontSize(element)} : {})};
   }
   drawingFontSize(element) {
     if(!element)return null;
-    // A raster's box can resize when a scrollbar appears without any font
-    // change. Its pen follows image coordinates, just like a rectangle does.
-    if(element.localName==='img'||element.closest?.('[data-librememo-image],[data-djvu-page]'))return null;
+    // A raster or fixed-aspect slide/page/SVG canvas scales its entire viewBox
+    // or image box together; its pen follows box coordinates like shapes do.
+    if(element.localName==='img'||element.localName==='svg'||element.closest?.('[data-librememo-image],[data-djvu-page],.office-slide,.office-page,.ebook-comic-page,.ebook-fixed-page,svg'))return null;
     const content = this.doc.getElementById('reader-content');
     const target = content && element !== content && element.contains?.(content) ? content : element;
     const size = Number.parseFloat(this.doc.defaultView?.getComputedStyle?.(target)?.fontSize);
@@ -2500,6 +2579,8 @@ export class Reader {
       const offset=this.annotationDragTextOffset(drag,event);drag.grabOffset=offset==null?0:clamp(offset-drag.resolved.start,0,drag.resolved.end-drag.resolved.start-1);
     }else{
       drag.geometry=this.drawingGeometry(source);if(!drag.geometry.points.length)return false;
+      const targetEl=this.resolveDrawingTarget(source);
+      drag.container=this.drawableContainer(targetEl)||this.drawableContainer(event.target);
     }
     this.annotationDrag=drag;event.preventDefault();event.stopPropagation();return true;
   }
@@ -2528,7 +2609,21 @@ export class Reader {
     const drag=this.annotationDrag;if(!drag||drag.pointerId!==event.pointerId)return false;
     event.preventDefault();event.stopPropagation();
     if(this.disposed||this.tool!=='select'||drag.section!==currentSection(this.doc)){this.cancelAnnotationDrag();return true;}
-    const point=this.point(event);drag.delta={x:point.x-drag.start.x,y:point.y-drag.start.y};drag.lastPoint={clientX:event.clientX,clientY:event.clientY};
+    const point=this.point(event);let dx=point.x-drag.start.x,dy=point.y-drag.start.y;
+    if(drag.geometry&&drag.container){
+      const bounds=this.drawingBounds(drag.container);
+      if(bounds?.measured&&drag.geometry.points.length){
+        const rawPad=['area','note','text'].includes(drag.annotation.type)?0:Math.max(0,(Number(drag.annotation.width)||0)*(drag.annotation.type==='pen'?drag.geometry.scale||1:1)/2);
+        const padX=Math.min(rawPad,Math.max(0,bounds.width/2-.5)),padY=Math.min(rawPad,Math.max(0,bounds.height/2-.5));
+        let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+        for(const p of drag.geometry.points){minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y);}
+        const loX=bounds.x+padX-minX,hiX=bounds.x+bounds.width-padX-maxX;
+        const loY=bounds.y+padY-minY,hiY=bounds.y+bounds.height-padY-maxY;
+        if(loX<=hiX)dx=clamp(dx,loX,hiX);
+        if(loY<=hiY)dy=clamp(dy,loY,hiY);
+      }
+    }
+    drag.delta={x:dx,y:dy};drag.lastPoint={clientX:event.clientX,clientY:event.clientY};
     if(!drag.moved){
       if(Math.hypot(drag.delta.x,drag.delta.y)*(this.zoom||1)<4)return true;
       drag.moved=true;this.doc.documentElement.setAttribute('data-htmlmemo-moving','');
@@ -2544,15 +2639,23 @@ export class Reader {
     return true;
   }
   movedDrawingAnnotation(drag,event) {
-    const target=this.annotationDragTarget(event);if(!target)return null;
-    const box=this.elementAnchor(target,true),points=drag.geometry.points.map(p=>({x:p.x+drag.delta.x,y:p.y+drag.delta.y}));
+    let target=this.annotationDragTarget(event);if(!target)return null;
+    let container=this.drawableContainer(target);
+    if(!container){
+      if(!drag.container)return null;
+      target=this.resolveDrawingTarget(drag.annotation)||drag.container;
+      container=drag.container;
+    }
+    const origin=this.layerOrigin(),box=this.elementAnchor(target,true),bounds=this.drawingBounds(container,box,origin);
+    const scale=drag.geometry.scale||1,strokeWidth=(Number(drag.annotation.width)||0)*(drag.annotation.type==='pen'?scale:1);
+    const points=drag.geometry.points.map(p=>this.clampDrawingPoint({x:p.x+drag.delta.x,y:p.y+drag.delta.y},bounds?.measured?bounds:null,drag.annotation.type,strokeWidth));
     const next={...drag.annotation,anchor:box.key,anchorTarget:box.target};let width=box.width,height=box.height;
     if(this.pdf)next.pdfPage=Number(box.key.slice(1));
     if(next.type==='pen'&&box.fontSize){
-      const scale=drag.geometry.scale||1,fontSize=box.fontSize/scale;
+      const fontSize=box.fontSize/scale;
       if(!Number.isFinite(fontSize)||fontSize<.1||fontSize>1000)return null;
       const basis={width:clamp(width/scale,1,1e8),height:clamp(height/scale,1,1e8),fontSize};width=basis.width*scale;height=basis.height*scale;
-      const textAnchor=this.capturePenTextAnchor(this.resolveDrawingTarget(next),points,box,this.layerOrigin(),scale);
+      const textAnchor=this.capturePenTextAnchor(this.resolveDrawingTarget(next),points,box,origin,scale);
       if(textAnchor)basis.textAnchor=textAnchor;next.penBasis=basis;
     }else if(next.type==='pen')delete next.penBasis;
     next.points=points.map(p=>({x:(p.x-box.x)/width,y:(p.y-box.y)/height}));return next;
@@ -2646,11 +2749,18 @@ export class Reader {
     if(this.startTextMarkGesture(event))return;
     if (DRAW_TOOLS.includes(this.tool) || ['note','text'].includes(this.tool)) {
       if (this.gesture) { this.cancelDrawingGesture(); return; }
-      event.preventDefault(); event.stopPropagation();
+      const container = this.drawableContainer(event.target);
+      if (!container) return;
       const scrollHost = this.findAnnotationScrollHost();
       if (!this.layer?.isConnected || (scrollHost && this.layer.parentElement !== scrollHost)) this.renderDrawingLayer();
-      const anchor = this.elementAnchor(event.target,true); const p = this.point(event);
-      this.gesture = {pointerId:event.pointerId, target:event.target, type:this.tool, anchor, points:[p]};
+      const origin = this.layerOrigin(scrollHost);
+      const anchor = this.elementAnchor(event.target,true);
+      const bounds = this.drawingBounds(container, anchor, origin);
+      const rawPoint = this.point(event);
+      if (bounds?.measured && (rawPoint.x < bounds.x || rawPoint.x > bounds.x + bounds.width || rawPoint.y < bounds.y || rawPoint.y > bounds.y + bounds.height)) return;
+      event.preventDefault(); event.stopPropagation();
+      const p = this.clampDrawingPoint(rawPoint, bounds, this.tool, this.width);
+      this.gesture = {pointerId:event.pointerId, target:event.target, container, bounds, type:this.tool, anchor, points:[p]};
       this.callbacks.onAnnotationInput?.();
       event.target.setPointerCapture?.(event.pointerId);
     }
@@ -2662,7 +2772,9 @@ export class Reader {
     if (!this.gesture || this.gesture.pointerId !== event.pointerId) return;
     this.callbacks.onAnnotationInput?.();
     event.preventDefault();
-    const p = this.point(event); const g = this.gesture;
+    const g = this.gesture;
+    const bounds = g.container ? this.drawingBounds(g.container, g.anchor) : g.bounds;
+    const p = this.clampDrawingPoint(this.point(event), bounds, g.type, this.width);
     if (g.type === 'pen') { if (Math.hypot(p.x - g.points.at(-1).x, p.y - g.points.at(-1).y) >= 1) g.points.push(p); }
     else g.points[1] = p;
     this.preview?.remove(); this.preview = this.drawAnnotation(this.annotation(g.type, {points:g.points}), true);
@@ -2675,16 +2787,18 @@ export class Reader {
     if(this.finishAnnotationDrag(event))return;
     if (this.gesture && this.gesture.pointerId === event.pointerId) {
       event.preventDefault(); const g = this.gesture; this.gesture = null; this.preview?.remove(); this.preview = null;
-      const points = g.points.map(p => ({x:(p.x - g.anchor.x) / g.anchor.width, y:(p.y - g.anchor.y) / g.anchor.height}));
+      const bounds = g.container ? this.drawingBounds(g.container, g.anchor) : g.bounds;
+      const clampedPoints = bounds ? g.points.map(p => this.clampDrawingPoint(p, bounds, g.type, this.width)) : g.points;
+      const points = clampedPoints.map(p => ({x:(p.x - g.anchor.x) / g.anchor.width, y:(p.y - g.anchor.y) / g.anchor.height}));
       if (['note','text'].includes(g.type)) {
         const text = await this.callbacks.requestText?.(g.type);
         if (text?.trim()) this.commit([...this.metadata.annotations, this.annotation(g.type, {anchor:g.anchor.key, anchorTarget:g.anchor.target, points:[points[0]], text:text.trim()})]);
-      } else if (g.points.length > 1) {
+      } else if (clampedPoints.length > 1) {
         const penBasis = g.type === 'pen' && g.anchor.fontSize ? {width:g.anchor.width,height:g.anchor.height,fontSize:g.anchor.fontSize} : null;
         const next = this.annotation(g.type, {anchor:g.anchor.key, anchorTarget:g.anchor.target, points, ...(penBasis ? {penBasis} : {})});
         if(penBasis && this.doc){
           const origin=this.layerOrigin(),element=this.resolveDrawingTarget(next);
-          const textAnchor=this.capturePenTextAnchor(element,g.points,g.anchor,origin);
+          const textAnchor=this.capturePenTextAnchor(element,clampedPoints,g.anchor,origin);
           if(textAnchor)penBasis.textAnchor=textAnchor;
         }
         if (g.type === 'pen' && this.penTTL > 0) {
@@ -2749,6 +2863,37 @@ export class Reader {
     }
     if(!metrics)return {points:[],scale:1};
     const box = metrics.box;
+    if ((element === this.doc.body || element === scrollHost || element.matches?.('main,article[data-office-slides],article[data-office-pages]')) && this.doc.querySelector('article[data-office-slides] > .office-slide, article[data-office-pages] > .office-page')) {
+      const slides = [...this.doc.querySelectorAll('article[data-office-slides] > .office-slide')];
+      const pages = slides.length ? slides : [...this.doc.querySelectorAll('article[data-office-pages] > .office-page')].map(p => p.querySelector?.(':scope > [data-djvu-page], :scope > svg') || p);
+      if (pages.length && annotation.points?.length) {
+        const f0 = annotation.penBasis?.fontSize || this.readingFontSize || 16;
+        const W0 = annotation.penBasis?.width || box.width;
+        const H0 = annotation.penBasis?.height || box.height;
+        const svgEl = pages[0].localName === 'svg' ? pages[0] : pages[0].querySelector?.('svg');
+        const vb = (svgEl?.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+        const pageBox0 = this.anchorBox(pages[0], origin);
+        const aspect = vb[2] > 0 && vb[3] > 0 ? vb[3] / vb[2] : (pageBox0.height / Math.max(1, pageBox0.width));
+        const emW = slides.length ? 60 : (vb[2] > 0 ? vb[2] / 16 : 60);
+        const scale0 = f0 / (this.readingFontSize || 16);
+        const w0 = Math.min(Math.max(1, (W0 - 3 * f0) * Math.min(1, scale0)), emW * f0);
+        const x0 = Math.max(1.5 * f0, (W0 - w0) / 2);
+        const h0 = Math.max(1, w0 * aspect);
+        const avgPy = annotation.points.reduce((s, p) => s + p.y * H0, 0) / annotation.points.length;
+        const idx = clamp(Math.floor(Math.max(0, avgPy - .75 * f0) / Math.max(1, h0 + 1.5 * f0)), 0, pages.length - 1);
+        const y0 = 1.5 * f0 + idx * (h0 + 1.5 * f0);
+        const targetPage = pages[idx];
+        const pBox = this.anchorBox(targetPage, origin);
+        const scale = annotation.type === 'pen' && annotation.penBasis ? pBox.width / Math.max(1, w0) : 1;
+        const strokeWidth = (Number(annotation.width) || 0) * scale;
+        const bounds = {x:pBox.x, y:pBox.y, width:pBox.width, height:pBox.height};
+        const points = annotation.points.map(p => this.clampDrawingPoint({
+          x:pBox.x + ((p.x * W0 - x0) / w0) * pBox.width,
+          y:pBox.y + ((p.y * H0 - y0) / h0) * pBox.height,
+        }, bounds, annotation.type, strokeWidth));
+        return {points, scale};
+      }
+    }
     if (annotation.type === 'pen') {
       const fontSize = 'fontSize' in metrics?metrics.fontSize:(metrics.fontSize=this.drawingFontSize(element));
       let basis = annotation.penBasis;
@@ -2796,7 +2941,13 @@ export class Reader {
         return {points:annotation.points.map(p => ({x:box.x+p.x*basis.width*scale+dx,y:box.y+p.y*basis.height*scale+dy})),scale,basis,textChanged};
       }
     }
-    return {points:annotation.points.map(p => ({x:box.x + p.x * box.width, y:box.y + p.y * box.height})),scale:1};
+    const fixedContainer = this.fixedPageContainer(element);
+    const fixedBounds = fixedContainer ? this.drawingBounds(fixedContainer, null, origin) : null;
+    const rawPoints = annotation.points.map(p => ({x:box.x + p.x * box.width, y:box.y + p.y * box.height}));
+    return {
+      points:fixedBounds?.measured ? rawPoints.map(p => this.clampDrawingPoint(p, fixedBounds, 'area', 0)) : rawPoints,
+      scale:1,
+    };
   }
   absolutePoints(annotation) { return this.drawingGeometry(annotation).points; }
   annotationIdAt(target) {

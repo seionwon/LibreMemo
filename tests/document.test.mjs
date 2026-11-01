@@ -484,3 +484,58 @@ test('clicking TOC items reliably expands and collapses sub-items across details
   assert.equal(btnGroup.getAttribute('aria-expanded'),'true');
   assert.match(btnGroup.textContent,/▼ 개발 용어 4790/);
 });
+test('annotations stay strictly inside document/slide/page bounds and scale in place with PPTX slides and other formats on zoom/font scale',async()=>{
+  const doc=documentFor('<html><head></head><body data-htmlmemo-anchor="body"><main data-htmlmemo-anchor="n0"><article data-office-slides data-htmlmemo-anchor="n1"><section class="office-slide" id="office-slide-1" data-htmlmemo-anchor="n2" style="width:60em"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" data-htmlmemo-anchor="n3"><rect id="slide-bg" width="960" height="540" fill="#fff" data-htmlmemo-anchor="n4"/><foreignObject x="100" y="60" width="400" height="50" data-htmlmemo-anchor="n5"><span xmlns="http://www.w3.org/1999/xhtml" id="slide-text" data-office-text data-htmlmemo-anchor="n6" style="font-size:28px">Slide Heading</span></foreignObject></svg></section></article></main></body></html>');
+  const main=doc.querySelector('main'),slide=doc.querySelector('.office-slide'),svgEl=doc.querySelector('svg'),bg=doc.getElementById('slide-bg'),span=doc.getElementById('slide-text');
+  let slideLeft=120,slideTop=24,slideW=960,slideH=540;
+  main.getBoundingClientRect=()=>({left:0,top:0,right:1200,bottom:800,width:1200,height:800});
+  slide.getBoundingClientRect=()=>({left:slideLeft,top:slideTop,right:slideLeft+slideW,bottom:slideTop+slideH,width:slideW,height:slideH});
+  svgEl.getBoundingClientRect=slide.getBoundingClientRect;
+  bg.getBoundingClientRect=slide.getBoundingClientRect;
+  for(const el of [main,slide,svgEl,bg,span])el.getClientRects=()=>[el.getBoundingClientRect()];
+  const r=Object.create(Reader.prototype);
+  Object.assign(r,{doc,win:doc.defaultView,width:4,color:'#ef4444',opacity:1,penTTL:0,tool:'pen',zoom:1,naturalWidth:1200,naturalHeight:800,metadata:{version:1,annotations:[],view:{}},callbacks:{},findAnnotationScrollHost:()=>main});
+  r.commit=annotations=>{r.metadata.annotations=annotations;r.renderDrawingLayer();};
+  r.renderDrawingLayer();
+  // 1) Clicking in the outer margin (main/body outside .office-slide) is ignored
+  r.pointerDown({button:0,pointerId:1,clientX:40,clientY:200,target:main,preventDefault(){},stopPropagation(){}});
+  assert.equal(r.gesture,undefined);
+  // 2) Clicking inside .office-slide (on SVG rect or foreignObject text) anchors to .office-slide with fontSize: null and clamps points to slide bounds
+  r.pointerDown({button:0,pointerId:1,clientX:150,clientY:100,target:bg,preventDefault(){},stopPropagation(){}});
+  assert.ok(r.gesture);
+  assert.equal(r.gesture.anchor.key,'n2');
+  assert.equal(r.gesture.anchor.fontSize,null);
+  assert.equal(r.drawingFontSize(span),null);
+  // Dragging outside the left/right/top/bottom edges of the slide clamps to [slideLeft+pad .. slideLeft+slideW-pad]
+  r.pointerMove({pointerId:1,clientX:10,clientY:5,preventDefault(){}});
+  r.pointerMove({pointerId:1,clientX:1180,clientY:700,preventDefault(){}});
+  await r.pointerUp({pointerId:1,preventDefault(){}});
+  assert.equal(r.metadata.annotations.length,1);
+  const stroke=r.metadata.annotations[0];
+  assert.equal(stroke.anchor,'n2');
+  assert.equal(stroke.penBasis,undefined);
+  const ptsAt100=r.absolutePoints(stroke);
+  for(const p of ptsAt100){
+    assert.ok(p.x>=slideLeft+2&&p.x<=slideLeft+slideW-2,`point x=${p.x} stays within slide [${slideLeft+2}, ${slideLeft+slideW-2}]`);
+    assert.ok(p.y>=slideTop+2&&p.y<=slideTop+slideH-2,`point y=${p.y} stays within slide [${slideTop+2}, ${slideTop+slideH-2}]`);
+  }
+  const relX=ptsAt100.map(p=>(p.x-slideLeft)/slideW),relY=ptsAt100.map(p=>(p.y-slideTop)/slideH);
+  // 3) Zooming / scaling the slide (e.g. A- shrinks slide and centers it at left=240, or A+ enlarges it) keeps exact relative positions
+  for(const [left,top,w,h] of [[240,24,720,405],[40,24,1120,630],[120,24,960,540]]){
+    slideLeft=left;slideTop=top;slideW=w;slideH=h;
+    const pts=r.absolutePoints(stroke);
+    pts.forEach((p,i)=>{
+      assert.ok(Math.abs((p.x-slideLeft)/slideW-relX[i])<1e-9);
+      assert.ok(Math.abs((p.y-slideTop)/slideH-relY[i])<1e-9);
+    });
+  }
+  // 4) Legacy PPTX annotations saved on main/body also stay locked and clamped inside the slide across zoom/scale
+  const legacy={id:'legacy-slide-pen',type:'pen',anchor:'n0',penBasis:{width:1200,height:800,fontSize:16},points:[{x:100/1200,y:100/800},{x:600/1200,y:300/800}],color:'#ef4444',width:4,opacity:1};
+  slideLeft=120;slideTop=24;slideW=960;slideH=540;
+  const legacyPts100=r.absolutePoints(legacy);
+  assert.equal(legacyPts100[0].x,122,'out-of-bounds left point is clamped inside the slide');
+  assert.ok(Math.abs(legacyPts100[1].x-600)<1e-6,'in-bounds point stays at its drawn slide position');
+  slideLeft=240;slideTop=24;slideW=720;slideH=405;
+  const legacyPts75=r.absolutePoints(legacy);
+  assert.ok(Math.abs((legacyPts75[1].x-240)/720-(600-120)/960)<1e-6,'legacy slide pen scales and shifts with the slide');
+});
