@@ -512,6 +512,7 @@ test('real Chrome: palette controls stay above palettes and retain their setting
       assert.deepEqual(await layout(),expected);
       await writeFile(join(root,`test-results/palette-controls-${width}.png`),await page.screenshot());
       if(width===1280){
+        assert.equal(await page.evaluate('document.querySelector("#palette-preset").value'),'preset-7');
         await page.evaluate(`(()=>{for(const [id,value,event] of [['pen-width','7','input'],['pen-opacity','55','input'],['pen-ttl','10','change']]){const n=document.getElementById(id);n.value=value;n.dispatchEvent(new Event(event,{bubbles:true}));}})()`);
         assert.deepEqual(await values(),['7','55','10','7px','55%']);
         for(const ttl of [0,3,10,30,10]){await page.evaluate(`(()=>{const n=document.getElementById('pen-ttl');n.value='${ttl}';n.dispatchEvent(new Event('change',{bubbles:true}));})()`);lifetimeMetrics.push({ttl,...await checkSummary(['7px','55%',ttl?ttl+'초':'∞'],'#edcf67',.55)});}

@@ -5343,3 +5343,16 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
 - **목적·사용법:** 문서 상단 읽기 도구줄의 **A+**(글씨 크게) 버튼을 눌렀을 때 확대할 수 있는 최대 글자 크기 배율(`fontScale`)을 기존 `2.4`(240%)에서 `1.1`배씩 3단계 더 큰 **`3.2`(320%)**까지 확대할 수 있도록 확장했습니다.
 - **동작·보존:** 기본 크기(`1.0`)에서 **A+**를 누르면 기존 10단계보다 3단계 더 많은 13단계까지 글자와 문서 폭을 키울 수 있으며, 기존 상한(`2.4`)으로 저장된 문서에서도 **A+**를 3번 더(`2.4 → 2.64 → 2.904 → 3.2`) 눌러 확대할 수 있습니다. `3.2`에 도달하면 **A+** 버튼이 비활성화되고, **A−**로 다시 줄이거나 문서를 저장·내보내고 다시 열어도 확장된 배율(`0.6`~`3.2`)이 그대로 유지됩니다.
 - **로컬 검증:** `npm run check` 221개 JavaScript 및 JSON 문법 검사 통과, `npm test` 896개 단위 검사 통과(`tests/reading-controls.test.mjs`의 3단계 추가 확대 및 저장·복원 검사 포함), `npm run build` 통과, `codememo-browser`(포트 4173, 1280×800) 초기 화면 확인 통과. GitHub Actions 전체 Chrome 검증 및 Pages 게시 결과는 아래에 이어서 보충합니다.
+
+<a id="hist-20261101-010"></a>
+### 2026-11-01 15:27:00 +09:00 — 초기 설치 시 기본 색상 팔레트를 1번(교재,논문 마킹)으로 설정
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261101-010 |
+| 변경 종류 | 펜과 색상 · 기본 팔레트 프리셋 변경 |
+| 상태 | 로컬 검증 완료 · 1.8.4 GitHub Pages 게시 및 CI Chrome 검증 진행 중 |
+
+- **목적·사용법:** 앱을 처음 설치했거나 별도의 팔레트를 지정하지 않은 초기 상태에서 **플로팅 툴바 → 펜과 색상**을 열었을 때 기본 선택되는 팔레트 프리셋을 2번(`preset-1`, 기본 20색 팔레트) 대신 **1번(`preset-7`, `1. 교재,논문 마킹 (8)`)**(`PRESET_PALETTES[0]`)이 되도록 통일했습니다.
+- **동작·보존:** 기본 설정(`DEFAULT_PREFERENCES.annotation.paletteId`), 설정 정규화(`normalizePreferences`), 활성 팔레트 조회(`getActivePalette`), 사용자 팔레트 삭제 후 복귀 팔레트, 기기 간 설정 동기화 기본값(`normalizeSyncSettings`)이 모두 첫 번째 프리셋(`PRESET_PALETTES[0].id`, `preset-7`)을 가리키며, 사용자가 직접 다른 프리셋이나 사용자 팔레트를 선택한 경우에는 해당 선택을 그대로 유지합니다.
+- **로컬 검증:** `npm run check` 221개 JavaScript 및 JSON 문법 검사 통과, `npm test` 896개 단위 검사 통과(`tests/preferences.test.mjs` 및 `tests/device-sync.test.mjs` 초기 팔레트 검증 포함), `tests/browser.integration.mjs` 실제 Chrome 초기 팔레트(`#palette-preset` 값 `preset-7`) 검증 추가, `npm run build` 통과, `codememo-browser`(포트 4173, 1280×800) 초기 화면 확인 통과. GitHub Actions 전체 Chrome 검증 및 Pages 게시 결과는 아래에 이어서 보충합니다.

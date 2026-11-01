@@ -28,7 +28,7 @@ export const PRESET_PALETTES = Object.freeze([
   Object.freeze({id:'preset-19',name:'미니멀 잉크',colors:Object.freeze(['#111827','#374151','#dc2626','#2563eb','#16a34a','#d97706','#7c3aed','#0891b2'])}),
   Object.freeze({id:'preset-20',name:'레인보우 컬렉션',colors:Object.freeze(['#ef4444','#f97316','#f59e0b','#eab308','#84cc16','#22c55e','#06b6d4','#3b82f6','#6366f1','#a855f7'])}),
 ]);
-export const DEFAULT_PREFERENCES = Object.freeze({theme:'light',librarySort:'modified',librarySortDirection:'desc',libraryView:'card',annotation:Object.freeze({color:'#edcf67',highlightColor:'#edcf67',width:3,opacity:.35,penTTL:0}),toolbarPosition:null,sidebarWidth:300});
+export const DEFAULT_PREFERENCES = Object.freeze({theme:'light',librarySort:'modified',librarySortDirection:'desc',libraryView:'card',annotation:Object.freeze({color:'#edcf67',highlightColor:'#edcf67',width:3,opacity:.35,penTTL:0,paletteId:PRESET_PALETTES[0].id}),toolbarPosition:null,sidebarWidth:300});
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 export function normalizeHexColor(value) {
   if (typeof value !== 'string') return null;
@@ -86,10 +86,9 @@ export function normalizePreferences(value = {}) {
   const annotation={color:typeof input.color==='string'?input.color.toLowerCase():defaults.color,highlightColor:input.highlightColor===undefined?defaults.highlightColor:input.highlightColor,width:input.width??defaults.width,opacity:input.opacity??defaults.opacity,penTTL:input.penTTL??defaults.penTTL};
   if(typeof annotation.highlightColor!=='string'||!/^#[\da-f]{6}$/i.test(annotation.highlightColor)||!/^#[\da-f]{6}$/i.test(annotation.color)||!Number.isFinite(annotation.width)||annotation.width<1||annotation.width>18||!Number.isFinite(annotation.opacity)||annotation.opacity<.1||annotation.opacity>.9||![0,3,10,30].includes(annotation.penTTL))throw new Error('주석 색상·굵기·투명도·표시 시간 설정이 올바르지 않습니다.');
   annotation.highlightColor=annotation.highlightColor.toLowerCase();
-  if (input.paletteId !== undefined) {
-    if (typeof input.paletteId !== 'string' || !/^[\w-]{1,64}$/.test(input.paletteId)) throw new Error('팔레트 설정이 올바르지 않습니다.');
-    annotation.paletteId = input.paletteId;
-  }
+  const paletteId = input.paletteId ?? defaults.paletteId;
+  if (typeof paletteId !== 'string' || !/^[\w-]{1,64}$/.test(paletteId)) throw new Error('팔레트 설정이 올바르지 않습니다.');
+  annotation.paletteId = paletteId;
   if (input.customColors !== undefined) {
     if (!Array.isArray(input.customColors) || input.customColors.length > 64 || input.customColors.some(c => typeof c !== 'string' || !/^#[\da-f]{6}$/i.test(c))) throw new Error('사용자 색상 목록이 올바르지 않습니다.');
     annotation.customColors = [...new Set(input.customColors.map(c => c.toLowerCase()))];

@@ -24,6 +24,10 @@ test('reloading a connected handle reads the latest bytes rather than a cached f
 test('20 preset colors, 20 preset palettes, user custom colors/palettes, and color picker HSV/RGB/HEX conversions work and round-trip',()=>{
   assert.equal(PRESET_COLORS.length,20);
   assert.equal(PRESET_PALETTES.length,20);
+  assert.equal(PRESET_PALETTES[0].id,'preset-7');
+  assert.equal(PRESET_PALETTES[0].name,'교재,논문 마킹');
+  assert.equal(normalizePreferences().annotation.paletteId,PRESET_PALETTES[0].id);
+  assert.equal(loadPreferences(storage()).annotation.paletteId,PRESET_PALETTES[0].id);
   for(const c of PRESET_COLORS)assert.match(c,/^#[\da-f]{6}$/);
   for(const p of PRESET_PALETTES){assert.ok(p.id&&p.name&&p.colors.length>=8);for(const c of p.colors)assert.match(c,/^#[\da-f]{6}$/);}
   assert.equal(normalizeHexColor(' #F0A '), '#ff00aa');

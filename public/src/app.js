@@ -1051,7 +1051,7 @@ function getAllPalettes() {
 }
 function getActivePalette() {
   const all = getAllPalettes();
-  const id = preferences.annotation.paletteId || 'preset-1';
+  const id = preferences.annotation.paletteId || PRESET_PALETTES[0].id;
   return all.find(p => p.id === id) || PRESET_PALETTES[0];
 }
 function renderPalettePopoverContent(r) {
@@ -1133,7 +1133,7 @@ function renderPalettePopoverContent(r) {
   if ($('#delete-custom-palette', pop)) {
     $('#delete-custom-palette', pop).onclick = safely(() => {
       const nextPalettes = (preferences.annotation.customPalettes || []).filter(p => p.id !== activePalette.id);
-      changePreferences({annotation: {customPalettes: nextPalettes, paletteId: 'preset-1'}});
+      changePreferences({annotation: {customPalettes: nextPalettes, paletteId: PRESET_PALETTES[0].id}});
       toast('사용자 팔레트를 삭제했습니다.');
       renderPalettePopoverContent(r);
     });

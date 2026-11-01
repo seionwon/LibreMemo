@@ -62,7 +62,7 @@ async function sameStoredContent(previous,value){
 
 export function normalizeSyncSettings(value){
   const {entries}=validateSettings(value),preferences=normalizePreferences(entries[PREFERENCES_KEY]?JSON.parse(entries[PREFERENCES_KEY]):{theme:entries['htmlmemo-theme']||'light'});
-  preferences.annotation.paletteId||='preset-1';preferences.annotation.customColors||=[];preferences.annotation.customPalettes||=[];
+  preferences.annotation.paletteId||=PRESET_PALETTES[0].id;preferences.annotation.customColors||=[];preferences.annotation.customPalettes||=[];
   entries[PREFERENCES_KEY]=JSON.stringify(preferences);entries['htmlmemo-theme']=preferences.theme;
   const rate=Number(entries.msuite_tts_rate||1);entries.msuite_tts_rate=Number.isFinite(rate)?String(rate):'1';
   for(const key of Object.keys(entries))if(entries[key]===''&&/^(msuite_tts_voice_|htmlmemo_tts_lang_)/.test(key))delete entries[key];
