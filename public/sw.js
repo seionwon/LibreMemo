@@ -1,7 +1,7 @@
 const CACHE = 'htmlmemo-v44';
 const VERSION = 'development';
 const DIGESTS = {};
-const SHELL = ["./","./index.html","./styles.css","./manifest.webmanifest","./example.html","./icons/icon.svg","./icons/icon-192.png","./icons/icon-512.png","./shared/capture.js","./src/app.js","./src/updates.js","./src/help.js","./src/help-content.js","./src/web.js","./src/markdown.js","./src/document.js","./src/bookmark-location.js","./src/search-index.js","./src/local-files.js","./src/mhtml.js","./src/migrate.js","./src/model.js","./src/reader.js","./src/isolated-runtime.js","./src/read-aloud.js","./src/storage.js","./src/data-folder.js","./src/library-folders.js","./src/folder-tree.js","./src/utils.js","./src/preferences.js","./src/zip.js","./src/bundler.js","./src/distribution.js","./src/install.js","./src/version.js","./src/sync-service.js","./src/sync-crypto.js","./src/sync-adapter.js","./src/sync-ui.js","./src/sync-device-service.js","./src/sync-peer.js","./src/sync-stream.js","./src/sync-temp.js","./src/sync-qr.js","./vendor/markdown-it.js","./vendor/markdown-it-LICENSE.txt","./vendor/html5-qrcode.min.js","./vendor/html5-qrcode-LICENSE.txt","./vendor/qrcodegen-LICENSE.txt","./distribution.json"];
+const SHELL = ["./","./index.html","./styles.css","./manifest.webmanifest","./example.html","./icons/icon.svg","./icons/icon-192.png","./icons/icon-512.png","./shared/capture.js","./src/app.js","./src/updates.js","./src/help.js","./src/help-content.js","./src/web.js","./src/markdown.js","./src/document.js","./src/bookmark-location.js","./src/search-index.js","./src/local-files.js","./src/mhtml.js","./src/migrate.js","./src/model.js","./src/reader.js","./src/isolated-runtime.js","./src/read-aloud.js","./src/storage.js","./src/data-folder.js","./src/library-folders.js","./src/folder-tree.js","./src/utils.js","./src/preferences.js","./src/zip.js","./src/bundler.js","./src/distribution.js","./src/install.js","./src/version.js","./src/sync-service.js","./src/sync-crypto.js","./src/sync-adapter.js","./src/sync-ui.js","./src/sync-device-service.js","./src/sync-peer.js","./src/sync-stream.js","./src/sync-temp.js","./src/sync-qr.js","./vendor/markdown-it.js","./vendor/markdown-it-LICENSE.txt","./vendor/html5-qrcode.min.js","./vendor/html5-qrcode-LICENSE.txt","./vendor/qrcodegen-LICENSE.txt"];
 const BASE=new URL('./',self.location.href),STORE=CACHE+':'+BASE.pathname,CONTROL='htmlmemo-control-v1:'+BASE.pathname;
 const identity={cache:STORE,version:VERSION};
 const key=name=>new URL('.htmlmemo-update/'+name,BASE).href;
@@ -10,18 +10,41 @@ async function write(name,value){await(await caches.open(CONTROL)).put(key(name)
 const locked=action=>self.navigator?.locks?.request?self.navigator.locks.request('htmlmemo-app-update:'+BASE.pathname,action):action();
 const application=url=>{try{const u=new URL(url);return u.origin===BASE.origin&&(u.pathname===BASE.pathname||u.pathname===BASE.pathname+'index.html');}catch{return false;}};
 // This checksum detects incomplete/mixed deployments; HTTPS supplies source authentication.
-function checksum(bytes){let crc=0xffffffff;for(const byte of bytes){crc^=byte;for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return(crc^0xffffffff)>>>0;}
+const crcTable=Array.from({length:256},(_,i)=>{for(let b=0;b<8;b++)i=i&1?0xedb88320^(i>>>1):i>>>1;return i>>>0;});
+function checksum(bytes){let crc=0xffffffff;for(let i=0;i<bytes.length;i++)crc=crcTable[(crc^bytes[i])&255]^(crc>>>8);return(crc^0xffffffff)>>>0;}
+async function fetchVerified(url,expected){
+  if(expected!==undefined){
+    const cached=await fetch(new Request(url,{credentials:'same-origin'})).catch(()=>null);
+    if(cached?.ok&&checksum(new Uint8Array(await cached.clone().arrayBuffer()))===expected)return cached;
+  }
+  const response=await fetch(new Request(url,{cache:'reload',credentials:'same-origin'}));
+  if(!response.ok)throw Error('앱 파일을 받지 못했습니다.');
+  if(expected!==undefined&&checksum(new Uint8Array(await response.clone().arrayBuffer()))!==expected)throw Error('새 앱 파일이 일치하지 않습니다.');
+  return response;
+}
 async function prepare(){
-  const cache=await caches.open(STORE);
+  const cache=await caches.open(STORE),inflight=new Map();
+  const load=(url,name,expected)=>{
+    let task=inflight.get(name);
+    if(!task){task=fetchVerified(url,expected);if(expected!==undefined)inflight.set(name,task);}
+    return task.then(r=>r.clone());
+  };
   try{
-    for(let offset=0;offset<SHELL.length;offset+=6)await Promise.all(SHELL.slice(offset,offset+6).map(async path=>{
-      const url=new URL(path,BASE),response=await fetch(new Request(url,{cache:'reload',credentials:'same-origin'}));
-      if(!response.ok)throw Error('앱 파일을 받지 못했습니다.');
-      const expected=DIGESTS[path==='./'?'index.html':path.slice(2)];
-      if(expected!==undefined&&checksum(new Uint8Array(await response.clone().arrayBuffer()))!==expected)throw Error('새 앱 파일이 일치하지 않습니다.');
-      await cache.put(url.href,response);
+    const prevNames=(await caches.keys()).filter(name=>name!==STORE&&name.startsWith('htmlmemo-')&&name.endsWith(':'+BASE.pathname));
+    const prevCaches=await Promise.all(prevNames.map(async name=>({cache:await caches.open(name),digests:await read('digests/'+encodeURIComponent(name))})));
+    for(let offset=0;offset<SHELL.length;offset+=32)await Promise.all(SHELL.slice(offset,offset+32).map(async path=>{
+      const url=new URL(path,BASE),name=path==='./'?'index.html':path.slice(2),expected=DIGESTS[name];
+      if(expected!==undefined){
+        for(const prev of prevCaches){
+          const hit=await prev.cache.match(url.href);
+          if(hit&&(prev.digests?.[name]===expected||!prev.digests&&checksum(new Uint8Array(await hit.clone().arrayBuffer()))===expected)){
+            await cache.put(url.href,hit);return;
+          }
+        }
+      }
+      await cache.put(url.href,await load(url,name,expected));
     }));
-    await locked(async()=>{if(!await read('selected'))await write('selected',identity);await write('latest',identity);});
+    await locked(async()=>{if(!await read('selected'))await write('selected',identity);await write('latest',identity);await write('digests/'+encodeURIComponent(STORE),DIGESTS);});
     await prune();
   }catch(error){if((await read('selected'))?.cache!==STORE)await caches.delete(STORE);throw error;}
 }
@@ -45,7 +68,7 @@ async function prune(){
     if(!liveIds.has(request.url.slice(key('client/').length))&&before.has(request.url))await control.delete(request);
     else keep.add((await(await control.match(request)).json()).cache);
   }
-  for(const name of await caches.keys())if(name.startsWith('htmlmemo-')&&name.endsWith(':'+BASE.pathname)&&!keep.has(name))await caches.delete(name);
+  for(const name of await caches.keys())if(name.startsWith('htmlmemo-')&&name.endsWith(':'+BASE.pathname)&&!keep.has(name)){await caches.delete(name);await control.delete(key('digests/'+encodeURIComponent(name)));}
   });
 }
 self.addEventListener('install',event=>event.waitUntil(prepare()));

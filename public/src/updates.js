@@ -1,6 +1,6 @@
 import {installableLocation} from './install.js';
 
-function workerReady(worker,timeout=30000){
+function workerReady(worker,timeout=15000){
   if(!worker||['installed','activated'].includes(worker.state))return Promise.resolve(worker);
   return new Promise((resolve,reject)=>{
     const finish=error=>{clearTimeout(timer);worker.removeEventListener('statechange',changed);error?reject(error):resolve(worker);};
@@ -31,7 +31,7 @@ function controlledBy(service,worker,timeout=15000){
 }
 // One check per full launch. No focus, online, visibility or periodic update checks.
 export class UpdateController {
-  constructor({navigator,location,onOffer=async()=>false,beforeUpdate=async()=>{},onState=()=>{},reload=()=>location.reload(),Channel=globalThis.MessageChannel,requestTimeout=15000,checkTimeout=15000}){
+  constructor({navigator,location,onOffer=async()=>false,beforeUpdate=async()=>{},onState=()=>{},reload=()=>location.reload(),Channel=globalThis.MessageChannel,requestTimeout=15000,checkTimeout=5000}){
     Object.assign(this,{navigator,location,onOffer,beforeUpdate,onState,reload,Channel,requestTimeout,checkTimeout});this.started=false;this.cancelled=false;
   }
   state(value,error=null){this.onState(value,error);}

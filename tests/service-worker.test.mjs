@@ -16,8 +16,8 @@ class Cache{
 function fixture({getClient=(id,clients)=>clients.get(id),matchClients=clients=>[...clients.values()]}={}){
   const stores=new Map(),clients=new Map(),network=new Map(),requests=[];
   const caches={async open(name){if(!stores.has(name))stores.set(name,new Cache());return stores.get(name);},async keys(){return[...stores.keys()];},async delete(name){return stores.delete(name);}};
-  function worker(version,{bad=false,networkFailure=false,activation=async()=>{}}={}){
-    const files={'index.html':`<h1>release ${version}</h1>`,'styles.css':`/* ${version} */`,'src/version.js':`export const APP_VERSION = "${version}";`},events=new Map();
+  function worker(version,{bad=false,networkFailure=false,unchangedCss=false,activation=async()=>{}}={}){
+    const files={'index.html':`<h1>release ${version}</h1>`,'styles.css':unchangedCss?'/* one */':`/* ${version} */`,'src/version.js':`export const APP_VERSION = "${version}";`},events=new Map();
     for(const[name,body]of Object.entries(files))network.set(new URL(name,base).href,body);network.set(base,files['index.html']);
     const digests=Object.fromEntries(Object.entries(files).map(([name,body])=>[name,crc32(new TextEncoder().encode(body))]));
     if(bad)network.set(new URL('styles.css',base).href,'Wrong deployed file');if(networkFailure)network.delete(new URL('styles.css',base).href);
@@ -95,4 +95,16 @@ test('old app resources stay cached offline and cache cleanup is limited to this
   assert.ok(f.stores.has('htmlmemo-one:/LibreMemo/'));const three=f.worker('three');await three.event('install');
   assert.ok(!f.stores.has('htmlmemo-one:/LibreMemo/'));assert.ok(f.stores.has('htmlmemo-other:/Other/'));assert.ok(f.stores.has('another-app'));
   assert.equal(await two.fetch('https://foreign.test/file.js'),null);assert.equal(await two.fetch('styles.css',{method:'POST'}),null);
+});
+test('new release reuses unchanged verified assets from previous cache and deduplicates index.html fetches',async()=>{
+  const f=fixture();f.client('page');const one=f.worker('one');await one.event('install');await one.event('activate');
+  assert.equal(f.requests.filter(u=>u===base||u===base+'index.html').length,1);
+  f.requests.length=0;
+  const two=f.worker('two',{unchangedCss:true});
+  f.network.delete(new URL('styles.css',base).href);
+  await two.event('install');
+  assert.equal(f.requests.some(u=>u.endsWith('styles.css')),false);
+  assert.equal(f.requests.filter(u=>u===base||u===base+'index.html').length,1);
+  await two.message('page',{type:'HTMLMEMO_UPDATE_APPLY',build:'htmlmemo-two'});
+  assert.match(await(await two.fetch('styles.css',{id:'updated'})).text(),/one/);
 });

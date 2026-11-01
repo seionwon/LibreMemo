@@ -5373,3 +5373,19 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
   1. `BrowserMetrics.measure`와 SVG `<foreignObject>` 텍스트 스타일에서 글꼴 패밀리 이름을 항상 큰따옴표로 감싸고, 측정된 글자 폭이 비정상적으로 작을 때 한글·영문 글자 폭 하한을 보장하며, 같은 줄의 연속된 한글·텍스트 조각을 하나의 `<span data-office-text>`로 병합하고 과도한 음수 자간을 제한해 글자가 겹치지 않도록 했습니다.
   2. 도형의 반전(`flipH`/`flipV`)과 `180°` 상하 반전 회전은 도형 기하(`path`·`polygon`·`rect` 등)에만 적용하고, 도형 내부 텍스트(`textLayout`)는 똑바로 읽히도록 분리했습니다.
 - **로컬 검증:** `npm run check` 221개 JavaScript 및 JSON 문법 검사 통과, `npm test` 897개 단위 검사 통과(`tests/office.test.mjs`의 PPTX `flipH`/`flipV`·`180°` 배너 텍스트 정방향 유지 및 숫자 포함 한글 글꼴·`latinLnBrk="1"` 글자 겹침 방지 회귀 검사 포함), `npm run build` 통과, `codememo-browser`(포트 4173, 1280×800) 초기 화면 확인 통과. GitHub Actions 전체 Chrome 검증 및 Pages 게시 결과는 아래에 이어서 보충합니다.
+
+<a id="hist-20261101-012"></a>
+### 2026-11-01 16:02:00 +09:00 — 앱 시작 시 "새 버전을 확인하는 중…" 속도 대폭 개선(캐시 재사용·불필요 번들 제외·병렬화)
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261101-012 |
+| 변경 종류 | 서비스 워커(`sw.js`) 오프라인 캐시 준비 · 시작 시 버전 확인 속도 개선 |
+| 상태 | 로컬 검증 완료 · 1.8.6 GitHub Pages 게시 및 CI Chrome 검증 진행 중 |
+
+- **목적·원인:** 앱 실행 시 `"새 버전을 확인하는 중…"` 단계에서 서비스 워커(`sw.js`)가 새 버전을 준비할 때마다 ① 런타임에 사용하지 않는 `distribution.json`(약 `27.76MB`)까지 `SHELL` 목록에 포함해 매번 내려받고, ② 변경되지 않은 대용량 정적 자산(`rhwp_bg.wasm` `11.5MB`, `pdf.worker.min.mjs`, `genoffice.js`, `sheets.js`, PDF 글꼴·CMap 등 `22.56MB`, 300여 개 파일)을 이전 버전 캐시나 브라우저 HTTP 캐시에서 재사용하지 않고 `cache: 'reload'`로 6개씩(51번 직렬 왕복) 다시 내려받으며, ③ 바이트마다 8비트 루프를 도는 CRC32 계산을 수행해 버전 확인이 오래 걸리던 문제를 해결했습니다.
+- **동작·보존:**
+  1. [`public/src/distribution.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/LibreMemo/public/src/distribution.js) 및 [`public/sw.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/LibreMemo/public/sw.js)의 서비스 워커 `SHELL` 목록에서 런타임 미사용 `distribution.json`(`27.76MB`)을 제외해 오프라인 셸 용량을 55% 이상 줄였습니다.
+  2. [`public/sw.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/LibreMemo/public/sw.js)의 `prepare()`에서 이전 버전 서비스 워커 캐시(`htmlmemo-*`)에 동일한 CRC32(`DIGESTS`)의 파일이 있으면 네트워크 요청 없이 즉시 재사용하도록 개선해, 버전 업데이트 시 변경된 파일(수십 KB)만 내려받도록 했습니다.
+  3. 새로 받는 파일도 브라우저 HTTP 캐시 응답의 CRC32가 `DIGESTS`와 일치하면 즉시 채택하고 불일치할 때만 `cache: 'reload'`로 재요청하며, `./`와 `./index.html` 중복 요청 제거, 동시 요청 배치 크기 확대(`6 → 32`), 256엔트리 룩업 테이블 기반 고속 CRC32(`checksum`) 적용, [`public/src/updates.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/LibreMemo/public/src/updates.js)의 네트워크 확인 타임아웃 단축(`15초 → 5초`)을 함께 적용했습니다.
+- **로컬 검증:** `npm run check` 221개 JavaScript 및 JSON 문법 검사 통과, `npm test` 898개 단위 검사 통과(`tests/service-worker.test.mjs`의 이전 캐시 미변경 자산 재사용 및 `index.html` 중복 요청 제거 검사 포함), `npm run build` 통과, `codememo-browser`(포트 4173, 1280×800) 초기 화면 확인 통과. GitHub Actions 전체 Chrome 검증 및 Pages 게시 결과는 아래에 이어서 보충합니다.

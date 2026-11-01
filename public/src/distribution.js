@@ -7,7 +7,7 @@ export function pwaEntries(assets) {
   assets=cleanDistribution(assets);
   const release=assetText(assets.app['src/version.js']).match(/export\s+const\s+APP_VERSION = ("[^"\n]+");/);
   const digests=Object.fromEntries(APP_FILES.filter(name=>name!=='sw.js').map(name=>[name,crc32(assetBytes(assets.app[name]))]));
-  const shell=['./',...APP_FILES.filter(name=>name!=='sw.js').map(name=>'./'+name),'./distribution.json'];
+  const shell=['./',...APP_FILES.filter(name=>name!=='sw.js').map(name=>'./'+name)];
   const normalizedSW=assetText(assets.app['sw.js']).replace(/const SHELL = \[[^\n]+\];/,'const SHELL = '+JSON.stringify(shell)+';').replace(/const CACHE = '[^']+';/,"const CACHE = 'htmlmemo-pages';").replace(/const VERSION = [^;]+;/,'const VERSION = '+(release?.[1]||'"development"')+';').replace(/const DIGESTS = [^;]+;/,'const DIGESTS = '+JSON.stringify(digests)+';');
   const app={...assets.app,'sw.js':{text:normalizedSW}};
   const version=crc32(new TextEncoder().encode(JSON.stringify({...assets,app}))).toString(16).padStart(8,'0');
