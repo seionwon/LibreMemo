@@ -22,7 +22,8 @@
     "build:office": "node scripts/build-office.mjs",
     "build:rhwp": "node scripts/build-rhwp.mjs",
     "build:foliate": "node scripts/build-foliate.mjs",
-    "build:pdf-export": "node scripts/build-pdf-export.mjs"
+    "build:pdf-export": "node scripts/build-pdf-export.mjs",
+    "build:djvu": "node scripts/build-djvu.mjs"
   },
   "devDependencies": {
     "@noble/hashes": "2.0.1",
@@ -31,6 +32,7 @@
     "bidi-js": "1.0.3",
     "buffer": "6.0.3",
     "cssom": "0.5.0",
+    "djvu-rs": "0.43.0",
     "esbuild": "0.25.12",
     "fast-xml-parser": "5.10.1",
     "jszip": "3.10.1",

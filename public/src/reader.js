@@ -2167,7 +2167,7 @@ export class Reader {
   elementAnchor(target, describe = false) {
     const origin = this.layerOrigin();
     const scrollHost = origin.scrollHost;
-    let element = target?.closest?.('[data-htmlmemo-anchor]') || scrollHost || this.doc.body;
+    let element = target?.closest?.('[data-djvu-page]') || target?.closest?.('[data-htmlmemo-anchor]') || scrollHost || this.doc.body;
     if (element.namespaceURI === NS || element.closest?.('#' + LAYER_ID)) element = scrollHost || this.doc.body;
     while (element !== this.doc.body && element !== scrollHost && ['span','a','b','strong','em','i','small','mark'].includes(element.localName)) element = element.parentElement || this.doc.body;
     const win = this.doc?.defaultView;
@@ -2182,6 +2182,9 @@ export class Reader {
   }
   drawingFontSize(element) {
     if(!element)return null;
+    // A raster's box can resize when a scrollbar appears without any font
+    // change. Its pen follows image coordinates, just like a rectangle does.
+    if(element.localName==='img'||element.closest?.('[data-librememo-image],[data-djvu-page]'))return null;
     const content = this.doc.getElementById('reader-content');
     const target = content && element !== content && element.contains?.(content) ? content : element;
     const size = Number.parseFloat(this.doc.defaultView?.getComputedStyle?.(target)?.fontSize);
@@ -2324,13 +2327,13 @@ export class Reader {
     const box=this.elementAnchor(target,true),points=drag.geometry.points.map(p=>({x:p.x+drag.delta.x,y:p.y+drag.delta.y}));
     const next={...drag.annotation,anchor:box.key,anchorTarget:box.target};let width=box.width,height=box.height;
     if(this.pdf)next.pdfPage=Number(box.key.slice(1));
-    if(next.type==='pen'){
+    if(next.type==='pen'&&box.fontSize){
       const scale=drag.geometry.scale||1,fontSize=box.fontSize/scale;
       if(!Number.isFinite(fontSize)||fontSize<.1||fontSize>1000)return null;
       const basis={width:clamp(width/scale,1,1e8),height:clamp(height/scale,1,1e8),fontSize};width=basis.width*scale;height=basis.height*scale;
       const textAnchor=this.capturePenTextAnchor(this.resolveDrawingTarget(next),points,box,this.layerOrigin(),scale);
       if(textAnchor)basis.textAnchor=textAnchor;next.penBasis=basis;
-    }
+    }else if(next.type==='pen')delete next.penBasis;
     next.points=points.map(p=>({x:(p.x-box.x)/width,y:(p.y-box.y)/height}));return next;
   }
   cancelAnnotationDrag() {

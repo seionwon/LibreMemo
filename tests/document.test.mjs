@@ -80,6 +80,14 @@ test('pen geometry scales uniformly with text, not the reflowed paragraph box or
   assert.deepEqual(r.absolutePoints(pen),[{x:120,y:72},{x:360,y:168}],'no cumulative drift after enlargement and reduction');
   doc.querySelector('p').remove();assert.deepEqual(r.absolutePoints(pen),[]);
 });
+test('image pens retain pixel-relative positions when a scrollbar or font zoom changes image size',()=>{
+  const doc=documentFor('<html><head></head><body><article data-librememo-image><img data-htmlmemo-anchor="n0"></article></body></html>'),image=doc.querySelector('img'),r=Object.create(Reader.prototype);
+  Object.assign(r,{doc,naturalWidth:1600,metadata:{annotations:[]}});let width=1600;
+  image.getBoundingClientRect=()=>({left:0,top:0,width,height:width*1000/1600});
+  const pen={id:'image-pen',type:'pen',anchor:'n0',penBasis:{width:1600,height:1000,fontSize:18},points:[{x:.15,y:.35},{x:.7,y:.35}],color:'#edcf67',width:3,opacity:1};
+  for(width of [1600,1585,1760,800,1600]){const points=r.absolutePoints(pen);for(let i=0;i<2;i++){assert.equal(points[i].x/width,pen.points[i].x);assert.ok(Math.abs(points[i].y/(width*1000/1600)-pen.points[i].y)<1e-12);}}
+  assert.equal(r.drawingFontSize(image),null);
+});
 test('legacy pens keep their first visible appearance and persist the baseline only after a font change',()=>{
   const doc=documentFor('<html><head></head><body><p data-htmlmemo-anchor="n0">Legacy paragraph.</p></body></html>');
   const r=Object.create(Reader.prototype);r.doc=doc;r.naturalWidth=960;r.naturalHeight=800;

@@ -1,0 +1,17 @@
+{
+  "name": "djvu-rs",
+  "version": "0.43.0",
+  "license": "MIT",
+  "repository": "https://github.com/matyushkin/djvu-rs",
+  "release": "https://github.com/matyushkin/djvu-rs/tree/v0.43.0",
+  "files": {
+    "djvu_rs.js": "f6f06f420cb48461c501e090a741702d3c1be1a8e2bba4719b713fc02196e0da",
+    "scalar/djvu_rs.js": "494000bc6cfcf6504664e303c5a23563f286b8cf5a6aa02d460cddb1bda7295d",
+    "scalar/djvu_rs_bg.wasm": "6de0f12f0f1bbbe6ab191db213863c6f997b499f56b0304583efe0ac29384c9e",
+    "simd128/djvu_rs.js": "494000bc6cfcf6504664e303c5a23563f286b8cf5a6aa02d460cddb1bda7295d",
+    "simd128/djvu_rs_bg.wasm": "b511ef683934ab9576eb2bad43d0586db39b206a2992504c829998c65cdbe7c5",
+    "LICENSE": "9b634d974fb7ccacccc877fa6b36016eb48884b09732485d7ad92b6294699163",
+    "THIRD_PARTY_NOTICES": "f8b526769a2f382a6a8a0ea6a0f56948604b1508ec73429b19c43b89a8f1e752"
+  },
+  "changes": "Unmodified npm scalar/SIMD decoder and complete notices for the 38 embedded Rust crates. No DjVuLibre, DjVu.js, viewer UI, OCR, encoder or network document loader is used."
+}

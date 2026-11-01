@@ -551,7 +551,7 @@ async function createDocument(snapshot, handle = null, name = null, local = {}) 
   // New, size-unmatched files prepare the reader and fingerprint concurrently.
   // Attach a rejection handler now; openRecord awaits it before baseline save.
   const identity=identifyLocalFile(local);identity.catch(()=>{});
-  const office=!!snapshot.office;if(office){toast('문서를 읽는 중…');snapshot=await prepareOffice(snapshot);}
+  const office=!!snapshot.office;if(office){toast('문서를 읽는 중…');snapshot=await prepareOffice(snapshot,({page,pages})=>toast('DjVu를 읽는 중… '+page+' / '+pages+'쪽'));}
   if(snapshot.image){toast('이미지를 여는 중…');const {prepareImage}=await import('./image-document.js');snapshot=await prepareImage(snapshot);}
   const parsed=snapshot.pdf?preparePDF(snapshot.pdf,{title:snapshot.title,metadata:snapshot.metadata,freshAnnotations:!!local.freshAnnotations}):snapshot.file ? {...parseHTML('<html><head></head><body></body></html>',{title:snapshot.title,viewport:snapshot.viewport,execution:{allowScripts:!!snapshot.allowScripts}}),file:snapshot.file,nativeScroll:true,freshAnnotations:!!local.freshAnnotations} : parseHTML(snapshot.html,{title:snapshot.title,source:snapshot.url,viewport:snapshot.viewport,warnings:snapshot.warnings},{includeMetadata:true,allowScripts:snapshot.allowScripts,freshAnnotations:!!local.freshAnnotations});
   if(snapshot.archiveMetadata){parsed.metadata=structuredClone(snapshot.archiveMetadata);if(local.freshAnnotations){parsed.metadata.annotations=[];parsed.metadata.bookmarks=[];parsed.metadata.view={scrollTop:0,scrollLeft:0,autoFit:true};}parsed.savedMetadata=true;}

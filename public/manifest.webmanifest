@@ -168,6 +168,14 @@
         "text/x-ssa": [
           ".ass",
           ".ssa"
+        ],
+        "image/vnd.djvu": [
+          ".djvu",
+          ".djv"
+        ],
+        "image/x-djvu": [
+          ".djvu",
+          ".djv"
         ]
       }
     }

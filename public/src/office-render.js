@@ -24,10 +24,11 @@ export async function inspectOfficeZip(bytes,format,warnings){
   if(['xlsx','xlsm','xls','ods','ots'].includes(format)&&[...names].some(n=>/^(?:xl\/(?:drawings|charts)\/|Object \d+\/)/.test(n)))warnings.push('시트의 셀·병합·저장된 계산 결과를 표시합니다. 차트·그림·피벗의 대화형 기능은 포함하지 않습니다. 원본 파일은 그대로 보관합니다.');
   return zip;
 }
-export async function renderOffice(input,format,title){
+export async function renderOffice(input,format,title,onProgress){
   if(!Object.hasOwn(OFFICE_FORMATS,format))throw Error('지원하지 않는 문서 형식입니다.');
   let bytes=input instanceof Uint8Array?input:new Uint8Array(input);
   if(!bytes.length||bytes.length>OFFICE_MAX_BYTES)throw Error('문서 파일은 비어 있지 않은 100MB 이하 파일이어야 합니다.');
+  if(OFFICE_FORMATS[format]==='djvu'){const {renderDjvu}=await import('./office-djvu.js');return renderDjvu(bytes,title,{onProgress});}
   const warnings=[];
   if(OFFICE_FORMATS[format]!=='ebook'&&bytes[0]===0x50&&bytes[1]===0x4b)await inspectOfficeZip(bytes,format,warnings);
   let body;

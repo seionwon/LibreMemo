@@ -1,6 +1,7 @@
 import {IMAGE_EXTENSIONS} from './image-formats.js';
 // Opening formats from GenOffice 36a509e8 (app-routing.ts), plus LibreMemo HTML/MHTML/PDF/images.
 export const OFFICE_FORMATS={
+  djvu:'djvu',djv:'djvu',
   srt:'subtitle',vtt:'subtitle',smi:'subtitle',sami:'subtitle',ass:'subtitle',ssa:'subtitle',
   epub:'ebook',epub3:'ebook',mobi:'ebook',azw:'ebook',azw3:'ebook',fb2:'ebook',fbz:'ebook','fb2.zip':'ebook',cbz:'ebook',
   hwp:'hangul',hwpx:'hangul',hml:'hangul',
@@ -10,6 +11,7 @@ export const OFFICE_FORMATS={
   md:'markdown',markdown:'markdown',txt:'text',json:'text',
 };
 export const OFFICE_MIMES={
+  'image/vnd.djvu':['.djvu','.djv'],'image/x-djvu':['.djvu','.djv'],
   'application/x-subrip':['.srt'],'text/vtt':['.vtt'],'application/x-sami':['.smi','.sami'],'text/x-ssa':['.ass','.ssa'],
   'application/epub+zip':['.epub','.epub3'],'application/x-mobipocket-ebook':['.mobi','.azw'],
   'application/vnd.amazon.mobi8-ebook':['.azw3'],'application/x-fictionbook+xml':['.fb2'],
@@ -45,6 +47,10 @@ export async function verifyOffice(file,format){
   if(['markdown','text','subtitle'].includes(OFFICE_FORMATS[format])||['csv','tsv'].includes(format))return;
   if(OFFICE_FORMATS[format]==='ebook')return; // Bounded worker validates structure, encryption and resource sizes.
   const b=new Uint8Array(await file.slice(0,8).arrayBuffer());
+  if(OFFICE_FORMATS[format]==='djvu'){
+    if(new TextDecoder('ascii').decode(b)==='AT&TFORM')return;
+    throw Error('올바른 DjVu 파일이 아니거나 파일이 손상되었습니다.');
+  }
   const zip=b[0]===0x50&&b[1]===0x4b&&b[2]===3&&b[3]===4;
   const ole=[0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1].every((n,i)=>b[i]===n);
   if(format==='hml')return; // XML encoding/root/DTD validation runs in the bounded worker.
