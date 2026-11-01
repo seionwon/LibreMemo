@@ -539,3 +539,75 @@ test('annotations stay strictly inside document/slide/page bounds and scale in p
   const legacyPts75=r.absolutePoints(legacy);
   assert.ok(Math.abs((legacyPts75[1].x-240)/720-(600-120)/960)<1e-6,'legacy slide pen scales and shifts with the slide');
 });
+test('EPUB and reflowable format pen annotations keep horizontal position without jumping left/right when text wraps on font enlargement or reduction',async()=>{
+  const doc=documentFor('<html><head></head><body data-htmlmemo-anchor="body"><main data-tts-root data-htmlmemo-anchor="n0"><article data-ebook data-ebook-layout="reflow" data-htmlmemo-anchor="n1"><section class="ebook-section" id="ebook-section-0" data-htmlmemo-anchor="n2"><p id="p1" data-htmlmemo-anchor="n3">첫번째 문단입니다.</p><p id="p2" data-htmlmemo-anchor="n4">전자책 본문에서 펜으로 밑줄이나 표시를 그렸을 때 글자 크기를 확대하거나 축소해도 좌우로 엉뚱한 위치로 이동하지 않아야 합니다.</p></section></article></main></body></html>');
+  const main=doc.querySelector('main'),sec=doc.getElementById('ebook-section-0'),p1=doc.getElementById('p1'),p2=doc.getElementById('p2');
+  let fontSize=16,p2Top=200,p2Height=120,glyphX=480,glyphY=240;
+  main.getBoundingClientRect=()=>({left:0,top:0,right:1100,bottom:900,width:1100,height:900});
+  sec.getBoundingClientRect=()=>({left:70,top:24,right:1030,bottom:24+p2Top+p2Height,width:960,height:p2Top+p2Height});
+  p1.getBoundingClientRect=()=>({left:70,top:24,right:1030,bottom:160,width:960,height:136});
+  p2.getBoundingClientRect=()=>({left:70,top:p2Top,right:1030,bottom:p2Top+p2Height,width:960,height:p2Height});
+  for(const el of [main,sec,p1,p2])el.getClientRects=()=>[el.getBoundingClientRect()];
+  const r=Object.create(Reader.prototype);
+  Object.assign(r,{doc,win:doc.defaultView,width:4,color:'#ef4444',opacity:1,penTTL:0,tool:'pen',zoom:1,naturalWidth:1100,naturalHeight:900,metadata:{version:1,annotations:[],view:{}},callbacks:{},findAnnotationScrollHost:()=>null,drawingFontSize:()=>fontSize});
+  r.penTextIndex=()=>({text:p2.textContent,nodes:[{node:p2.firstChild,start:0,end:p2.textContent.length}]});
+  r.capturePenTextAnchor=()=>({start:10,end:11,quote:p2.textContent.slice(10,11),prefix:p2.textContent.slice(0,10),suffix:p2.textContent.slice(11,30),x:glyphX-70,y:glyphY-p2Top,fontSize:16});
+  r.penTextRect=()=>({x:glyphX,y:glyphY,fontSize});
+  r.commit=annotations=>{r.metadata.annotations=annotations;r.renderDrawingLayer();};
+  r.renderDrawingLayer();
+  // Start pen stroke even slightly in the vertical margin above p2 (on .ebook-section): resolves to p2
+  r.pointerDown({button:0,pointerId:1,clientX:310,clientY:p2Top-6,target:sec,preventDefault(){},stopPropagation(){}});
+  assert.equal(r.gesture.anchor.key,'n4','margin click near p2 anchors to paragraph p2 rather than the whole chapter section');
+  r.pointerMove({pointerId:1,clientX:650,clientY:p2Top+40,preventDefault(){}});
+  await r.pointerUp({pointerId:1,preventDefault(){}});
+  const stroke=r.metadata.annotations[0];
+  const initialPts=r.absolutePoints(stroke);
+  assert.deepEqual(initialPts.map(p=>Math.round(p.x)),[310,650]);
+  // Enlarge font size (A+): pinned character wraps to the far right edge of the line (glyphX=1010) and moves down vertically (glyphY=360)
+  fontSize=24;p2Top=280;p2Height=240;glyphX=1010;glyphY=360;
+  const enlargedPts=r.absolutePoints(stroke);
+  assert.deepEqual(enlargedPts.map(p=>Math.round(p.x)),[310,650],'horizontal X coordinates stay locked in place despite glyph wrapping to x=1010');
+  assert.ok(enlargedPts[0].y>initialPts[0].y,'vertical Y coordinate follows reflowed line downward');
+  // Reduce font size (A-): pinned character wraps to the far left edge of the line (glyphX=80) and moves up vertically (glyphY=150)
+  fontSize=12;p2Top=120;p2Height=80;glyphX=80;glyphY=150;
+  const reducedPts=r.absolutePoints(stroke);
+  assert.deepEqual(reducedPts.map(p=>Math.round(p.x)),[310,650],'horizontal X coordinates stay locked in place despite glyph wrapping to x=80');
+  assert.ok(reducedPts[0].y<initialPts[0].y,'vertical Y coordinate follows reflowed line upward');
+});
+test('setReadingFontScale preserves the current reading position across EPUB, DOCX, PPTX and HTML formats',()=>{
+  const doc=documentFor('<html><head></head><body data-htmlmemo-anchor="body"><main data-tts-root><article data-ebook data-ebook-layout="reflow"><section class="ebook-section" id="ch1"><p id="p0">첫 문단</p><p id="p1">지금 읽고 있는 문단입니다.</p><p id="p2">다음 문단</p></section></article></main></body></html>');
+  const sec=doc.getElementById('ch1'),p0=doc.getElementById('p0'),p1=doc.getElementById('p1'),p2=doc.getElementById('p2');
+  let scale=1,scrollY=1000;
+  const view={get scrollY(){return scrollY;},scrollX:0,scrollTo(x,y){this.scrollX=x;scrollY=y;},getComputedStyle:()=>({fontSize:'16px'})};
+  Object.defineProperty(doc,'defaultView',{value:view,configurable:true});
+  // At scale=1, p1 is at document top=980..1180 (straddling viewport top=1000 + focalOffset=36 -> focalY=1036, 28% into p1)
+  const docRect=(baseTop,baseH)=>({left:70,top:baseTop*scale-scrollY,bottom:(baseTop+baseH)*scale-scrollY,right:1030,width:960,height:baseH*scale});
+  sec.getBoundingClientRect=()=>docRect(0,3000);
+  p0.getBoundingClientRect=()=>docRect(0,980);
+  p1.getBoundingClientRect=()=>docRect(980,200);
+  p2.getBoundingClientRect=()=>docRect(1180,1820);
+  const r=Object.create(Reader.prototype);
+  Object.assign(r,{
+    doc,nativeScroll:true,zoom:1,naturalWidth:1100,naturalHeight:3000,
+    viewport:{clientHeight:800,clientWidth:1100,scrollTop:0,scrollLeft:0},
+    frame:{style:{}},sizer:{style:{}},
+    metadata:{version:1,annotations:[],bookmarks:[],view:{}},
+    callbacks:{},
+    cancelAnnotationDrag(){},renderDrawingLayer(){},updateReadingControls(){},
+    findAnnotationScrollHost:()=>null,penTextIndex:()=>null,
+  });
+  const origApply=r.applyReadingFont.bind(r);
+  r.applyReadingFont=()=>{scale=r.readingFontScale()*r.readingFontScale();origApply();};
+  r.measure=()=>{r.naturalHeight=3000*scale;};
+  // Enlarge font size (A+ to 1.5 -> document height scales by 2.25x): reading position stays at 32% of p1
+  assert.equal(r.setReadingFontScale(1.5),true);
+  const p1RectAfterPlus=p1.getBoundingClientRect();
+  const focalOffset=Math.min(44,Math.max(24,800*.12));
+  const focalInP1AfterPlus=(focalOffset-p1RectAfterPlus.top)/p1RectAfterPlus.height;
+  assert.ok(Math.abs(focalInP1AfterPlus-0.32)<0.001,`expected focal point to stay at 32% of p1 after A+, got ${focalInP1AfterPlus}`);
+  // Reduce font size (A- to 0.8): reading position still stays at 32% of p1
+  assert.equal(r.setReadingFontScale(0.8),true);
+  const p1RectAfterMinus=p1.getBoundingClientRect();
+  const focalInP1AfterMinus=(focalOffset-p1RectAfterMinus.top)/p1RectAfterMinus.height;
+  assert.ok(Math.abs(focalInP1AfterMinus-0.32)<0.001,`expected focal point to stay at 32% of p1 after A-, got ${focalInP1AfterMinus}`);
+});

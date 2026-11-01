@@ -5527,3 +5527,26 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
      - 워드(`office-word.js`)·자막(`office-subtitles.js`)·일반 HTML에서 같은 문단 안의 `<br>` 줄바꿈을 [`lineBreakBetween`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/read-aloud.js#L364-L377)으로 감지해 `\n` 경계를 부여했습니다.
   3. **읽고 있는 텍스트 노드만 정확히 하이라이트([`public/src/read-aloud.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/read-aloud.js)):** [`paintSentence`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/read-aloud.js#L525-L561)에서 SVG/다이어그램 구간(`part.diagram === true`)은 각 텍스트 노드(`part.node`)마다 개별 `Range`를 생성해 `getClientRects()`가 컨테이너 박스가 아닌 현재 읽고 있는 글자 영역만 칠하도록 수정했습니다.
 - **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 903개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800) 실제 브라우저 검증 통과, `https://seionwon.github.io/LibreMemo/src/version.js`에서 `1.9.4` 온라인 게시 확인.
+
+<a id="hist-20261102-001"></a>
+### 2026-11-02 01:00:00 +09:00 — EPUB 및 모든 문서 포맷에서 글자 크기 확대·축소(`A+`/`A−`) 및 화면 배율(`%`) 변경 시 펜 주석 좌우 위치 고정과 직전 읽기 위치 유지
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261102-001 |
+| 변경 종류 | 리플로우 문서 펜 주석 가로 좌표 고정·경계 클램핑(`drawingGeometry`, `elementAnchor`, `OFFICE_STYLE`, `applyReadingFont`) · 전 포맷 글자 크기·배율 변경 시 직전 읽기 위치 복원(`captureReadingAnchor`, `restoreReadingAnchor`, `setReadingFontScale`, `stepSourceFont`, `setZoom`) |
+| 상태 | 로컬 검증 완료 · 1.9.5 GitHub Pages 게시 완료 |
+
+- **목적·원인:**
+  1. 전자책(EPUB 등, `article[data-ebook]`)과 워드(`.office-word`), 자막(`.office-subtitles`), 마크다운·일반 HTML 등 리플로우 문서에서 펜으로 주석을 그린 뒤 `A+`/`A−`로 글자 크기를 확대·축소하면 두 가지 원인으로 펜 주석이 좌우 엉뚱한 위치로 이동했습니다:
+     - [`office-common.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/office-common.js)의 `OFFICE_STYLE`에서 `.ebook-section`, `.office-word`, `.office-subtitles`의 `max-width: 60em`과 `main { padding: 1.5em }`가 `em` 단위를 사용해 `A+`/`A−` 조작 시 본문 컬럼 폭과 좌우 여백(`margin: 0 auto`)이 함께 줄거나 늘어나면서 기준 박스(`box.x`, `box.width`) 자체가 좌우로 밀렸습니다.
+     - [`reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js)의 [`drawingGeometry`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L3124-L3205)가 리플로우 문단에서도 단일 글자(`basis.textAnchor`)의 가로 좌표(`rect.x`) 변화량(`dx`)이나 `p.x * basis.width * scale`을 그대로 더해, 글자 크기 변경으로 줄바꿈 위치가 바뀔 때 기준 글자가 줄의 오른쪽 끝이나 다음 줄 왼쪽 끝으로 이동하면 펜 주석 전체가 좌우로 수백 픽셀씩 엉뚱한 곳으로 튀었습니다.
+  2. 또한 PDF를 제외한 모든 문서 포맷(EPUB, DOCX/ODT, PPTX/ODP, HWP/HWPX/HML, DjVu, XLSX/CSV/ODS, 자막, 텍스트, 마크다운, HTML)에서 [`setReadingFontScale`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1429-L1439)과 [`stepSourceFont`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1101-L1121)·자체 상단 바 `A+`/`A−` 조작 시 문서 전체 높이(`scrollHeight`)가 크게 변함에도 스크롤 위치(`scrollTop`/`scrollLeft`)를 보정하지 않아, 읽고 있던 위치에서 수십 쪽 앞뒤의 엉뚱한 곳으로 이동하던 문제를 해결했습니다.
+- **동작·보존:**
+  1. **EPUB 및 전 포맷 펜 주석 좌우 정위치 유지([`public/src/office-common.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/office-common.js), [`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js)):**
+     - [`OFFICE_STYLE`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/office-common.js#L11)과 [`applyReadingFont`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1420-L1428)에서 `main` 여백을 고정 픽셀(`24px`, 모바일 `12px`)로, `.ebook-section:not(.ebook-comic-page)`·`.office-word`·`.office-subtitles`의 `max-width`를 `960px`로 고정하여 새로 가져온 문서와 기존 보관함 문서 모두에서 `A+`/`A−` 조작 시 본문 컬럼의 가로 위치·너비가 흔들리지 않도록 했습니다.
+     - [`elementAnchor`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L2644-L2708)가 모든 인라인 태그(`span, a, b, strong, em, i, u, s, sub, sup, ruby, code, mark` 등)에서 블록 문단으로 올라가고, 문단 사이 여백(`section.ebook-section`, `article.office-word`, `main` 등)에서 펜을 시작해도 가장 가까운 문단 블록으로 앵커를 연결하도록 보강했습니다.
+     - [`drawingGeometry`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L3168-L3203)에서 리더 글자 크기 조절이 적용되는 리플로우 문서(`reflowReaderScaled`)의 펜 주석은 가로 좌표를 문단 폭 비율(`box.x + p.x * box.width`)에 고정해 줄바꿈이 바뀌어도 좌우로 밀리지 않게 하고, 세로 좌표는 해당 텍스트 줄(`rect.y`) 또는 문단 비율을 따라 이동하며 문서 컨테이너 경계(`drawableContainer`) 안에 유지되도록 했습니다.
+  2. **확대·축소 시 모든 포맷에서 직전 읽기 위치 유지([`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js)):**
+     - [`captureReadingAnchor`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1278-L1372)와 [`restoreReadingAnchor`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1373-L1419)를 추가해 현재 화면 상단 읽기 기준선(`focalY`)에 걸친 슬라이드·쪽·표 행·문단 블록(`node`, `offsetRatioY`, `offsetRatioX`)과 문단 내 해당 줄의 글자 범위(`textPin`)를 이진 탐색으로 포착한 뒤, `A+`/`A−`(`setReadingFontScale`, `stepSourceFont`, 자체 상단 바 `#reader-smaller`/`#reader-larger`) 및 레이아웃 리플로우가 발생하는 배율 변경(`setZoom`) 직후 해당 줄·문단·슬라이드·쪽이 화면의 동일한 위치에 오도록 스크롤을 복원합니다.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 905개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800) 실제 브라우저 검증 통과, `https://seionwon.github.io/LibreMemo/src/version.js`에서 `1.9.5` 온라인 게시 확인.

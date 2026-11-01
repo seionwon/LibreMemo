@@ -1104,6 +1104,7 @@ export class Reader {
     const next=clamp(prev+delta,0,3);
     if(next===prev)return false;
     this.cancelAnnotationDrag?.();
+    const readingAnchor=this.pendingReadingAnchor||this.captureReadingAnchor?.();this.pendingReadingAnchor=null;
     this.sourceFontExtraSteps=next;
     if(next>0){
       this.sourceFontAtMax=true;
@@ -1113,7 +1114,7 @@ export class Reader {
     }
     this.applySourceReadingFont();
     this.syncSourceFontControls(controls);
-    this.measure?.();this.renderDrawingLayer?.();this.readAloud?.refreshPaint?.();
+    this.measure?.();this.restoreReadingAnchor?.(readingAnchor);this.renderDrawingLayer?.();this.readAloud?.refreshPaint?.();
     if(!this.rememberPosition?.())this.callbacks?.onPosition?.();
     this.updateReadingControls?.();this.callbacks?.onView?.();
     return true;
@@ -1125,14 +1126,18 @@ export class Reader {
     if(controls.larger.disabled||controls.larger.getAttribute('data-htmlmemo-source-max')==='true'){
       controls.larger.setAttribute('data-htmlmemo-source-max','true');
       this.sourceFontAtMax=true;
-      if(after<=before+.05&&(this.sourceFontExtraSteps||0)===0)this.stepSourceFont(1);
-      else this.syncSourceFontControls(controls);
-      return;
-    }
-    if(after<=before+.05&&(this.sourceFontExtraSteps||0)===0){
+      if(after<=before+.05&&(this.sourceFontExtraSteps||0)===0){this.stepSourceFont(1);return;}
+      this.syncSourceFontControls(controls);
+    }else if(after<=before+.05&&(this.sourceFontExtraSteps||0)===0){
       this.sourceFontAtMax=true;
       this.stepSourceFont(1);
+      return;
     }
+    if(this.pendingReadingAnchor&&Math.abs(after-before)>.05){
+      const anchor=this.pendingReadingAnchor;this.pendingReadingAnchor=null;
+      this.measure?.();this.restoreReadingAnchor?.(anchor);this.renderDrawingLayer?.();
+      if(!this.rememberPosition?.())this.callbacks?.onPosition?.();
+    }else this.pendingReadingAnchor=null;
   }
   onRuntimePatch() {
     const controls=this.findSourceFontControls();if(!controls)return;
@@ -1147,8 +1152,18 @@ export class Reader {
           this.sourceFontAtMax=true;
           if(after<=before+.05&&(this.sourceFontExtraSteps||0)===0){this.stepSourceFont(1);return;}
         }
+        if(this.pendingReadingAnchor&&Math.abs(after-before)>.05){
+          const anchor=this.pendingReadingAnchor;this.pendingReadingAnchor=null;
+          this.measure?.();this.restoreReadingAnchor?.(anchor);this.renderDrawingLayer?.();
+          if(!this.rememberPosition?.())this.callbacks?.onPosition?.();
+        }
       }
     }else{
+      if(this.pendingReadingAnchor&&this.lastSourceFontSize!=null&&Math.abs(after-this.lastSourceFontSize)>.05){
+        const anchor=this.pendingReadingAnchor;this.pendingReadingAnchor=null;
+        this.measure?.();this.restoreReadingAnchor?.(anchor);this.renderDrawingLayer?.();
+        if(!this.rememberPosition?.())this.callbacks?.onPosition?.();
+      }
       this.lastSourceFontSize=after;
     }
     if((this.sourceFontExtraSteps||0)>0)this.applySourceReadingFont();
@@ -1165,6 +1180,8 @@ export class Reader {
       if(event._htmlmemoSourceFontHandled)return;event._htmlmemoSourceFontHandled=true;
       const current=this.findSourceFontControls();if(!current)return;
       clearTimeout(this.sourceFontTimer);this.sourceFontTimer=0;this.pendingSourceFontBefore=null;
+      this.pendingReadingAnchor=this.captureReadingAnchor?.();
+      this.pendingSmallerBefore=this.lastSourceFontSize??this.rawSourceFontSize();
       if((this.sourceFontExtraSteps||0)>0){
         event.preventDefault();event.stopImmediatePropagation();
         this.stepSourceFont(-1);
@@ -1183,6 +1200,7 @@ export class Reader {
         current.larger.disabled=true;
         return;
       }
+      this.pendingReadingAnchor=this.captureReadingAnchor?.();
       if((this.sourceFontExtraSteps||0)>0||this.sourceFontAtMax){
         event.preventDefault();event.stopImmediatePropagation();
         this.stepSourceFont(1);
@@ -1211,14 +1229,187 @@ export class Reader {
         else if(button===current.larger)handleLarger(event);
       },true);
       this.doc.addEventListener('click',()=>{
-        if(!this.runtime&&this.pendingSourceFontBefore!=null){
-          const before=this.pendingSourceFontBefore;this.pendingSourceFontBefore=null;
-          this.finishSourceFontCheck(before);
+        if(!this.runtime){
+          if(this.pendingSourceFontBefore!=null){
+            const before=this.pendingSourceFontBefore;this.pendingSourceFontBefore=null;
+            this.finishSourceFontCheck(before);
+          }else if(this.pendingSmallerBefore!=null){
+            const before=this.pendingSmallerBefore;this.pendingSmallerBefore=null;
+            const after=this.rawSourceFontSize();this.lastSourceFontSize=after;
+            if(this.pendingReadingAnchor&&Math.abs(after-before)>.05){
+              const anchor=this.pendingReadingAnchor;this.pendingReadingAnchor=null;
+              this.measure?.();this.restoreReadingAnchor?.(anchor);this.renderDrawingLayer?.();
+              if(!this.rememberPosition?.())this.callbacks?.onPosition?.();
+            }else this.pendingReadingAnchor=null;
+          }
         }
       },false);
     }
     if(this.sourceFontExtraSteps>0)this.applySourceReadingFont();
     this.syncSourceFontControls(controls);
+  }
+  readingScrollMetrics() {
+    const zoom=this.zoom||1;
+    const origin=typeof this.layerOrigin==='function'?this.layerOrigin():{left:0,top:0,scrollHost:null};
+    const scrollHost=origin.scrollHost;
+    const top=(this.scrollTop||0)/zoom;
+    const left=(this.scrollLeft||0)/zoom;
+    let viewHeight=(this.viewport?.clientHeight||800)/zoom;
+    let viewWidth=(this.viewport?.clientWidth||1000)/zoom;
+    let scrollHeight=this.naturalHeight||0;
+    let scrollWidth=this.naturalWidth||0;
+    if(this.nativeScroll){
+      if(scrollHost){
+        viewHeight=scrollHost.clientHeight||viewHeight;
+        viewWidth=scrollHost.clientWidth||viewWidth;
+        scrollHeight=scrollHost.scrollHeight||scrollHeight;
+        scrollWidth=scrollHost.scrollWidth||scrollWidth;
+      }else{
+        const de=this.doc?.documentElement,body=this.doc?.body;
+        viewHeight=de?.clientHeight||viewHeight;
+        viewWidth=de?.clientWidth||viewWidth;
+        scrollHeight=Math.max(body?.scrollHeight||0,de?.scrollHeight||0,scrollHeight);
+        scrollWidth=Math.max(body?.scrollWidth||0,de?.scrollWidth||0,scrollWidth);
+      }
+    }
+    return {
+      zoom,origin,scrollHost,top,left,
+      viewHeight:Math.max(1,viewHeight),
+      viewWidth:Math.max(1,viewWidth),
+      maxScrollY:Math.max(0,scrollHeight-viewHeight),
+      maxScrollX:Math.max(0,scrollWidth-viewWidth),
+    };
+  }
+  captureReadingAnchor() {
+    if(this.pdf||!this.doc?.body||this.host?.hidden||this.disposed||typeof this.layerOrigin!=='function')return null;
+    try{
+      const m=this.readingScrollMetrics();
+      const headingCursorNode=this.readingHeadingCursor?.node?.isConnected&&Math.abs((this.readingHeadingCursor.top||0)-(this.scrollTop||0))<2?this.readingHeadingCursor.node:null;
+      if(m.top<=2&&m.left<=2)return {atStart:true,top:m.top,left:m.left,headingCursorNode};
+      const focalOffset=Math.min(44,Math.max(24,m.viewHeight*.12));
+      const focalOffsetX=Math.min(48,Math.max(24,m.viewWidth*.1));
+      const focalY=m.top+focalOffset,focalX=m.left+focalOffsetX;
+      const ratioY=m.maxScrollY>0?clamp(m.top/m.maxScrollY,0,1):0;
+      const ratioX=m.maxScrollX>0?clamp(m.left/m.maxScrollX,0,1):0;
+      if(typeof this.doc.querySelector!=='function')return {ratioY,ratioX,top:m.top,left:m.left,focalOffset,focalOffsetX,headingCursorNode};
+      const root=m.scrollHost||this.doc.getElementById?.('reader-content')||this.doc.querySelector?.('article[data-ebook],article[data-office-slides],article[data-office-pages],article[data-librememo-image],.office-word,.office-subtitles')||this.doc.querySelector?.('main,[role="main"],article')||this.doc.body;
+      const skipNode=el=>!el||el.nodeType!==1||el.id===LAYER_ID||el.hasAttribute?.('data-htmlmemo-ui')||/^(?:script|style|link|meta|template|noscript|nav|aside)$/i.test(el.localName||'')||this.isInsideTocOrTopbar?.(el);
+      const pickChild=parent=>{
+        let list;try{list=parent?.children;}catch{return null;}
+        const len=list?.length||0;if(!len)return null;
+        let start=0,end=len-1;
+        if(len>32){
+          let lo=0,hi=len-1;
+          while(lo<=hi){
+            const mid=(lo+hi)>>1,r=list[mid]?.getBoundingClientRect?.();
+            if(r&&(r.width>0||r.height>0)&&(r.bottom-m.origin.top)<focalY)lo=mid+1;
+            else hi=mid-1;
+          }
+          start=Math.max(0,lo-6);end=Math.min(len-1,lo+8);
+        }
+        let best=null,bestDist=Infinity;
+        for(let i=start;i<=end;i++){
+          const child=list[i];if(skipNode(child))continue;
+          const r=child.getBoundingClientRect?.();
+          if(!r||r.width<=0||r.height<=0){
+            if(len<=8&&child.children?.length){const inner=pickChild(child);if(inner)return inner;}
+            continue;
+          }
+          const top=r.top-m.origin.top,bottom=top+r.height;
+          const dist=focalY<top?top-focalY:focalY>bottom?focalY-bottom:0;
+          if(dist<bestDist||(dist===0&&bestDist===0&&top<=focalY+4)){best=child;bestDist=dist;}
+        }
+        return best;
+      };
+      let cur=root;
+      for(let depth=0;depth<10&&cur;depth++){
+        if(cur.matches?.('.office-slide,.office-page,[data-djvu-page],.ebook-fixed-page,.ebook-comic-page,article[data-librememo-image],p,h1,h2,h3,h4,h5,h6,pre,.subtitle-cue,tr'))break;
+        const next=pickChild(cur);
+        if(!next)break;
+        cur=next;
+      }
+      const rect=cur?.getBoundingClientRect?.();
+      if(!cur||!rect||rect.width<=0||rect.height<=0)return {ratioY,ratioX,top:m.top,left:m.left,focalOffset,focalOffsetX,headingCursorNode};
+      const docTop=rect.top-m.origin.top,docLeft=rect.left-m.origin.left;
+      const offsetRatioY=clamp((focalY-docTop)/Math.max(1,rect.height),0,1);
+      const offsetRatioX=clamp((focalX-docLeft)/Math.max(1,rect.width),0,1);
+      let textPin=null;
+      if(!this.fixedPageContainer?.(cur)&&cur.localName!=='tr'&&typeof this.penTextIndex==='function'){
+        const index=this.penTextIndex(cur);
+        if(index&&index.text.length>0){
+          let lo=0,hi=index.text.length;
+          while(hi-lo>16){
+            const mid=(lo+hi)>>1;
+            const r=rangeFromOffsets(this.doc,lo,mid,index)?.getBoundingClientRect?.();
+            if(r&&r.width>0&&r.height>0&&(r.bottom-m.origin.top)<focalY)lo=mid;
+            else hi=mid;
+          }
+          let bestAt=-1,bestFinish=-1,bestDist=Infinity,bestRect=null;
+          for(let at=Math.max(0,lo-4);at<Math.min(index.text.length,hi+8);at++){
+            if(/\s|[\uDC00-\uDFFF]/u.test(index.text[at]))continue;
+            const finish=at+(index.text.codePointAt(at)>0xffff?2:1);
+            const r=rangeFromOffsets(this.doc,at,finish,index)?.getBoundingClientRect?.();
+            if(!r||r.width<=0||r.height<=0)continue;
+            const t=r.top-m.origin.top,b=t+r.height;
+            const dy=focalY<t?t-focalY:focalY>b?focalY-b:0;
+            const l=r.left-m.origin.left,rt=l+r.width;
+            const dx=focalX<l?l-focalX:focalX>rt?focalX-rt:0;
+            const d=dy*1000+dx;
+            if(d<bestDist){bestDist=d;bestAt=at;bestFinish=finish;bestRect=r;}
+          }
+          if(bestRect){
+            textPin={
+              index,
+              start:bestAt,
+              end:bestFinish,
+              lineOffsetRatio:clamp((focalY-(bestRect.top-m.origin.top))/Math.max(1,bestRect.height),-2,3),
+            };
+          }
+        }
+      }
+      return {node:cur,offsetRatioY,offsetRatioX,textPin,ratioY,ratioX,top:m.top,left:m.left,focalOffset,focalOffsetX,headingCursorNode};
+    }catch{return null;}
+  }
+  restoreReadingAnchor(anchor) {
+    if(!anchor||this.pdf||!this.doc?.body||this.host?.hidden||this.disposed||typeof this.layerOrigin!=='function')return;
+    try{
+      const m=this.readingScrollMetrics();
+      if(anchor.atStart){
+        if(anchor.top<=2)this.scrollTop=anchor.top*m.zoom;
+        if(anchor.left<=2)this.scrollLeft=anchor.left*m.zoom;
+        if(anchor.headingCursorNode?.isConnected)this.readingHeadingCursor={node:anchor.headingCursorNode,top:this.scrollTop};
+        return;
+      }
+      let targetDocY=null,targetDocX=null;
+      if(anchor.textPin?.index){
+        const r=rangeFromOffsets(this.doc,anchor.textPin.start,anchor.textPin.end,anchor.textPin.index)?.getBoundingClientRect?.();
+        if(r&&r.width>0&&r.height>0){
+          targetDocY=(r.top-m.origin.top)+anchor.textPin.lineOffsetRatio*r.height;
+        }
+      }
+      if(targetDocY===null&&anchor.node?.isConnected){
+        const r=anchor.node.getBoundingClientRect?.();
+        if(r&&r.width>0&&r.height>0){
+          targetDocY=(r.top-m.origin.top)+anchor.offsetRatioY*r.height;
+          if(anchor.left>2&&(this.fixedPageContainer?.(anchor.node)||anchor.node.closest?.('.office-sheet'))){
+            targetDocX=(r.left-m.origin.left)+anchor.offsetRatioX*r.width;
+          }
+        }
+      }
+      if(targetDocY!==null&&Number.isFinite(targetDocY)){
+        this.scrollTop=Math.max(0,(targetDocY-anchor.focalOffset)*m.zoom);
+      }else if(m.maxScrollY>0&&Number.isFinite(anchor.ratioY)){
+        this.scrollTop=Math.max(0,anchor.ratioY*m.maxScrollY*m.zoom);
+      }
+      if(anchor.left>2){
+        if(targetDocX!==null&&Number.isFinite(targetDocX)){
+          this.scrollLeft=Math.max(0,(targetDocX-anchor.focalOffsetX)*m.zoom);
+        }else if(m.maxScrollX>0&&Number.isFinite(anchor.ratioX)){
+          this.scrollLeft=Math.max(0,anchor.ratioX*m.maxScrollX*m.zoom);
+        }
+      }
+      if(anchor.headingCursorNode?.isConnected)this.readingHeadingCursor={node:anchor.headingCursorNode,top:this.scrollTop};
+    }catch{/* Ignore layout measurement errors in detached or mocked views. */}
   }
   applyReadingFont() {
     if(this.pdf){this.pdf.applyFont();return;}
@@ -1227,13 +1418,15 @@ export class Reader {
     this.readingFontSize ||= Number.parseFloat(this.doc.defaultView?.getComputedStyle?.(this.doc.body)?.fontSize)||18;
     let style=this.doc.getElementById('htmlmemo-reading-font-style');
     if(!style){style=this.doc.createElement('style');style.id='htmlmemo-reading-font-style';style.setAttribute('data-htmlmemo-ui','');this.doc.head.append(style);}
-    const css='html,body{font-size:'+(this.readingFontSize*scale).toFixed(3)+'px!important}article[data-ebook]:not([data-ebook-layout="fixed"]) .ebook-section{font-size:1rem!important}article[data-office-slides]>.office-slide,article[data-office-pages]>.office-page,article[data-ebook]>.office-page,article[data-ebook]>.ebook-comic-page{max-width:'+(scale*100)+'%}'+(this.doc.querySelector('article[data-librememo-image]')?'article[data-librememo-image]{width:'+((this.metadata.viewport?.width||this.naturalWidth||1100)*scale)+'px;max-width:none}':'');if(style.textContent!==css)style.textContent=css;
+    const css='html,body{font-size:'+(this.readingFontSize*scale).toFixed(3)+'px!important}main[data-tts-root]{padding:24px}@media(max-width:480px){main[data-tts-root]{padding:12px}}.office-word,.office-subtitles,article[data-ebook]:not([data-ebook-layout="fixed"]) .ebook-section:not(.ebook-comic-page){max-width:960px}article[data-ebook]:not([data-ebook-layout="fixed"]) .ebook-section{font-size:1rem!important}article[data-office-slides]>.office-slide,article[data-office-pages]>.office-page,article[data-ebook]>.office-page,article[data-ebook]>.ebook-comic-page{max-width:'+(scale*100)+'%}'+(this.doc.querySelector('article[data-librememo-image]')?'article[data-librememo-image]{width:'+((this.metadata.viewport?.width||this.naturalWidth||1100)*scale)+'px;max-width:none}':'');if(style.textContent!==css)style.textContent=css;
   }
   setReadingFontScale(value) {
     if(!Number.isFinite(value)||this.disposed||this.preparing||this.topbarNode?.isConnected)return false;
     const raw=clamp(value,.6,3.2),scale=raw>=3.1944?3.2:Math.round(raw*10000)/10000;if(scale===this.readingFontScale())return false;
-    this.cancelAnnotationDrag();if(this.pdf)this.autoFit=false;this.metadata.view.fontScale=scale;this.applyReadingFont();
-    this.measure();this.renderDrawingLayer();this.readAloud?.refreshPaint?.();
+    this.cancelAnnotationDrag();if(this.pdf)this.autoFit=false;
+    const readingAnchor=this.captureReadingAnchor();
+    this.metadata.view.fontScale=scale;this.applyReadingFont();
+    this.measure();this.restoreReadingAnchor(readingAnchor);this.renderDrawingLayer();this.readAloud?.refreshPaint?.();
     // Font scale was already applied to view above; unchanged scroll offsets
     // must still notify the document writer about that setting change.
     if(!this.rememberPosition())this.callbacks.onPosition?.();this.updateReadingControls();this.callbacks.onView?.();return true;
@@ -2249,10 +2442,16 @@ export class Reader {
   }
   setZoom(value, fit = false) {
     this.cancelAnnotationDrag();
+    const pinnedSourceUI = this.nativeScroll && (this.topbarNode?.isConnected || this.tocResize?.sidebar?.isConnected);
+    const prevMaxScrollY = pinnedSourceUI ? this.readingScrollMetrics().maxScrollY : 0;
+    const readingAnchor = pinnedSourceUI ? this.captureReadingAnchor() : null;
     const centerX = (this.scrollLeft + this.viewport.clientWidth / 2) / this.zoom;
     const centerY = (this.scrollTop + this.viewport.clientHeight / 2) / this.zoom;
     this.autoFit = fit; this.zoom = clamp(fit ? this.fitZoom() : value, .2, 8); this.applyZoom();
     this.scrollLeft = centerX * this.zoom - this.viewport.clientWidth / 2; this.scrollTop = centerY * this.zoom - this.viewport.clientHeight / 2;
+    if (readingAnchor && Math.abs(this.readingScrollMetrics().maxScrollY - prevMaxScrollY) > 4) {
+      this.restoreReadingAnchor(readingAnchor);
+    }
     if(!this.preparing&&this.layer?.isConnected)this.renderDrawingLayer();
     this.rememberPosition(); this.callbacks.onView?.();
   }
@@ -2446,7 +2645,7 @@ export class Reader {
       y:clamp(point.y, bounds.y + padY, bounds.y + bounds.height - padY),
     };
   }
-  elementAnchor(target, describe = false) {
+  elementAnchor(target, describe = false, point = null) {
     const origin = this.layerOrigin();
     const scrollHost = origin.scrollHost;
     const node = target?.nodeType === 1 ? target : target?.parentElement;
@@ -2462,8 +2661,9 @@ export class Reader {
     if (element.closest?.('#' + LAYER_ID) || (element.namespaceURI === NS && element.localName !== 'svg')) {
       element = fixed || this.drawableContainer(node) || scrollHost || this.doc.body;
     }
+    const inlineTags = ['span','a','b','strong','em','i','u','s','del','ins','small','sub','sup','mark','ruby','rt','rp','code','kbd','samp','var','cite','dfn','abbr','time','q','bdi','bdo','font','br','wbr'];
     if (!fixed) {
-      while (element !== this.doc.body && element !== scrollHost && ['span','a','b','strong','em','i','small','mark'].includes(element.localName)) element = element.parentElement || this.doc.body;
+      while (element !== this.doc.body && element !== scrollHost && inlineTags.includes(element.localName)) element = element.parentElement || this.doc.body;
     }
     const container = this.drawableContainer(node);
     if (container && element && (element === this.doc.body || element === scrollHost || (element.contains?.(container) && element !== container))) {
@@ -2473,6 +2673,37 @@ export class Reader {
     if (typeof win?.getComputedStyle === 'function') {
       while (element && element !== this.doc.body && element !== scrollHost && /^(?:fixed|sticky)$/i.test(win.getComputedStyle(element)?.position || '')) {
         element = element.parentElement || scrollHost || this.doc.body;
+      }
+    }
+    if (!fixed && point && element && !element.matches?.('p,h1,h2,h3,h4,h5,h6,li,blockquote,pre,td,th,figcaption,dt,dd,.subtitle-cue,svg,img')) {
+      for (let depth = 0; depth < 6 && element; depth++) {
+        if (element.matches?.('p,h1,h2,h3,h4,h5,h6,li,blockquote,pre,td,th,figcaption,dt,dd,.subtitle-cue,svg,img')) break;
+        let list; try { list = element.children; } catch { break; }
+        const len = list?.length || 0; if (!len) break;
+        let start = 0, end = len - 1;
+        if (len > 32) {
+          let lo = 0, hi = len - 1;
+          while (lo <= hi) {
+            const mid = (lo + hi) >> 1, r = list[mid]?.getBoundingClientRect?.();
+            if (r && (r.width > 0 || r.height > 0) && (r.bottom - origin.top) < point.y) lo = mid + 1;
+            else hi = mid - 1;
+          }
+          start = Math.max(0, lo - 4); end = Math.min(len - 1, lo + 6);
+        }
+        let best = null, bestDy = 48;
+        for (let i = start; i <= end; i++) {
+          const child = list[i];
+          if (!child || child.id === LAYER_ID || child.hasAttribute?.('data-htmlmemo-ui') || inlineTags.includes(child.localName) || /^(?:script|style|link|meta|template|noscript|nav|aside)$/i.test(child.localName || '')) continue;
+          if (!child.hasAttribute?.('data-htmlmemo-anchor') && !child.dataset?.htmlmemoAnchor) continue;
+          const r = child.getBoundingClientRect?.();
+          if (!r || r.width <= 0 || r.height <= 0) continue;
+          const left = r.left - origin.left, right = left + r.width, top = r.top - origin.top, bottom = top + r.height;
+          if (point.x < left - 48 || point.x > right + 48) continue;
+          const dy = point.y < top ? top - point.y : point.y > bottom ? point.y - bottom : 0;
+          if (dy <= bestDy) { best = child; bestDy = dy; }
+        }
+        if (!best) break;
+        element = best;
       }
     }
     if (scrollHost && !scrollHost.contains(element)) element = scrollHost;
@@ -2646,7 +2877,7 @@ export class Reader {
       target=this.resolveDrawingTarget(drag.annotation)||drag.container;
       container=drag.container;
     }
-    const origin=this.layerOrigin(),box=this.elementAnchor(target,true),bounds=this.drawingBounds(container,box,origin);
+    const origin=this.layerOrigin(),rawPoint=event&&Number.isFinite(event.clientX)?this.point(event):null,box=this.elementAnchor(target,true,rawPoint),bounds=this.drawingBounds(container,box,origin);
     const scale=drag.geometry.scale||1,strokeWidth=(Number(drag.annotation.width)||0)*(drag.annotation.type==='pen'?scale:1);
     const points=drag.geometry.points.map(p=>this.clampDrawingPoint({x:p.x+drag.delta.x,y:p.y+drag.delta.y},bounds?.measured?bounds:null,drag.annotation.type,strokeWidth));
     const next={...drag.annotation,anchor:box.key,anchorTarget:box.target};let width=box.width,height=box.height;
@@ -2754,9 +2985,9 @@ export class Reader {
       const scrollHost = this.findAnnotationScrollHost();
       if (!this.layer?.isConnected || (scrollHost && this.layer.parentElement !== scrollHost)) this.renderDrawingLayer();
       const origin = this.layerOrigin(scrollHost);
-      const anchor = this.elementAnchor(event.target,true);
-      const bounds = this.drawingBounds(container, anchor, origin);
       const rawPoint = this.point(event);
+      const anchor = this.elementAnchor(event.target,true,rawPoint);
+      const bounds = this.drawingBounds(container, anchor, origin);
       if (bounds?.measured && (rawPoint.x < bounds.x || rawPoint.x > bounds.x + bounds.width || rawPoint.y < bounds.y || rawPoint.y > bounds.y + bounds.height)) return;
       event.preventDefault(); event.stopPropagation();
       const p = this.clampDrawingPoint(rawPoint, bounds, this.tool, this.width);
@@ -2905,7 +3136,7 @@ export class Reader {
         if (!basis) { basis = {width:box.width,height:box.height,fontSize}; this.legacyPenBases.set(annotation.id,basis); }
       }
       if (basis && fontSize) {
-        let scale = fontSize / basis.fontSize, dx=0, dy=0, textChanged=false;
+        let scale = fontSize / basis.fontSize, dx=0, dy=0, textChanged=false, rect=null;
         let index;
         const getIndex=()=>{
           if(index===undefined){
@@ -2931,12 +3162,48 @@ export class Reader {
         }
         if(basis.textAnchor){
           const textIndex=getIndex(),hit=textIndex && this.resolvePenTextAnchor(textIndex,basis.textAnchor);
-          const rect=hit && this.penTextRect(textIndex,hit.start,hit.end,origin);
+          rect=hit && this.penTextRect(textIndex,hit.start,hit.end,origin);
           if(rect){
             scale=rect.fontSize/basis.textAnchor.fontSize;
             dx=rect.x-box.x-basis.textAnchor.x*scale;dy=rect.y-box.y-basis.textAnchor.y*scale;
             textChanged ||= Math.abs(dx)>.01 || Math.abs(dy)>.01;
           }
+        }
+        const reflowReaderScaled = Boolean(
+          this.doc?.getElementById?.('htmlmemo-reading-font-style') ||
+          this.doc?.getElementById?.('htmlmemo-source-font-style') ||
+          this.doc?.getElementById?.('book-manifest') ||
+          this.doc?.querySelector?.('article[data-ebook],.office-word,.office-subtitles,.office-sheet,.office-plain')
+        );
+        if (reflowReaderScaled && annotation.points?.length) {
+          let minPx = Infinity, maxPx = -Infinity, minPy = Infinity, maxPy = -Infinity;
+          for (const p of annotation.points) {
+            minPx = Math.min(minPx, p.x); maxPx = Math.max(maxPx, p.x);
+            minPy = Math.min(minPy, p.y); maxPy = Math.max(maxPy, p.y);
+          }
+          const cy0 = (minPy + maxPy) / 2;
+          const strokeSpanY0 = (maxPy - minPy) * basis.height;
+          const useLineY = Boolean(rect && strokeSpanY0 <= Math.max(basis.fontSize * 3.5, 84) && Math.abs(cy0 * basis.height - basis.textAnchor.y) <= Math.max(basis.fontSize * 4, 96));
+          let points = annotation.points.map(p => ({
+            x: box.x + p.x * box.width,
+            y: useLineY ? (box.y + p.y * basis.height * scale + dy) : (box.y + cy0 * box.height + (p.y - cy0) * basis.height * Math.min(scale, box.height / Math.max(1, basis.height))),
+          }));
+          const container = this.drawableContainer(element);
+          const bounds = container ? this.drawingBounds(container, null, origin) : null;
+          if (bounds?.measured) {
+            const rawPad = Math.max(0, (Number(annotation.width) || 0) * scale / 2);
+            const padX = Math.min(rawPad, Math.max(0, bounds.width / 2 - .5));
+            const padY = Math.min(rawPad, Math.max(0, bounds.height / 2 - .5));
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            for (const p of points) { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }
+            let shiftX = 0, shiftY = 0;
+            if (minX < bounds.x + padX) shiftX = bounds.x + padX - minX;
+            else if (maxX > bounds.x + bounds.width - padX) shiftX = (bounds.x + bounds.width - padX) - maxX;
+            if (minY < bounds.y + padY) shiftY = bounds.y + padY - minY;
+            else if (maxY > bounds.y + bounds.height - padY) shiftY = (bounds.y + bounds.height - padY) - maxY;
+            points = points.map(p => this.clampDrawingPoint({x:p.x + shiftX, y:p.y + shiftY}, bounds, 'pen', (Number(annotation.width) || 0) * scale));
+          }
+          return {points, scale, basis, textChanged};
         }
         return {points:annotation.points.map(p => ({x:box.x+p.x*basis.width*scale+dx,y:box.y+p.y*basis.height*scale+dy})),scale,basis,textChanged};
       }
