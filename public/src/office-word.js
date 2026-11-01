@@ -68,9 +68,12 @@ export function renderWord(doc,warnings){
     if(block.decorative)return '<hr>';
     if(block.previewText)return anchors+'<p id="'+id+'">'+esc(block.previewText)+'</p>';
     missing++;return '<p class="office-note">'+esc(block.label||'표시할 수 없는 문서 개체')+'</p>';
-  }).join('');
+  });
+  let bodyLen=0;for(const s of body)bodyLen+=s.length;
   const notes=(kind,items)=>(items||[]).map(n=>'<li id="office-'+kind+'-'+esc(n.id)+'">'+(n.richParas?.map(runs=>paragraph(runs)).join('')||esc(n.text||''))+'</li>').join('');
   const footnotes=notes('footnote',doc.footnotes),endnotes=notes('endnote',doc.endnotes);
   if(missing)warnings.push('일부 문서 개체 '+missing+'개는 원래 모양을 표시하지 못했습니다. 원본 파일은 그대로 보관합니다.');
-  return '<article class="office-word">'+(doc.headerText?'<header>'+esc(doc.headerText)+'</header>':'')+body+(footnotes?'<section><h2>각주</h2><ol>'+footnotes+'</ol></section>':'')+(endnotes?'<section><h2>미주</h2><ol>'+endnotes+'</ol></section>':'')+(doc.footerText?'<footer>'+esc(doc.footerText)+'</footer>':'')+'</article>';
+  const head='<article class="office-word">'+(doc.headerText?'<header>'+esc(doc.headerText)+'</header>':'');
+  const tail=(footnotes?'<section><h2>각주</h2><ol>'+footnotes+'</ol></section>':'')+(endnotes?'<section><h2>미주</h2><ol>'+endnotes+'</ol></section>':'')+(doc.footerText?'<footer>'+esc(doc.footerText)+'</footer>':'')+'</article>';
+  return bodyLen>=64*1024*1024?new Blob([head,...body,tail]):head+body.join('')+tail;
 }

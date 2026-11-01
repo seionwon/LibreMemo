@@ -245,6 +245,9 @@ export function renderSlides(opened,warnings){
     const title=formatSlideTocTitle(index,total,extractSlideTitle(slide,tree,index+1));
     outline.push('<a href="#office-slide-'+(index+1)+'" data-level="1">'+esc(title)+'</a>');
     return '<section class="office-slide" id="office-slide-'+(index+1)+'" data-slide-title="'+esc(title)+'" style="width:60em"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+tree.widthPx+' '+tree.heightPx+'" role="group" aria-label="'+esc(title)+'"><defs>'+paint.definitions.join('')+'</defs><rect width="100%" height="100%" fill="'+esc(bg==='none'?'white':bg)+'"/>'+content+'</svg></section>';
-  }).join('');
-  warnings.push(...issues);return '<article data-office-slides><template data-ebook-outline>'+outline.join('')+'</template>'+body+'</article>';
+  });
+  let bodyLen=0;for(const s of body)bodyLen+=s.length;
+  warnings.push(...issues);
+  const head='<article data-office-slides><template data-ebook-outline>'+outline.join('')+'</template>';
+  return bodyLen>=64*1024*1024?new Blob([head,...body,'</article>']):head+body.join('')+'</article>';
 }

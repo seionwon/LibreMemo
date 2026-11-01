@@ -2,7 +2,7 @@ import {EPUB,MOBI,makeFB2,makeComicBook,InertDOMParser,resourceBlobs,parseCSS,ac
 import {esc,safeLink} from './office-common.js';
 import {inspectOfficeZip} from './office-render.js';
 
-const MAX_PART=256*1024*1024,MAX_TEXT=500*1024*1024;
+const MAX_PART=2*1024*1024*1024,MAX_TEXT=2*1024*1024*1024;
 const parser=new InertDOMParser();
 const imageMimes={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',svg:'image/svg+xml',bmp:'image/bmp',avif:'image/avif',jxl:'image/jxl',woff:'font/woff',woff2:'font/woff2',ttf:'font/ttf',otf:'font/otf',css:'text/css'};
 function bytes64(bytes){let s='';for(let i=0;i<bytes.length;i+=16384)s+=String.fromCharCode(...bytes.subarray(i,i+16384));return btoa(s);}
@@ -25,7 +25,7 @@ export function validateMOBI(bytes){
   }
 }
 export function validateFB2(bytes){
-  if(bytes.length>MAX_PART)throw Error('FB2 파일은 256MB 이하로 나누어 가져와 주세요.');
+  if(bytes.length>MAX_PART)throw Error('FB2 파일은 2GB 이하로 나누어 가져와 주세요.');
   const head=new TextDecoder().decode(bytes.subarray(0,300));
   const encoding=bytes[0]===255&&bytes[1]===254?'utf-16le':bytes[0]===254&&bytes[1]===255?'utf-16be':head.match(/encoding\s*=\s*["']([^"']+)/i)?.[1]||'utf-8';
   let text;try{text=new TextDecoder(encoding,{fatal:true}).decode(bytes);}catch{throw Error('FB2 문자 인코딩을 읽지 못했습니다.');}
@@ -183,6 +183,7 @@ export async function renderEbook(bytes,format,warnings){
     }
     if(format==='cbz')warnings.push('만화 이미지에는 펜·도형·메모·북마크를 사용할 수 있습니다. 이미지 안 글자의 검색·선택·읽어주기는 OCR 없이 제공되지 않습니다.');
     const tocHTML='<template data-ebook-outline>'+outline.map(x=>'<a href="'+esc(x.href)+'" data-level="'+x.level+'">'+esc(x.title)+'</a>').join('')+'</template>';
-    return tocHTML+'<article data-ebook data-ebook-layout="'+(book.rendition?.layout==='pre-paginated'?'fixed':'reflow')+'" dir="'+(book.dir==='rtl'?'rtl':'ltr')+'">'+bodies.join('')+'</article>';
+    const head=tocHTML+'<article data-ebook data-ebook-layout="'+(book.rendition?.layout==='pre-paginated'?'fixed':'reflow')+'" dir="'+(book.dir==='rtl'?'rtl':'ltr')+'">';
+    return outputBytes>=64*1024*1024?new Blob([head,...bodies,'</article>']):head+bodies.join('')+'</article>';
   }finally{book?.destroy?.();for(const url of resourceBlobs.keys())if(!persistent.has(url))resourceBlobs.delete(url);}
 }

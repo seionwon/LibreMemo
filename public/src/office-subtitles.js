@@ -1,6 +1,6 @@
 import {esc} from './office-common.js';
 
-const LIMIT=128*1024*1024,MAX_CUES=500000;
+const LIMIT=256*1024*1024,MAX_CUES=1000000;
 function clock(value){
   const m=String(value).trim().match(/^(?:(\d{1,3}):)?(\d{1,2}):(\d{2})[.,](\d{1,3})$/);
   if(!m||+m[2]>=60||+m[3]>=60)return null;
@@ -66,7 +66,7 @@ function ass(text,cues,warnings){
   return invalid;
 }
 export function parseSubtitles(text,format,warnings=[]){
-  if(text.length>LIMIT)throw Error('자막 파일은 128MB 이하로 나누어 가져와 주세요.');
+  if(text.length>LIMIT)throw Error('자막 파일은 2GB 이하로 나누어 가져와 주세요.');
   text=text.replace(/^\uFEFF/,'').replace(/\r\n?/g,'\n');const cues=[];let invalid;
   if(['srt','vtt'].includes(format))invalid=timedBlocks(text,format,cues);
   else if(['smi','sami'].includes(format))invalid=sami(text,cues);

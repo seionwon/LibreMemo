@@ -28,9 +28,9 @@ export interface Relationship {
 
 /** Shared with the CLI's pre-open check so both layers accept the same files. */
 export const PPTX_ZIP_LIMITS = {
-  maxParts: 10000,
-  maxPartBytes: 512 * 1024 * 1024,
-  maxTotalBytes: 1.5 * 1024 * 1024 * 1024,
+  maxParts: 200000,
+  maxPartBytes: 2 * 1024 * 1024 * 1024,
+  maxTotalBytes: 2 * 1024 * 1024 * 1024,
 } as const
 
 /** Declared sizes from the central directory, checked before any part is inflated. */

@@ -5,7 +5,7 @@ export const IMAGE_MIMES={
   'image/bmp':['.bmp'],'image/svg+xml':['.svg'],
 };
 export const IMAGE_EXTENSIONS=Object.values(IMAGE_MIMES).flat().map(ext=>ext.slice(1));
-export const IMAGE_MAX_BYTES=256*1024*1024,IMAGE_MAX_PIXELS=40000000,IMAGE_MAX_SIDE=32768;
+export const IMAGE_MAX_BYTES=2*1024*1024*1024,IMAGE_MAX_PIXELS=40000000,IMAGE_MAX_SIDE=32768;
 export function imageType(file){
   const ext=String(file?.name||'').match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
   if(ext)return Object.entries(IMAGE_MIMES).find(([,extensions])=>extensions.includes('.'+ext))?.[0]||null;
@@ -19,7 +19,7 @@ export function imageDimensions(width,height){
 }
 export function imageFileSize(file){
   if(!file?.size)throw Error('이미지 파일이 비어 있습니다.');
-  if(file.size>IMAGE_MAX_BYTES)throw Error('이미지는 파일 하나당 256MB 이하로 가져와 주세요.');
+  if(file.size>IMAGE_MAX_BYTES)throw Error('이미지는 파일 하나당 2GB 이하로 가져와 주세요.');
 }
 export function clipboardImageFile(blob,index=0,now=new Date()){
   const type=blob.type==='image/apng'?'image/png':blob.type,ext=IMAGE_MIMES[type]?.[0];

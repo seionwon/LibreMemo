@@ -13,7 +13,7 @@ export function hangulMeasure(fontName,text){
   return Array.from(text).reduce((sum,c)=>sum+(/[^\x00-\x7f]/.test(c)?1:.55),0)*size;
 }
 export function validateHML(bytes){
-  if(bytes.length>256*1024*1024)throw Error('HML 파일은 256MB 이하로 나누어 가져와 주세요.');
+  if(bytes.length>2*1024*1024*1024)throw Error('HML 파일은 2GB 이하로 나누어 가져와 주세요.');
   const head=new TextDecoder().decode(bytes.subarray(0,200));
   const encoding=bytes[0]===0xff&&bytes[1]===0xfe||bytes[0]===0x3c&&bytes[1]===0?'utf-16le':bytes[0]===0xfe&&bytes[1]===0xff||bytes[0]===0&&bytes[1]===0x3c?'utf-16be':head.match(/encoding\s*=\s*["']([^"']+)/i)?.[1]||'utf-8';
   let text;try{text=new TextDecoder(encoding,{fatal:true}).decode(bytes);}catch{throw Error('HML 문서의 문자 인코딩을 읽지 못했습니다. UTF-8로 다시 저장한 사본을 가져와 주세요.');}
@@ -54,7 +54,7 @@ function sourceGlyphs(layout){
 // supply selection/search/TTS and the shared Reader's annotation wrappers.
 // Keeping the vector text avoids changing rhwp's glyph spacing and equations.
 export function hangulPage(svg,page,warnings=[],measure=hangulMeasure,layout=null){
-  if(svg.length>64*1024*1024||/<!\s*(?:DOCTYPE|ENTITY)\b/i.test(svg))throw Error('한글 문서의 한 쪽이 너무 크거나 안전하게 표시할 수 없습니다.');
+  if(svg.length>256*1024*1024||/<!\s*(?:DOCTYPE|ENTITY)\b/i.test(svg))throw Error('한글 문서의 한 쪽이 너무 크거나 안전하게 표시할 수 없습니다.');
   const parsed=new XMLParser({ignoreAttributes:false,preserveOrder:true,trimValues:false,parseTagValue:false,parseAttributeValue:false}).parse(svg);
   const root=parsed.find(node=>node.svg),size=attrsOf(root||{}),width=Number(size.width),height=Number(size.height),prefix='rhwp-'+page+'-';
   if(!root||![width,height].every(n=>Number.isFinite(n)&&n>0&&n<=20000))throw Error('한글 문서의 용지 크기가 올바르지 않습니다.');
@@ -141,9 +141,9 @@ export async function renderHangul(bytes,format,warnings){
     const body=[];let size=0;
     for(let page=0;page<pages;page++){
       const html=hangulPage(doc.renderPageSvg(page),page,warnings,hangulMeasure,JSON.parse(doc.getPageTextLayout(page)));size+=html.length;
-      if(size>500*1024*1024)throw Error('한글 문서의 읽기 화면이 너무 큽니다. 문서를 나누어 가져와 주세요.');
+      if(size>2*1024*1024*1024)throw Error('한글 문서의 읽기 화면이 2GB를 넘습니다. 문서를 나누어 가져와 주세요.');
       body.push(html);
     }
-    return '<article data-office-pages data-rhwp>'+body.join('')+'</article>';
+    return size>=64*1024*1024?new Blob(['<article data-office-pages data-rhwp>',...body,'</article>']):'<article data-office-pages data-rhwp>'+body.join('')+'</article>';
   }finally{doc?.free();}
 }

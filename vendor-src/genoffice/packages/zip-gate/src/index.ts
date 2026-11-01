@@ -34,9 +34,9 @@ export interface ZipLimits {
 
 /** Part-count / per-part / total caps shared by the docx and pptx engines. */
 export const DEFAULT_ZIP_LIMITS = {
-  maxParts: 10000,
-  maxPartBytes: 512 * 1024 * 1024,
-  maxTotalBytes: 1.5 * 1024 * 1024 * 1024,
+  maxParts: 200000,
+  maxPartBytes: 2 * 1024 * 1024 * 1024,
+  maxTotalBytes: 2 * 1024 * 1024 * 1024,
 } as const
 
 /** What the declared-size pass needs to know about one part. */

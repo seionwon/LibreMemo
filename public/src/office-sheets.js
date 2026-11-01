@@ -51,7 +51,8 @@ export function renderSheets(bytes,format,warnings){
     for(let c=range.s.c;c<=range.e.c;c++){const col=sheet['!cols']?.[c];columns+='<col style="width:'+Math.max(3,Math.min(80,number(col?.wch??(col?.wpx/8),10)*.6))+'em">';}
     const hidden=workbook.Workbook?.Sheets?.[index]?.Hidden;
     return '<section class="office-sheet" id="office-sheet-'+index+'"><h2>'+esc(name)+(hidden?' (숨겨진 시트)':'')+'</h2><div class="office-table-scroll"><table><colgroup>'+columns+'</colgroup>'+content+'</tbody></table></div></section>';
-  }).join('');
+  });
+  let bodyLen=0;for(const s of body)bodyLen+=s.length;
   if(uncached)warnings.push('저장된 계산 결과가 없는 셀은 수식을 글자로 표시합니다. 수식을 다시 계산하거나 매크로를 실행하지 않습니다.');
-  return body;
+  return bodyLen>=64*1024*1024?new Blob(body):body.join('');
 }

@@ -7,7 +7,7 @@ import {renderSheets} from './office-sheets.js';
 import {renderMarkdown} from './markdown.js';
 import {renderSubtitles} from './office-subtitles.js';
 
-export async function inspectOfficeZip(bytes,format,warnings,limits={maxParts:100000,maxPartBytes:512*1024*1024,maxTotalBytes:2*1024*1024*1024}){
+export async function inspectOfficeZip(bytes,format,warnings,limits={maxParts:200000,maxPartBytes:2*1024*1024*1024,maxTotalBytes:2*1024*1024*1024}){
   await assertZipInflatesWithinLimits(bytes,limits);
   const zip=await JSZip.loadAsync(bytes),names=new Set();
   for(const entry of Object.values(zip.files)){
@@ -27,7 +27,7 @@ export async function inspectOfficeZip(bytes,format,warnings,limits={maxParts:10
 export async function renderOffice(input,format,title,onProgress){
   if(!Object.hasOwn(OFFICE_FORMATS,format))throw Error('지원하지 않는 문서 형식입니다.');
   let bytes=input instanceof Uint8Array?input:new Uint8Array(input);
-  if(!bytes.length||bytes.length>OFFICE_MAX_BYTES)throw Error('문서 파일은 비어 있지 않은 1GB 이하 파일이어야 합니다.');
+  if(!bytes.length||bytes.length>OFFICE_MAX_BYTES)throw Error('문서 파일은 비어 있지 않은 2GB 이하 파일이어야 합니다.');
   if(OFFICE_FORMATS[format]==='djvu'){const {renderDjvu}=await import('./office-djvu.js');return renderDjvu(bytes,title,{onProgress});}
   const warnings=[];
   if(OFFICE_FORMATS[format]!=='ebook'&&bytes[0]===0x50&&bytes[1]===0x4b)await inspectOfficeZip(bytes,format,warnings);
@@ -43,10 +43,11 @@ export async function renderOffice(input,format,title,onProgress){
   }else if(OFFICE_FORMATS[format]==='sheet')body=renderSheets(bytes,format,warnings);
   else{
     const text=decodeCsvBuffer(bytes,'euc-kr');
-    if(text.length>64*1024*1024)throw Error('텍스트 문서는 6,400만 글자 이하로 나누어 가져와 주세요.');
+    if(text.length>256*1024*1024)throw Error('텍스트 문서는 2억 5,600만 글자 이하로 나누어 가져와 주세요.');
     body=OFFICE_FORMATS[format]==='subtitle'?renderSubtitles(text,format,warnings):OFFICE_FORMATS[format]==='markdown'?renderMarkdown(text).html:'<pre class="office-plain" data-tts-keep>'+esc(text)+'</pre>';
   }
   const unique=[...new Set(warnings)],html=officeHTML(title,body,unique);
-  if(html.length>500*1024*1024)throw Error('읽기 화면이 너무 큽니다. 문서를 나누어 가져와 주세요.');
-  return {html,title,warnings:unique,allowScripts:false};
+  const size=html instanceof Blob?html.size:html.length;
+  if(size>OFFICE_MAX_BYTES)throw Error('읽기 화면이 2GB를 넘습니다. 문서를 나누어 가져와 주세요.');
+  return html instanceof Blob?{file:html,html:null,title,warnings:unique,allowScripts:false}:{html,title,warnings:unique,allowScripts:false};
 }

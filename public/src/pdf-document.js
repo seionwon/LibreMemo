@@ -41,7 +41,7 @@ export async function readPDFArchive(file){
   for(let offset=0;offset<file.size;offset+=262144){
     if(finished)break;
     let chunk=decoder.decode(await file.slice(offset,offset+262144).arrayBuffer(),{stream:offset+262144<file.size});
-    if(!inPayload){header+=chunk;const at=header.indexOf(PAYLOAD);if(at<0){if(header.length>256*1024*1024)throw Error('PDF 보관 파일의 문서 정보가 너무 큽니다.');continue;}chunk=header.slice(at+PAYLOAD.length);header=header.slice(0,at);inPayload=true;}
+    if(!inPayload){header+=chunk;const at=header.indexOf(PAYLOAD);if(at<0){if(header.length>512*1024*1024)throw Error('PDF 보관 파일의 문서 정보가 너무 큽니다.');continue;}chunk=header.slice(at+PAYLOAD.length);header=header.slice(0,at);inPayload=true;}
     pending+=chunk;const end=pending.indexOf(END);if(end>=0){pending=pending.slice(0,end);finished=true;}
     const length=finished?pending.length:Math.max(0,Math.floor((pending.length-END.length)/4)*4);
     if(length){const encoded=pending.slice(0,length);if(!/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)||encoded.length%4)throw Error('PDF 보관 파일의 본문이 손상되었습니다.');try{const binary=atob(encoded);parts.push(new Blob([Uint8Array.from(binary,c=>c.charCodeAt(0))]));}catch{throw Error('PDF 보관 파일의 본문이 손상되었습니다.');}pending=pending.slice(length);}

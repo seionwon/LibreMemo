@@ -24,7 +24,7 @@ export class OdfConvertError extends Error {
  * of the repo puts on decompression; a part past it is refused on the size the
  * archive declares, so a bomb costs a lookup rather than the heap.
  */
-export const MAX_ODF_PART_BYTES = 64 * 1024 * 1024
+export const MAX_ODF_PART_BYTES = 2 * 1024 * 1024 * 1024
 
 /** JSZip keeps the central-directory size on the entry's lazy compressed data */
 function declaredSize(entry: JSZipObject): number {

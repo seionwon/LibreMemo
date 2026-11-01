@@ -4,7 +4,7 @@ import {validateAnnotations,validPDFPosition,cleanSourceStorage} from './model.j
 const encoder=new TextEncoder(),decoder=new TextDecoder('utf-8',{fatal:true});
 export const ARCHIVE_FORMAT='librememo-document';
 export const ARCHIVE_VERSION=1;
-const MAX_FILE=0xffffffff,MAX_META=128*1024*1024;
+const MAX_FILE=0xffffffff,MAX_META=512*1024*1024;
 const table=Uint32Array.from({length:256},(_,i)=>{for(let n=0;n<8;n++)i=i&1?0xedb88320^(i>>>1):i>>>1;return i>>>0;});
 function abort(signal){if(signal?.aborted)throw new DOMException('내보내기를 취소했습니다.','AbortError');}
 export function archiveName(name,extension='librememo'){

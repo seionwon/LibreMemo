@@ -5,7 +5,9 @@ import {readFile} from 'node:fs/promises';
 import {officeFixtures} from './office-fixtures.mjs';
 import {installDOM,documentFor} from './dom.mjs';
 import {renderOffice,inspectOfficeZip} from '../public/src/office-render.js';
-import {OFFICE_FORMATS,officeFormat,verifyOffice} from '../public/src/office-formats.js';
+import {OFFICE_FORMATS,OFFICE_MAX_BYTES,officeFormat,verifyOffice} from '../public/src/office-formats.js';
+import {officeHTML} from '../public/src/office-common.js';
+import {IMAGE_MAX_BYTES} from '../public/src/image-formats.js';
 import {readLocalHTML,droppedHTMLFiles,findLocalDuplicates,localFileIdentity,htmlExportName} from '../public/src/local-files.js';
 import {parseHTML,textIndex,wrapOffsets,serializeHTML} from '../public/src/document.js';
 import {Reader} from '../public/src/reader.js';
@@ -65,7 +67,7 @@ test('Unsafe XML, archive paths, expansion bombs, empty, encrypted and mismatche
   for(const [name,value,pattern] of [['word/document.xml','<!DOCTYPE test [<!ENTITY x SYSTEM "https://example.invalid/">]><w:document/>',/엔터티/],['../bad.xml','<x/>',/경로/]]){
     const zip=await JSZip.loadAsync(fixtures.docx);zip.file(name,value);await assert.rejects(renderOffice(await zip.generateAsync({type:'uint8array'}),'docx','bad'),pattern);
   }
-  const bomb=await new JSZip().file('large.xml','x').generateAsync({type:'uint8array',compression:'DEFLATE'});const bombView=new DataView(bomb.buffer,bomb.byteOffset,bomb.byteLength);for(let i=0;i+46<=bomb.length;i++)if(bombView.getUint32(i,true)===0x02014b50){bombView.setUint32(i+24,513*1024*1024,true);break;}await assert.rejects(inspectOfficeZip(bomb,'docx',[]),/limit|exceed/);
+  const bomb=await new JSZip().file('large.xml','x').generateAsync({type:'uint8array',compression:'DEFLATE'});const bombView=new DataView(bomb.buffer,bomb.byteOffset,bomb.byteLength);for(let i=0;i+46<=bomb.length;i++)if(bombView.getUint32(i,true)===0x02014b50){bombView.setUint32(i+24,2*1024*1024*1024+1024,true);break;}await assert.rejects(inspectOfficeZip(bomb,'docx',[]),/limit|exceed/);
   await assert.rejects(verifyOffice(new File([],'empty.docx'),'docx'),/비어/);await assert.rejects(verifyOffice(new File(['not a zip'],'bad.docx'),'docx'),/손상/);
   await assert.rejects(verifyOffice(new File([new Uint8Array([0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1])],'locked.docx'),'docx'),/암호/);
 });
@@ -117,4 +119,11 @@ test('PPTX flipped or 180-degree rotated shapes keep text upright and Korean fon
   }finally{
     globalThis.OffscreenCanvas=prevCanvas;
   }
+});
+test('All formats allow files up to 2GB and large rendered bodies use Blob output without V8 string cap',async()=>{
+  assert.equal(OFFICE_MAX_BYTES,2*1024*1024*1024);
+  assert.equal(IMAGE_MAX_BYTES,2*1024*1024*1024);
+  const blobOut=officeHTML('대용량 문서',new Blob(['<p>본문</p>']),['경고']);
+  assert.ok(blobOut instanceof Blob);
+  assert.match(await blobOut.text(),/<p>본문<\/p>/);
 });

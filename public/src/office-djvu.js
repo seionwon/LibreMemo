@@ -11,7 +11,7 @@ function pageSize(width,height){
 export function inspectDjvu(input){
   const b=input instanceof Uint8Array?input:new Uint8Array(input),v=new DataView(b.buffer,b.byteOffset,b.byteLength),word=(at)=>decoder.decode(b.subarray(at,at+4));
   if(b.length<16||word(0)!=='AT&T'||word(4)!=='FORM'||!['DJVU','DJVM','PM44','BM44'].includes(word(12)))throw Error('올바른 DjVu 파일이 아니거나 파일이 손상되었습니다.');
-  if(b.length>1024*1024*1024)throw Error('DjVu 파일은 1GB 이하로 나누어 가져와 주세요.');
+  if(b.length>2*1024*1024*1024)throw Error('DjVu 파일은 2GB 이하로 나누어 가져와 주세요.');
   let count=0,chunks=0;
   function scan(start,end,depth){
     if(depth>32)throw Error('DjVu 내부 구조가 너무 깊습니다.');
@@ -31,7 +31,7 @@ export function inspectDjvu(input){
       }else if(tag==='INFO'){
         if(size<5)throw Error('DjVu 쪽 크기 정보가 손상되었습니다.');
         pageSize(v.getUint16(body),v.getUint16(body+2));
-      }else if(['TXTa','TXTz','ANTa','ANTz','NAVM'].includes(tag)&&size>128*1024*1024)throw Error('DjVu의 문자·목차 정보가 너무 큽니다.');
+      }else if(['TXTa','TXTz','ANTa','ANTz','NAVM'].includes(tag)&&size>512*1024*1024)throw Error('DjVu의 문자·목차 정보가 너무 큽니다.');
       at=next+(size&1);if(at>end&&next!==end)throw Error('DjVu 내부 정렬 정보가 손상되었습니다.');
     }
   }
