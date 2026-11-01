@@ -95,7 +95,7 @@ export function hangulPage(svg,page,warnings=[],measure=hangulMeasure,layout=nul
       if(next&&next.x>g.x&&next.x<g.x+g.w)g.w=next.x-g.x;
       const gap=Math.max(0,g.x-end);
       const previous=items[index-1],spaces=previous?.source?previous.source.after+(g.source?.before||''):gap>g.size*.2?' ':'';
-      if(gap>.01||spaces)html+='<span style="display:inline-block;width:'+gap+'px">'+esc(spaces)+'</span>';
+      if(gap>.01||spaces)html+='<span data-rhwp-gap style="display:inline-block;vertical-align:top;width:'+gap+'px">'+esc(spaces)+'</span>';
       // Each original SVG glyph/run keeps its exact advance; range rectangles
       // scale with the same viewBox as the visible text and pen drawings.
       html+='<span style="display:inline-block;vertical-align:top;width:'+g.w+'px;font-family:'+esc(g.family)+';font-size:'+g.size+'px;font-weight:'+g.weight+';font-style:'+g.italic+'"><span style="display:inline-block;transform-origin:0 0;transform:scaleX('+(g.w/g.natural)+')">'+esc(g.text)+'</span></span>';

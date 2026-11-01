@@ -2917,7 +2917,7 @@ export class Reader {
     for(const rect of range?.getClientRects?.()||[]){
       if(!rect.width||!rect.height)continue;
       const x=rect.left-origin.left,y=rect.top-origin.top;
-      this.preview.append(a.type==='highlight'?svg(this.doc,'rect',{x,y,width:rect.width,height:rect.height,fill:a.color,opacity:a.opacity}):svg(this.doc,'path',{d:`M${x},${y+(a.type==='underline'?rect.height:rect.height/2)}h${rect.width}`,fill:'none',stroke:a.color,'stroke-width':a.width}));
+      this.preview.append(a.type==='highlight'?svg(this.doc,'rect',{x,y,width:rect.width,height:rect.height,fill:a.color,opacity:a.opacity}):svg(this.doc,'path',{d:`M${x},${y+rect.height*(a.type==='underline'?.84:.53)}h${rect.width}`,fill:'none',stroke:a.color,'stroke-width':a.width}));
     }
   }
   moveAnnotationDrag(event) {
@@ -3143,14 +3143,14 @@ export class Reader {
     this.searchIndexCache?.invalidate();this.searchMarks=[];this.bookSearchMarks=[];
     cleanAnnotations(this.doc); this.selectedId = null;
     const style = this.doc.createElement('style'); style.id = 'htmlmemo-annotation-style';
-    style.textContent = '[data-htmlmemo-mark]{border-radius:2px;box-decoration-break:clone;-webkit-box-decoration-break:clone}'; this.doc.head.append(style);
+    style.textContent = '[data-htmlmemo-mark]{border-radius:2px;box-decoration-break:clone;-webkit-box-decoration-break:clone;text-decoration-skip-ink:none}[data-rhwp-gap]>[data-htmlmemo-mark]{display:inline-block;width:100%}'; this.doc.head.append(style);
     const textAnnotations=this.pdf?[]:this.metadata.annotations.filter(a=>TEXT_TOOLS.includes(a.type));
     const index=textAnnotations.length?textIndex(this.doc):null;
     const section = currentSection(this.doc);
     for (const annotation of textAnnotations) {
       if (!this.annotationInSection(annotation,section)) continue;
       const resolved = resolveTextAnchor(index, annotation.textAnchor); if (!resolved) continue;
-      const style = annotation.type === 'highlight' ? `background:${annotation.color}${Math.round(annotation.opacity * 255).toString(16).padStart(2,'0')};color:inherit` : `text-decoration-line:${annotation.type === 'underline' ? 'underline' : 'line-through'};text-decoration-color:${annotation.color};text-decoration-thickness:${annotation.width}px;text-underline-offset:3px`;
+      const style = annotation.type === 'highlight' ? `background:${annotation.color}${Math.round(annotation.opacity * 255).toString(16).padStart(2,'0')};color:inherit` : `text-decoration-line:${annotation.type === 'underline' ? 'underline' : 'line-through'};text-decoration-color:${annotation.color};text-decoration-thickness:${annotation.width}px;text-underline-offset:0.1em;text-decoration-skip-ink:none`;
       wrapOffsets(this.doc, resolved.start, resolved.end, {'data-htmlmemo-mark':'','data-htmlmemo-id':annotation.id}, style,index);
     }
     // Annotation restoration already made a current index. Adopt it instead

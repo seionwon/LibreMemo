@@ -90,3 +90,22 @@ test('PDF outline navigation resets horizontal position after recording the comp
   Object.assign(pdf,{reader:r,count:8,go(page,y,{history=false}={}){if(history)r.linkHistory.push({top:r.scrollTop,left:r.scrollLeft});visits.push({page,y,left:r.scrollLeft});return true;}});
   assert.equal(pdf.navigateNode({dataset:{pdfPage:'3'}}),true);assert.deepEqual(r.linkHistory,[{top:240,left:360}]);assert.deepEqual(visits,[{page:3,y:0,left:0}]);
 });
+test('PDF underline and strike marks align below the baseline and snap substring word bounds to rendered glyph ink',async()=>{
+  const {pdfExportPlan}=await import('../public/src/pdf-export-plan.js');
+  const doc=documentFor('<!doctype html><html><body><section id="p1"><div id="inner"><div class="textLayer"><span id="s1">Our earliest written artefacts</span></div></div></section></body></html>');
+  const sec=doc.querySelector('#p1'),inner=doc.querySelector('#inner'),text=doc.querySelector('.textLayer'),span=doc.querySelector('#s1'),node=span.firstChild;
+  sec.getBoundingClientRect=()=>({left:0,top:0,width:1000,height:200,right:1000,bottom:200});
+  span.getBoundingClientRect=()=>({left:100,top:14,width:800,height:70,right:900,bottom:84});
+  doc.createRange=()=>({setStart(){},setEnd(){},getClientRects:()=>[{left:684,top:14,width:231,height:82.5,right:915,bottom:96.5}]});
+  const pixels=new Uint8ClampedArray(1000*200*4).fill(255);
+  for(let y=24;y<=70;y++)for(let x=679;x<=899;x++){const i=(y*1000+x)*4;pixels[i]=pixels[i+1]=pixels[i+2]=20;}
+  const canvas={width:1000,height:200,getContext:()=>({getImageData:(c0,r0,w,h)=>{const out=new Uint8ClampedArray(w*h*4);for(let y=0;y<h;y++)for(let x=0;x<w;x++){const s=((r0+y)*1000+(c0+x))*4,d=(y*w+x)*4;out[d]=pixels[s];out[d+1]=pixels[s+1];out[d+2]=pixels[s+2];out[d+3]=255;}return {data:out};}})};
+  const slot={page:1,node:sec,inner,text,image:{canvas}},pdf=Object.create(PdfReader.prototype);
+  const annotations=[{id:'u1',type:'underline',color:'#ef4444',width:3,opacity:1,textAnchor:{start:21,end:30,quote:'artefacts'},pdfPage:1,pdfRects:[]}];
+  Object.assign(pdf,{doc,disposed:false,scale:1,slots:new Map([[1,slot]]),size:()=>({width:1000,height:200}),reader:{zoom:1,metadata:{title:'T',annotations,bookmarks:[]},layerOrigin:()=>({left:0,top:0})},count:1,pdf:{getPage:async()=>({getViewport:()=>({width:1000,height:200,convertToPdfPoint:(x,y)=>[x,200-y]})})}});pdf.reader.pdf=pdf;
+  const rects=pdf.captureRects({intersectsNode:()=>true,startContainer:node,endContainer:node,startOffset:20,endOffset:30});
+  assert.equal(rects.length,1);assert.equal(Math.round(rects[0].h*200),70);assert.ok(Math.abs(rects[0].x*1000-679)<=2);assert.ok(Math.abs((rects[0].x+rects[0].w)*1000-900)<=2);
+  annotations[0].pdfRects=rects;pdf.renderTextMarks();
+  const pathD=slot.marks.querySelector('path').getAttribute('d');assert.match(pathD,/^M679(?:\.\d+)? 72\.8h221(?:\.\d+)?$/);
+  const plan=await pdfExportPlan(pdf.reader);assert.ok(Math.abs(plan.annotations[0].quad[5]-(200-72.8))<0.5);
+});

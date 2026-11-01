@@ -5571,3 +5571,27 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
      - [`setReadingFontFamily`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1077-L1090) 호출 시 직전 읽기 기준점(`captureReadingAnchor`)을 포착한 뒤 본문 스타일(`#htmlmemo-reading-font-style` 또는 `#htmlmemo-source-font-style`)에 선택한 글꼴 패밀리 스택을 적용하고(수식 `.katex`/`math` 및 앱 UI `[data-htmlmemo-ui]` 제외, `고정폭` 외에는 `pre`/`code` 고정폭 유지), 즉시 `measure()`·`restoreReadingAnchor()`·`renderDrawingLayer()`를 수행해 글꼴 변경으로 줄바꿈이 달라져도 읽던 위치와 주석 위치가 유지되도록 했습니다.
      - 선택한 글꼴(`view.fontFamily`: `'sans' | 'serif' | 'dotum' | 'mono'`)은 문서 메타데이터와 `.librememo` 보관 파일에 저장·복원되며, HTML 내보내기 시 임시 스타일과 컨트롤 노드는 원본에서 깨끗이 제거됩니다.
 - **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 906개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800) 실제 브라우저 검증 통과, `https://seionwon.github.io/LibreMemo/src/version.js`에서 `1.9.6` 온라인 게시 확인.
+
+<a id="hist-20261102-003"></a>
+### 2026-11-02 02:30:00 +09:00 — PDF 및 모든 문서 포맷에서 밑줄·취소선 세로 기준선 및 가로 단어 경계 정밀 정렬
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261102-003 |
+| 변경 종류 | PDF 텍스트 주석(`captureRects`, `snapRectInk`, `renderTextMarks`, `previewText`, `pdfExportPlan`) 세로 높이 보정·기준선 직하단 정렬·단어 잉크 경계 스냅 · 전 포맷 밑줄 간격(`text-underline-offset`, `text-decoration-skip-ink`) 및 한글(`office-hangul.js`) 공백 구간 연속 밑줄 정렬 |
+| 상태 | 로컬 검증 완료 · 1.9.7 GitHub Pages 게시 진행 |
+
+- **목적·원인:**
+  1. PDF 문서에서 텍스트 밑줄(`underline`)을 그으면 두 가지 문제로 인해 밑줄이 글자 바로 아래가 아니라 아래쪽 줄의 글자 상단에 닿거나 좌우 단어 경계가 어긋났습니다:
+     - [`pdf-reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js)의 [`captureRects`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js#L228-L250)가 `.textLayer`의 `line-height: 1` `<span>` 박스(`1.0em`)를 넘어 브라우저 대체 글꼴의 내부 메트릭 하단(`part.getClientRects()`의 `r.bottom ≈ 1.18em`)까지 그대로 기록한 뒤, [`renderTextMarks`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js#L265)와 [`previewText`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js#L279), [`pdfExportPlan`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-export-plan.js#L22)에서 밑줄 Y 좌표를 박스 최하단(`y + h`)에 그려 글자 베이스라인보다 과도하게 아래(다음 줄 글자 상단)에 위치했습니다.
+     - PDF `.textLayer`가 한 줄 전체를 단일 `<span>`에 넣고 `--scale-x`로 균등 신축할 때, 양쪽 정렬(justified) 문단이나 비례 글꼴의 실제 단어 폭과 브라우저 대체 글꼴의 폭 차이로 인해 줄 중간 단어(`importance`, `artefacts` 등) 부분 선택 시 가로 시작·끝 위치가 수 픽셀~십수 픽셀 어긋나거나 공백까지 침범했습니다.
+  2. 또한 PDF 외의 일반 문서 포맷(HTML, EPUB, DOCX, PPTX, HWP/HWPX/HML, DjVu, 마크다운 등)에서도 고정 `text-underline-offset: 3px`와 영문 디센더 끊김(`text-decoration-skip-ink: auto`), 그리고 한글 문서(`office-hangul.js`) 단어 사이 공백 `<span>`의 세로 정렬·폭 불일치로 인해 줄 간격이 좁은 문서나 작은 글자에서 밑줄이 너무 아래로 내려가거나 단어 사이에서 끊어지는 문제가 있었습니다.
+- **동작·보존:**
+  1. **PDF 밑줄·취소선 세로 베이스라인 정렬 및 가로 단어 잉크 경계 스냅([`public/src/pdf-reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js), [`public/src/pdf-export-plan.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-export-plan.js)):**
+     - [`captureRects`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js#L228-L250)에서 비회전 `.textLayer` `<span>`의 세로 하단을 `span.getBoundingClientRect().bottom`(`1em` 박스)으로 제한해 대체 글꼴의 과도한 디센더 여백이 포함되지 않게 하고, 선택 양끝의 불필요한 공백 문자를 제거하며, 같은 줄의 인접 조각을 하나로 병합했습니다.
+     - [`snapRectInk`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js#L213-L227)를 추가해 다중 단어 `<span>` 내부의 단어·구절 부분 선택 시 현재 렌더링된 PDF 페이지 캔버스(`slot.image.canvas`)의 해당 줄 글자 잉크 클러스터 경계를 기준으로 단어 시작·끝 X 좌표를 정밀 보정하여 실제 렌더링된 글자 폭과 정확히 일치시켰습니다.
+     - [`renderTextMarks`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js#L265), [`previewText`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js#L279), [`pdfExportPlan`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-export-plan.js#L22)에서 밑줄 Y 좌표를 `y + h * 0.84`(글자 베이스라인 바로 아래), 취소선 Y 좌표를 `y + h * 0.53`으로 정렬하여 다음 줄 글자와 겹치지 않도록 했습니다.
+  2. **모든 문서 포맷의 밑줄 위치·연속성 통일([`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js), [`public/src/office-hangul.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/office-hangul.js)):**
+     - [`render`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L3145-L3155)에서 모든 비-PDF 포맷의 밑줄 스타일을 글자 크기에 비례하는 `text-underline-offset: 0.1em; text-decoration-skip-ink: none`으로 변경하고, 드래그 미리보기([`previewTextAnnotation`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L2920))도 동일한 비율(`0.84` / `0.53`)로 맞췄습니다.
+     - [`office-hangul.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/office-hangul.js#L98)의 단어 간격 `<span data-rhwp-gap>`에 `vertical-align: top`과 내부 마크 `width: 100%` 스타일을 부여해 한글(HWP/HWPX/HML) 문서에서도 여러 단어에 걸친 밑줄·형광펜이 높낮이 어긋남이나 끊김 없이 이어지도록 했습니다.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 907개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800) 실제 브라우저 검증 통과.

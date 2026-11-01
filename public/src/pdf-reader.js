@@ -210,13 +210,40 @@ export class PdfReader{
   applyFont(){
     if(!this.root)return;const position=this.position();this.scale=this.reader.readingFontScale();this.relayout();this.doc.body.style.width=this.width*this.scale+'px';this.reader.naturalWidth=this.width*this.scale;this.reader.frame.style.width=this.reader.naturalWidth+'px';this.reader.metadata.viewport.width=this.reader.naturalWidth;this.windowAt((this.tops[position.page-1]+this.size(position.page).height*position.y)*this.scale);this.seek(position.page,position.y,false);this.schedule();
   }
+  snapRectInk(slot,rect,snapLeft,snapRight){
+    if(!snapLeft&&!snapRight)return rect;const canvas=slot.image?.canvas,cw=canvas?.width||0,ch=canvas?.height||0;if(cw<8||ch<8)return rect;
+    const rawL=rect.x*cw,rawR=(rect.x+rect.w)*cw,hPx=rect.h*ch,pad=Math.ceil(hPx*1.1),c0=Math.max(0,Math.floor(rawL-pad)),c1=Math.min(cw-1,Math.ceil(rawR+pad)),r0=Math.max(0,Math.floor((rect.y+rect.h*.15)*ch)),r1=Math.min(ch-1,Math.ceil((rect.y+rect.h*.78)*ch)),w=c1-c0+1,h=r1-r0+1;
+    if(w<4||h<2)return rect;let data;try{data=canvas.getContext('2d')?.getImageData(c0,r0,w,h)?.data;}catch{return rect;}if(!data)return rect;
+    const samples=[];for(let i=0;i<data.length;i+=16)samples.push((data[i]+data[i+1]+data[i+2])/3);samples.sort((a,b)=>a-b);const bg=samples[Math.floor(samples.length*.85)]??255,ink=new Uint8Array(w);
+    for(let x=0;x<w;x++)for(let y=0;y<h;y++){const i=(y*w+x)*4;if(data[i+3]>32&&Math.abs((data[i]+data[i+1]+data[i+2])/3-bg)>35){ink[x]=1;break;}}
+    const maxGap=Math.max(2,Math.round(hPx*.09));let prev=-1;for(let x=0;x<w;x++)if(ink[x]){if(prev>=0&&x-prev-1<=maxGap)for(let k=prev+1;k<x;k++)ink[k]=1;prev=x;}
+    const clusters=[];for(let x=0;x<w;){if(!ink[x]){x++;continue;}let end=x;while(end+1<w&&ink[end+1])end++;clusters.push([c0+x,c0+end+1]);x=end+1;}if(!clusters.length)return rect;
+    let left=rawL,right=rawR;
+    if(snapLeft){let best=left,bestD=Math.ceil(hPx*.6);for(const[s,e]of clusters)if(left>=s-bestD&&left<=e){const d=Math.abs(left-s);if(d<=bestD){best=s;bestD=d;}}left=best;}
+    if(snapRight){let best=right,bestD=Math.ceil(hPx*.6);for(const[s,e]of clusters)if(right>=s&&right<=e+bestD){const d=Math.abs(right-e);if(d<=bestD){best=e;bestD=d;}}right=best;}
+    if(right<=left+1)return rect;const nx=clamp(left/cw,0,1),nw=Math.min((right-left)/cw,1-nx);return nw>0?{...rect,x:nx,w:nw}:rect;
+  }
   captureRects(range){
     const rects=[];
     for(const slot of this.slots.values()){
       if(!range.intersectsNode(slot.text))continue;const index=textIndex(this.doc,slot.text);
-      for(const run of index.nodes){if(!range.intersectsNode(run.node))continue;const from=run.node===range.startContainer?range.startOffset:0,to=run.node===range.endContainer?range.endOffset:run.node.length;if(to<=from)continue;
-        const part=this.doc.createRange();part.setStart(run.node,from);part.setEnd(run.node,to);const box=slot.node.getBoundingClientRect();
-        for(const r of part.getClientRects()){const x=clamp((r.left-box.left)/box.width,0,1),y=clamp((r.top-box.top)/box.height,0,1),w=Math.min(r.width/box.width,1-x),h=Math.min(r.height/box.height,1-y);if(w>0&&h>0)rects.push({page:slot.page,x,y,w,h});}
+      for(const run of index.nodes){if(!range.intersectsNode(run.node))continue;const text=run.node.nodeValue||'';let from=run.node===range.startContainer?range.startOffset:0,to=run.node===range.endContainer?range.endOffset:text.length;
+        if(run.node===range.startContainer)while(from<to&&/\s/u.test(text[from]))from++;
+        if(run.node===range.endContainer)while(to>from&&/\s/u.test(text[to-1]))to--;
+        if(to<=from)continue;
+        const sub=from>0||to<text.length,snapLeft=sub&&(from===0||/\s/u.test(text[from-1])),snapRight=sub&&(to===text.length||/\s/u.test(text[to]));
+        const part=this.doc.createRange();part.setStart(run.node,from);part.setEnd(run.node,to);const box=slot.node.getBoundingClientRect(),span=run.node.parentElement,spanBox=!span?.style?.getPropertyValue?.('--rotate')&&span?.getBoundingClientRect?.();
+        for(const r of part.getClientRects()){
+          const top=r.top,bottom=spanBox?.height>0&&spanBox.bottom>top+1?Math.min(r.bottom,spanBox.bottom):r.bottom;
+          let x=clamp((r.left-box.left)/box.width,0,1),y=clamp((top-box.top)/box.height,0,1),w=Math.min(r.width/box.width,1-x),h=Math.min((bottom-top)/box.height,1-y);
+          if(w>0&&h>0){
+            if(sub&&slot.image?.canvas)({x,w}=this.snapRectInk(slot,{x,y,w,h},snapLeft,snapRight));
+            const prev=rects.at(-1);
+            if(prev&&prev.page===slot.page&&Math.abs(prev.y+prev.h/2-(y+h/2))<=Math.min(prev.h,h)*.35&&Math.abs(prev.h-h)<=Math.max(prev.h,h)*.35&&x-(prev.x+prev.w)>=-.005&&x-(prev.x+prev.w)<=Math.max(prev.h,h)*.6){
+              const rx=Math.max(prev.x+prev.w,x+w),ry=Math.min(prev.y,y),rb=Math.max(prev.y+prev.h,y+h);prev.x=Math.min(prev.x,x);prev.y=ry;prev.w=rx-prev.x;prev.h=rb-ry;
+            }else rects.push({page:slot.page,x,y,w,h});
+          }
+        }
       }
     }
     return rects;
@@ -236,7 +263,7 @@ export class PdfReader{
         for(const rect of a.pdfRects){if(rect.page!==slot.page)continue;const width=this.size(slot.page).width,height=this.size(slot.page).height,x=rect.x*width,y=rect.y*height,w=rect.w*width,h=rect.h*height;
           const group=svg(this.doc,'g',{'data-htmlmemo-id':a.id,'data-htmlmemo-pdf-mark':''});
           if(a.type==='highlight')group.append(svg(this.doc,'rect',{x,y,width:w,height:h,fill:a.color,opacity:a.opacity,'pointer-events':'all'}));
-          else{const lineY=a.type==='strike'?y+h*.5:y+h;group.append(svg(this.doc,'path',{d:`M${x} ${lineY}h${w}`,fill:'none',stroke:a.color,'stroke-width':a.width,'pointer-events':'stroke'}));group.append(svg(this.doc,'path',{d:`M${x} ${lineY}h${w}`,fill:'none',stroke:'transparent','stroke-width':Math.max(a.width,12/(this.reader.zoom*this.scale)),'data-htmlmemo-hit':a.id,'pointer-events':'stroke'}));}
+          else{const lineY=y+h*(a.type==='strike'?.53:.84);group.append(svg(this.doc,'path',{d:`M${x} ${lineY}h${w}`,fill:'none',stroke:a.color,'stroke-width':a.width,'pointer-events':'stroke'}));group.append(svg(this.doc,'path',{d:`M${x} ${lineY}h${w}`,fill:'none',stroke:'transparent','stroke-width':Math.max(a.width,12/(this.reader.zoom*this.scale)),'data-htmlmemo-hit':a.id,'pointer-events':'stroke'}));}
           layer.append(group);
         }
       }
@@ -250,7 +277,7 @@ export class PdfReader{
     const start=entry.start+offset,end=Math.min(start+drag.annotation.textAnchor.quote.length,index.text.length),range=rangeFromOffsets(this.doc,start,end,index);if(!range)return null;
     const rects=this.captureRects(range);if(!rects.length)return null;return {...drag.annotation,textAnchor:selectionAnchor(this.doc,range,index),pdfPage:rects[0].page,pdfRects:rects};
   }
-  previewText(a,layer){const origin=this.reader.layerOrigin();for(const b of a.pdfRects||[]){const box=this.slots.get(b.page)?.node.getBoundingClientRect();if(!box)continue;const x=box.left-origin.left+b.x*box.width,y=box.top-origin.top+b.y*box.height,w=b.w*box.width,h=b.h*box.height;layer.append(a.type==='highlight'?svg(this.doc,'rect',{x,y,width:w,height:h,fill:a.color,opacity:a.opacity}):svg(this.doc,'path',{d:`M${x} ${y+(a.type==='strike'?h/2:h)}h${w}`,stroke:a.color,'stroke-width':a.width,fill:'none'}));}}
+  previewText(a,layer){const origin=this.reader.layerOrigin();for(const b of a.pdfRects||[]){const box=this.slots.get(b.page)?.node.getBoundingClientRect();if(!box)continue;const x=box.left-origin.left+b.x*box.width,y=box.top-origin.top+b.y*box.height,w=b.w*box.width,h=b.h*box.height;layer.append(a.type==='highlight'?svg(this.doc,'rect',{x,y,width:w,height:h,fill:a.color,opacity:a.opacity}):svg(this.doc,'path',{d:`M${x} ${y+h*(a.type==='strike'?.53:.84)}h${w}`,stroke:a.color,'stroke-width':a.width,fill:'none'}));}}
   bookmarkLocation(){
     const pdfPosition=this.position(),slot=this.slots.get(pdfPosition.page),index=slot?.text?textIndex(this.doc,slot.text):null;
     if(!index?.nodes.length)return {pdfPosition};
