@@ -1,0 +1,59 @@
+{
+  "status": "pass",
+  "states": [
+    {
+      "kind": "native",
+      "width": 1280,
+      "theme": "light",
+      "text": "악성코드가 포함되어 있는 파일입니다.",
+      "color": "rgb(255, 255, 255)",
+      "background": "rgb(153, 27, 27)",
+      "border": "rgb(252, 165, 165)",
+      "marked": true
+    },
+    {
+      "kind": "native",
+      "width": 1280,
+      "theme": "dark",
+      "text": "악성코드가 포함되어 있는 파일입니다.",
+      "color": "rgb(255, 255, 255)",
+      "background": "rgb(153, 27, 27)",
+      "border": "rgb(252, 165, 165)",
+      "marked": true
+    },
+    {
+      "kind": "native",
+      "width": 390,
+      "theme": "light",
+      "text": "악성코드가 포함되어 있는 파일입니다.",
+      "color": "rgb(255, 255, 255)",
+      "background": "rgb(153, 27, 27)",
+      "border": "rgb(252, 165, 165)",
+      "marked": true
+    },
+    {
+      "kind": "native",
+      "width": 390,
+      "theme": "dark",
+      "text": "악성코드가 포함되어 있는 파일입니다.",
+      "color": "rgb(255, 255, 255)",
+      "background": "rgb(153, 27, 27)",
+      "border": "rgb(252, 165, 165)",
+      "marked": true
+    },
+    {
+      "kind": "generated",
+      "width": 390,
+      "theme": "dark",
+      "text": "악성코드가 포함되어 있는 파일입니다.",
+      "color": "rgb(255, 255, 255)",
+      "background": "rgb(153, 27, 27)",
+      "border": "rgb(252, 165, 165)",
+      "marked": true
+    }
+  ],
+  "dynamicWarningClears": true,
+  "dynamicNestedWarningReturns": true,
+  "bodyUnchanged": true,
+  "errors": []
+}

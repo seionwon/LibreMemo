@@ -1,0 +1,60 @@
+{
+  "version": "1.7.3",
+  "commit": "1345693b6889c42d476e17d67053dd515d3f32ee",
+  "url": "https://seionwon.github.io/LibreMemo/",
+  "status": "pass",
+  "verifiedAt": "2026-11-01T01:35:49.876709+00:00",
+  "local": {
+    "unitTests": 871,
+    "passed": 871,
+    "syntaxJSON": 207,
+    "build": "pass",
+    "diff": "pass",
+    "trustedBrowserPreview": "Light and dark static native-sidebar markup with compiled app CSS, at 390px; distinct from complete app verification"
+  },
+  "ci": {
+    "run": 41258762716,
+    "unitTests": 871,
+    "passed": 870,
+    "skipped": 1,
+    "skipReason": "macOS-only launch guard on Linux",
+    "syntaxJSON": 188,
+    "sourceChrome": 117,
+    "sourceLeafCases": 115,
+    "publicChrome": 83,
+    "build": "success",
+    "deploy": "success",
+    "verify": "success"
+  },
+  "feature": {
+    "nativeAndGeneratedTOC": true,
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "widths": [
+      1280,
+      390
+    ],
+    "dynamicClearAndRestore": true,
+    "nestedText": true,
+    "bodyUnchanged": true,
+    "sharedWarningColors": {
+      "background": "#991b1b",
+      "color": "#ffffff",
+      "border": "#fca5a5"
+    }
+  },
+  "publicFiles": {
+    "count": 294,
+    "bytes": 49704957,
+    "verifiedAt": "2026-11-01T01:24:54.085Z",
+    "allHTTP200ByteAndSHA256Match": true
+  },
+  "limits": {
+    "physicalAndroidTested": false,
+    "desktopMacChromeLaunched": false,
+    "malwareScanningAdded": false,
+    "fixtures": "Synthetic HTML and Markdown; no actual malicious file was used"
+  }
+}

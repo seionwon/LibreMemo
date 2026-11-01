@@ -1,0 +1,11 @@
+{
+  "status": "pass",
+  "warning": {
+    "role": "alert",
+    "security": true,
+    "background": "rgb(153, 27, 27)",
+    "color": "rgb(255, 255, 255)",
+    "border": "rgb(252, 165, 165)"
+  },
+  "errors": []
+}
