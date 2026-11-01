@@ -1,0 +1,62 @@
+{
+  "status": "pass",
+  "results": [
+    {
+      "format": "png",
+      "width": 1600,
+      "height": 1000,
+      "originalBytes": 7235,
+      "readOnly": true
+    },
+    {
+      "format": "jpg",
+      "width": 1600,
+      "height": 1000,
+      "originalBytes": 47984,
+      "readOnly": true
+    },
+    {
+      "format": "webp",
+      "width": 1600,
+      "height": 1000,
+      "originalBytes": 4726,
+      "readOnly": true
+    },
+    {
+      "format": "avif",
+      "width": 1600,
+      "height": 1000,
+      "originalBytes": 2387,
+      "readOnly": true
+    },
+    {
+      "format": "bmp",
+      "width": 320,
+      "height": 200,
+      "originalBytes": 192054,
+      "readOnly": true
+    },
+    {
+      "format": "gif",
+      "width": 1600,
+      "height": 1000,
+      "originalBytes": 10435,
+      "readOnly": true
+    },
+    {
+      "format": "apng",
+      "width": 1600,
+      "height": 1000,
+      "originalBytes": 14378,
+      "readOnly": true
+    },
+    {
+      "format": "svg",
+      "width": 1600,
+      "height": 1000,
+      "originalBytes": 377,
+      "readOnly": true
+    }
+  ],
+  "errors": []
+}

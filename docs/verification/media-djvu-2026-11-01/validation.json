@@ -1,0 +1,46 @@
+{
+  "verifiedAt": "2026-11-01 12:52:58 +09:00",
+  "status": "pass",
+  "version": "1.8.0",
+  "sourceCommit": "add66b2b0fbe1976a38cc13c88dd1b3ce8498202",
+  "url": "https://seionwon.github.io/LibreMemo/",
+  "actionsRun": "https://github.com/seionwon/LibreMemo/actions/runs/41267349310",
+  "ciUnitTests": {
+    "total": 895,
+    "passed": 894,
+    "failed": 0,
+    "skipped": 1,
+    "skipReason": "Linux에서는 macOS 샌드박스의 Chrome 직접 실행 방지 검사 1개를 건너뜀"
+  },
+  "ciSyntaxAndJsonFiles": 202,
+  "sourceChrome": {
+    "reportedTests": 121,
+    "leafTests": 119,
+    "parentSuites": 2,
+    "passed": 121,
+    "failed": 0,
+    "skipped": 0
+  },
+  "publishedChrome": {
+    "tests": 87,
+    "passed": 87,
+    "failed": 0,
+    "skipped": 0
+  },
+  "supportedExtensionUiCorpus": 53,
+  "publicFiles": {
+    "count": 306,
+    "bytes": 52753077,
+    "allHttp200": true,
+    "allBytesAndSha256Match": true
+  },
+  "screenshotsReviewed": [
+    "pages-only-djvu-320.png",
+    "pages-only-djvu-1280.png",
+    "pages-only-subtitles-320.png",
+    "pages-only-screenshot-320.png",
+    "pages-only-screenshot-paste.png",
+    "pages-only-format-parity-srt-320.png"
+  ],
+  "environment": "GitHub Actions의 실제 Chrome 새 임시 프로필. 휴대폰 화면 크기와 DPR은 에뮬레이션이며 실물 Android 검사는 수행하지 않음. macOS 샌드박스 안에서 Chrome을 직접 실행하지 않음."
+}

@@ -1,0 +1,219 @@
+{
+  "id": 41267349310,
+  "url": "https://github.com/seionwon/LibreMemo/actions/runs/41267349310",
+  "headSHA": "add66b2b0fbe1976a38cc13c88dd1b3ce8498202",
+  "conclusion": "success",
+  "createdAt": "2026-11-01T02:59:25Z",
+  "updatedAt": "2026-11-01T03:49:43Z",
+  "jobs": [
+    {
+      "id": 124732816280,
+      "name": "build",
+      "conclusion": "success",
+      "startedAt": "2026-11-01T02:59:28Z",
+      "completedAt": "2026-11-01T03:37:08Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/configure-pages@v5",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm ci",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Korean fonts for realistic mobile layout checks",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm test",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm run check",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run mkdir -p test-results",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify screenshots, image imports and subtitle annotations",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify the expanded format corpus uses identical reader and sidebar controls",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify visible book selection and new-edition bookmarks",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify PDF pixel density and the revised outline interactions before the full suite",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify pasted-document history after expanding the outline",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify source archives, standard PDF and self-contained offline HTML exports",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify the current folder and sharing guide before the complete suite",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify original HTML outline links match common sidebar rows at every scale",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify live book search results retain their UI size when the document is zoomed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify legacy book menus and mobile word selection through visible controls",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm run test:browser",
+          "conclusion": "success"
+        },
+        {
+          "name": "Keep structured Chrome results and fixture screenshots",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm run build",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/upload-pages-artifact@v4",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-node@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 124740340816,
+      "name": "deploy",
+      "conclusion": "success",
+      "startedAt": "2026-11-01T03:37:12Z",
+      "completedAt": "2026-11-01T03:37:22Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Publish LibreMemo",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 124740385230,
+      "name": "verify",
+      "conclusion": "success",
+      "startedAt": "2026-11-01T03:37:24Z",
+      "completedAt": "2026-11-01T03:49:42Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm ci",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Korean fonts for realistic mobile layout checks",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify the published URL-only app, sidebar, annotation tree and pen scaling in Chrome",
+          "conclusion": "success"
+        },
+        {
+          "name": "Keep published desktop and mobile verification screenshots",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-node@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 13068867112,
+      "name": "github-pages",
+      "size_in_bytes": 19912601,
+      "digest": "sha256:0f79f1d18e20ba50bc81ae99c243d10f743d1b87777e621ea527db21f0f7a31d",
+      "created_at": "2026-11-01T03:37:05Z",
+      "downloadedSHA256": "sha256:0f79f1d18e20ba50bc81ae99c243d10f743d1b87777e621ea527db21f0f7a31d"
+    },
+    {
+      "id": 13068607930,
+      "name": "browser-verification",
+      "size_in_bytes": 22506170,
+      "digest": "sha256:891e5a9fe31a53ee9fa575750efeedcfc7dac879ec02092f07b4c197274c188c",
+      "created_at": "2026-11-01T03:36:57Z",
+      "downloadedSHA256": "sha256:891e5a9fe31a53ee9fa575750efeedcfc7dac879ec02092f07b4c197274c188c"
+    },
+    {
+      "id": 13068589386,
+      "name": "published-sidebar-screenshots",
+      "size_in_bytes": 20352095,
+      "digest": "sha256:57fbf9aa8dc8b5b1b751d5a14f28c7ed46137525c4112788e9d10044c26cf14f",
+      "created_at": "2026-11-01T03:49:40Z",
+      "downloadedSHA256": "sha256:57fbf9aa8dc8b5b1b751d5a14f28c7ed46137525c4112788e9d10044c26cf14f"
+    }
+  ]
+}

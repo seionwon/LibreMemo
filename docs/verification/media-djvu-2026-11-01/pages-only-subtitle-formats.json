@@ -1,0 +1,50 @@
+{
+  "status": "pass",
+  "results": [
+    {
+      "format": "srt",
+      "original": true,
+      "outline": 2,
+      "highlight": true,
+      "search": true
+    },
+    {
+      "format": "vtt",
+      "original": true,
+      "outline": 2,
+      "highlight": true,
+      "search": true
+    },
+    {
+      "format": "smi",
+      "original": true,
+      "outline": 2,
+      "highlight": true,
+      "search": true
+    },
+    {
+      "format": "sami",
+      "original": true,
+      "outline": 2,
+      "highlight": true,
+      "search": true
+    },
+    {
+      "format": "ass",
+      "original": true,
+      "outline": 2,
+      "highlight": true,
+      "search": true
+    },
+    {
+      "format": "ssa",
+      "original": true,
+      "outline": 2,
+      "highlight": true,
+      "search": true
+    }
+  ],
+  "archive": true,
+  "phone": 320,
+  "errors": []
+}

@@ -1,0 +1,24 @@
+{
+  "status": "pass",
+  "pages": 2,
+  "original": true,
+  "nativePixels": [
+    1600,
+    1000
+  ],
+  "highlight": true,
+  "pen": true,
+  "zoom": [
+    75,
+    125,
+    50
+  ],
+  "fontScale": 1.1,
+  "search": true,
+  "bookmarks": 1,
+  "archive": true,
+  "html": true,
+  "offlineNewDjvImport": true,
+  "phone": 320,
+  "errors": []
+}
