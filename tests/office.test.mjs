@@ -75,3 +75,46 @@ test('All read-only formats are available in the picker, PWA file handlers and o
   for(const name of ['office-worker','office-render','office-import','office-word','office-slides','office-sheets','office-common','office-formats'])assert.ok(APP_FILES.includes('src/'+name+'.js'));
   for(const name of ['genoffice.js','sheets.js','GENOFFICE-LICENSE.txt','GENOFFICE-NOTICE.txt','SHEETJS-LICENSE.txt'])assert.ok(APP_FILES.includes('vendor/office/'+name));
 });
+test('PPTX flipped or 180-degree rotated shapes keep text upright and Korean fonts with digits or latinLnBrk do not overlap characters',async()=>{
+  const prevCanvas=globalThis.OffscreenCanvas;
+  globalThis.OffscreenCanvas=class{
+    getContext(){
+      let currentSize=10;
+      return {
+        fontKerning:'normal',
+        set font(value){
+          const m=/^(?:italic\s+)?(?:700|400)\s+([\d.]+)px\s+(.+)$/.exec(String(value||'').trim());
+          if(!m)return;
+          const familyPart=m[2].trim();
+          // Simulate browser CSS font shorthand parser rejecting unquoted family tokens starting with digits
+          if(!familyPart.startsWith('"')&&/\b\d/.test(familyPart))return;
+          currentSize=Number(m[1])||10;
+        },
+        measureText(text){return {width:[...String(text||'')].length*currentSize*.92};},
+      };
+    }
+  };
+  try{
+    const zip=await JSZip.loadAsync(fixtures.pptx);
+    const slideXml='<?xml version="1.0" encoding="UTF-8"?><p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>'
+      +'<p:sp><p:nvSpPr><p:cNvPr id="2" name="FlippedBanner"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm flipH="1" flipV="1"><a:off x="914400" y="365760"/><a:ext cx="6400800" cy="685800"/></a:xfrm><a:prstGeom prst="round2SameRect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="E87331"/></a:solidFill></p:spPr><p:txBody><a:bodyPr anchor="ctr"/><a:lstStyle/><a:p><a:r><a:rPr lang="ko-KR" sz="2400" b="1"/><a:t>인터뷰 질문 학습모델 만들기</a:t></a:r></a:p></p:txBody></p:sp>'
+      +'<p:sp><p:nvSpPr><p:cNvPr id="3" name="Rotated180Banner"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm rot="10800000"><a:off x="914400" y="1200000"/><a:ext cx="6400800" cy="685800"/></a:xfrm><a:prstGeom prst="round2SameRect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="E87331"/></a:solidFill></p:spPr><p:txBody><a:bodyPr anchor="ctr"/><a:lstStyle/><a:p><a:r><a:rPr lang="ko-KR" sz="2400" b="1"/><a:t>회전 배너 텍스트 정상 표시</a:t></a:r></a:p></p:txBody></p:sp>'
+      +'<p:sp><p:nvSpPr><p:cNvPr id="4" name="LessonTitle"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="914400" y="2100000"/><a:ext cx="3657600" cy="1828800"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="3D8587"/></a:solidFill></p:spPr><p:txBody><a:bodyPr anchor="ctr"/><a:lstStyle/><a:p><a:pPr algn="ctr" latinLnBrk="1"/><a:r><a:rPr lang="ko-KR" sz="3600" b="1" spc="-2500"><a:latin typeface="1훈정글북 R"/><a:ea typeface="에스코어 드림 6 Bold"/></a:rPr><a:t>5교시 텍스트 인식하기</a:t></a:r></a:p></p:txBody></p:sp>'
+      +'</p:spTree></p:cSld></p:sld>';
+    zip.file('ppt/slides/slide1.xml',slideXml);
+    const rendered=await renderOffice(await zip.generateAsync({type:'uint8array'}),'pptx','lesson.pptx');
+    const doc=documentFor(parseHTML(rendered.html).html);
+    const spans=[...doc.querySelectorAll('#office-slide-1 foreignObject [data-office-text]')];
+    const banner1=spans.find(el=>el.textContent.includes('인터뷰 질문 학습모델 만들기'));
+    const banner2=spans.find(el=>el.textContent.includes('회전 배너 텍스트 정상 표시'));
+    const lesson=spans.find(el=>el.textContent.includes('5교시'));
+    assert.ok(banner1);assert.ok(banner2);assert.ok(lesson);
+    const chainTransforms=el=>{const out=[];for(let cur=el;cur&&cur.tagName?.toLowerCase()!=='svg';cur=cur.parentElement){const t=cur.getAttribute?.('transform');if(t)out.push(t);}return out.join(' ');};
+    assert.doesNotMatch(chainTransforms(banner1),/scale\(-1|rotate\(180/);
+    assert.doesNotMatch(chainTransforms(banner2),/scale\(-1|rotate\(180/);
+    assert.equal(lesson.textContent,'5교시 텍스트 인식하기');
+    assert.match(lesson.getAttribute('style')||'',/font-family:'에스코어 드림 6 Bold',sans-serif/);
+  }finally{
+    globalThis.OffscreenCanvas=prevCanvas;
+  }
+});

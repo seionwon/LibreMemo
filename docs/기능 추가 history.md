@@ -5356,3 +5356,20 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
 - **목적·사용법:** 앱을 처음 설치했거나 별도의 팔레트를 지정하지 않은 초기 상태에서 **플로팅 툴바 → 펜과 색상**을 열었을 때 기본 선택되는 팔레트 프리셋을 2번(`preset-1`, 기본 20색 팔레트) 대신 **1번(`preset-7`, `1. 교재,논문 마킹 (8)`)**(`PRESET_PALETTES[0]`)이 되도록 통일했습니다.
 - **동작·보존:** 기본 설정(`DEFAULT_PREFERENCES.annotation.paletteId`), 설정 정규화(`normalizePreferences`), 활성 팔레트 조회(`getActivePalette`), 사용자 팔레트 삭제 후 복귀 팔레트, 기기 간 설정 동기화 기본값(`normalizeSyncSettings`)이 모두 첫 번째 프리셋(`PRESET_PALETTES[0].id`, `preset-7`)을 가리키며, 사용자가 직접 다른 프리셋이나 사용자 팔레트를 선택한 경우에는 해당 선택을 그대로 유지합니다.
 - **로컬 검증:** `npm run check` 221개 JavaScript 및 JSON 문법 검사 통과, `npm test` 896개 단위 검사 통과(`tests/preferences.test.mjs` 및 `tests/device-sync.test.mjs` 초기 팔레트 검증 포함), `tests/browser.integration.mjs` 실제 Chrome 초기 팔레트(`#palette-preset` 값 `preset-7`) 검증 추가, `npm run build` 통과, `codememo-browser`(포트 4173, 1280×800) 초기 화면 확인 통과. GitHub Actions 전체 Chrome 검증 및 Pages 게시 결과는 아래에 이어서 보충합니다.
+
+<a id="hist-20261101-011"></a>
+### 2026-11-01 15:52:00 +09:00 — PPTX 슬라이드 글자 겹침 및 반전·180° 회전 도형 텍스트 뒤집힘 수정
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261101-011 |
+| 변경 종류 | PPTX 슬라이드 렌더링 · 한글 글꼴 측정 · 반전/180° 회전 도형 텍스트 |
+| 상태 | 로컬 검증 완료 · 1.8.5 GitHub Pages 게시 및 CI Chrome 검증 진행 중 |
+
+- **목적·원인:**
+  1. PPTX 슬라이드에서 숫자나 공백이 포함된 한글 글꼴 이름(예: `에스코어 드림 6 Bold`, `1훈정글북 R`, `210 맨발의청춘`)을 사용할 때 캔버스 `ctx.font` 단축 속성에 따옴표 없이 전달되어 CSS 글꼴 파싱이 실패하고 기본 `10px` 폭으로 잘못 측정되거나, `latinLnBrk="1"` 등으로 글자마다 쪼개진 `GlyphRun` 및 과도한 음수 자간(`spc`) 때문에 `48px` 한글 글자들이 같은 가로 위치에 겹쳐 찍히던 문제를 수정했습니다.
+  2. 상단 배너 도형(`round2SameRect` 등)에 좌우/상하 반전(`flipH`/`flipV`)이나 `180°` 회전(`rot="10800000"`)이 지정된 경우 도형 외곽선뿐 아니라 내부 텍스트까지 함께 거꾸로(`180°` 회전·반전) 렌더링되던 문제를 수정했습니다.
+- **동작·보존:**
+  1. `BrowserMetrics.measure`와 SVG `<foreignObject>` 텍스트 스타일에서 글꼴 패밀리 이름을 항상 큰따옴표로 감싸고, 측정된 글자 폭이 비정상적으로 작을 때 한글·영문 글자 폭 하한을 보장하며, 같은 줄의 연속된 한글·텍스트 조각을 하나의 `<span data-office-text>`로 병합하고 과도한 음수 자간을 제한해 글자가 겹치지 않도록 했습니다.
+  2. 도형의 반전(`flipH`/`flipV`)과 `180°` 상하 반전 회전은 도형 기하(`path`·`polygon`·`rect` 등)에만 적용하고, 도형 내부 텍스트(`textLayout`)는 똑바로 읽히도록 분리했습니다.
+- **로컬 검증:** `npm run check` 221개 JavaScript 및 JSON 문법 검사 통과, `npm test` 897개 단위 검사 통과(`tests/office.test.mjs`의 PPTX `flipH`/`flipV`·`180°` 배너 텍스트 정방향 유지 및 숫자 포함 한글 글꼴·`latinLnBrk="1"` 글자 겹침 방지 회귀 검사 포함), `npm run build` 통과, `codememo-browser`(포트 4173, 1280×800) 초기 화면 확인 통과. GitHub Actions 전체 Chrome 검증 및 Pages 게시 결과는 아래에 이어서 보충합니다.
