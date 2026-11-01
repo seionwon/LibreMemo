@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import {DOMParser} from 'linkedom';
-import {$, $$, icon, escapeHTML,sidebarWidthAction,isSecurityWarning} from '../public/src/utils.js';
+import {$, $$, icon, escapeHTML,sidebarWidthAction,isSecurityWarning,splitOutlinePrefix,formatOutlineTitle} from '../public/src/utils.js';
 import {Reader} from '../public/src/reader.js';
 import {ANNOTATION_LABELS} from '../public/src/model.js';
 import {documentFor,installDOM} from './dom.mjs';
@@ -19,7 +19,7 @@ function sidebar() {
     outline:()=>[{node:'heading-1',level:1,title:'첫 번째 절'}],jump:node=>calls.headings.push(node),jumpAnnotation:id=>calls.annotations.push(id),jumpBookmark(id){const mark=this.metadata.bookmarks.find(m=>m.id===id);this.scrollTop=mark.top*this.zoom;this.scrollLeft=mark.left*this.zoom;},
     search(query){this.searchQuery=query;calls.search.push(query);this.searchResults=query?[{quote:'찾은 문장: '+query}]:[];this.searchPosition=this.searchResults.length?0:-1;return this.searchResults;},nextSearch(direction){calls.next.push(direction);if(this.searchResults?.length)this.searchPosition=Math.max(0,Math.min(this.searchResults.length-1,this.searchPosition+direction));}};
   let current=r;
-  const context=vm.createContext({ANNOTATION_LABELS,sidebarWidthAction,isSecurityWarning,document:doc,$:(selector,root=doc)=>$(selector,root),$$:(selector,root=doc)=>$$(selector,root),icon,esc:escapeHTML,
+  const context=vm.createContext({ANNOTATION_LABELS,sidebarWidthAction,isSecurityWarning,formatOutlineTitle,document:doc,$:(selector,root=doc)=>$(selector,root),$$:(selector,root=doc)=>$$(selector,root),icon,esc:escapeHTML,
     reader:()=>current,active:()=>({queue:{schedule(){calls.saved++;}}}),closePopover(){},toolAction(){},innerWidth:1280,window:doc.createElement('div'),preferences:{sidebarWidth:300},changePreferences(patch){Object.assign(context.preferences,patch);calls.sizes.push(patch.sidebarWidth);context.applyAppSidebarWidth();},
     getComputedStyle:()=>({getPropertyValue:()=>''}),showError:error=>calls.errors.push(error.message),
     setTimeout(fn){const id=++timerId;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);}});
@@ -691,4 +691,56 @@ test('opening and exporting strip inline panel state while preserving the source
     const doc=documentFor(result);assert.equal(doc.querySelector('[data-htmlmemo-doc-sidebar-ui],#htmlmemo-doc-sidebar-style,[data-htmlmemo-native-sidebar],[data-htmlmemo-sidebar-view],[data-htmlmemo-redundant-toc-title]'),null);
     assert.equal(doc.querySelector('#reader-nav h2').textContent,'목차');assert.equal(doc.querySelector('#reader-nav details').hasAttribute('open'),true);assert.match(result,/window.originalScript=true/);
   }
+});
+
+test('sidebar distinguishes slide numbers and part/chapter/section prefixes while preserving text content and escaping',()=>{
+  for(const [input,prefix,title] of [
+    ['1/15 슬라이드 제목','1/15','슬라이드 제목'],
+    ['2/15','2/15',''],
+    ['제1부 시작하기','제1부','시작하기'],
+    ['1부 시작하기','1부','시작하기'],
+    ['제1부 제2장 아키텍처','제1부 제2장','아키텍처'],
+    ['1.1장 세부 내용','1.1장','세부 내용'],
+    ['2절: 배경 설명','2절:','배경 설명'],
+    ['PART 1 바이브 코딩','PART 1','바이브 코딩'],
+    ['Chapter 2: Getting Started','Chapter 2:','Getting Started'],
+    ['1.1 배경과 목적','1.1','배경과 목적'],
+    ['(1.2) 다음 장','(1.2)','다음 장'],
+    ['I. 서론','I.','서론'],
+    ['① 개요','①','개요'],
+  ]){
+    const parts=splitOutlinePrefix(input);
+    assert.equal(parts?.prefix,prefix,input);
+    assert.equal(parts?.title,title,input);
+  }
+  for(const plain of ['첫 장','두 번째 절','마지막 제목','2026년 사업 계획','3가지 핵심 원칙','100% 활용법','일부 개정안','2026-11-01 회의록']){
+    assert.equal(splitOutlinePrefix(plain),null,plain);
+    assert.equal(formatOutlineTitle(plain),escapeHTML(plain),plain);
+  }
+  const a=sidebar();
+  a.r.outline=()=>[
+    {node:'s1',level:1,title:'1/15 첫 슬라이드 <제목>'},
+    {node:'p1',level:1,title:'제1부 시작하기'},
+    {node:'c1',level:2,title:'1.1장 세부 구성'},
+    {node:'sec1',level:3,title:'2절: 핵심 요약'},
+    {node:'plain',level:1,title:'부록 및 참고문헌'},
+  ];
+  a.open('outline');
+  const panel=a.doc.querySelector('#sidebar');
+  const first=panel.querySelector('[data-heading="0"]');
+  assert.equal(first.textContent,'1/15 첫 슬라이드 <제목>');
+  assert.equal(first.querySelector('.outline-prefix')?.textContent,'1/15');
+  assert.equal(first.querySelector('.outline-title-text')?.textContent,'첫 슬라이드 <제목>');
+  const part=panel.querySelector('[data-heading="1"]');
+  assert.equal(part.querySelector('.outline-prefix')?.textContent,'제1부');
+  assert.equal(part.querySelector('.outline-title-text')?.textContent,'시작하기');
+  const chapter=panel.querySelector('[data-heading="2"]');
+  assert.equal(chapter.querySelector('.outline-prefix')?.textContent,'1.1장');
+  assert.equal(chapter.querySelector('.outline-title-text')?.textContent,'세부 구성');
+  const section=panel.querySelector('[data-heading="3"]');
+  assert.equal(section.querySelector('.outline-prefix')?.textContent,'2절:');
+  assert.equal(section.querySelector('.outline-title-text')?.textContent,'핵심 요약');
+  const plainBtn=panel.querySelector('[data-heading="4"]');
+  assert.equal(plainBtn.querySelector('.outline-prefix'),null);
+  assert.equal(plainBtn.textContent,'부록 및 참고문헌');
 });

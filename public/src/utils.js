@@ -88,3 +88,28 @@ export function readerSidebarCSS(rules){
     return content&&brace>=0?rule.cssText.slice(0,brace+1)+content+'}':'';
   }).filter(Boolean).join('\n');
 }
+
+const OUTLINE_UNIT_CORE=String.raw`(?:\[|\()?(?:제\s*(?:\d+(?:[.-]\d+)*|[IVXLCDMⅠ-Ⅻ]+|[일이삼사오육칠팔구십백]+)\s*(?:부|장|절|편|권|강|과|항|조|목|회|화|차|단계|단원|마당|교시|주제|세션|파트|챕터|섹션)|(?:\d+(?:[.-]\d+)*|[IVXLCDMⅠ-Ⅻ]+)\s*(?:부|장|절|편|권|강|과|항|조|목|회|화|차|단계|단원|마당|교시|주제|세션|파트|챕터|섹션)|(?:슬라이드|부록|별첨|파트|챕터|섹션|세션|단원|단계|교시|강의|강좌)\s*(?:\d+(?:[.-]\d+)*|[IVXLCDMⅠ-Ⅻ]+|[A-Z가나다라마바사아자차카타파하](?=\s|$|[.:)\]-]))|(?:part|chapter|ch\.?|section|sec\.?|step|lesson|unit|volume|vol\.?|book|act|scene|slide|page|p\.|appendix)\s*(?:\d+(?:[.-]\d+)*|[IVXLCDMⅠ-Ⅻ]+|[A-Z](?=\s|$|[.:)\]-])))(?:\]|\))?[.:)\]]?`;
+const OUTLINE_PAGE_UNIT=String.raw`(?:\[|\()?(?:제\s*)?\d+(?:[.-]\d+)*\s*쪽(?:\]|\))?[.:)\]]?`;
+const OUTLINE_FRACTION=String.raw`(?:\[|\()?\d{1,5}\s*\/\s*\d{1,5}(?!\s*\/\s*\d)(?:\]|\))?[.:)\]]?`;
+const OUTLINE_NUMBER=String.raw`(?!(?:19|20)\d{2}[.-]\d{1,2}(?:[.-]\d{1,2})?\b)(?:\(\d+(?:[.-]\d+)*\)|\[\d+(?:[.-]\d+)*\]|\d+(?:\.\d+)+[.:)]?|\d{1,3}-\d{1,3}[.:)]?|\d{1,3}[.)]|0\d{1,3}[.:)]?|(?:[IVXLCDM]{1,6}[.)]|[Ⅰ-Ⅻ]+[.)]?)|[①-⑳❶-❿➀-➉⓫-⓴])`;
+const OUTLINE_TOKEN=`(?:${OUTLINE_FRACTION}|${OUTLINE_UNIT_CORE}|${OUTLINE_PAGE_UNIT}|${OUTLINE_NUMBER})`;
+const OUTLINE_SPLIT_RE=new RegExp(`^(\\s*)(${OUTLINE_TOKEN}(?:\\s+(?:${OUTLINE_UNIT_CORE}|${OUTLINE_NUMBER}))?(?:\\s*[-–—:·|])?)(\\s+)([\\s\\S]+?)(\\s*)$`,'i');
+const OUTLINE_ALONE_RE=new RegExp(`^(\\s*)(${OUTLINE_FRACTION}|${OUTLINE_UNIT_CORE}(?:\\s+${OUTLINE_UNIT_CORE})?)(\\s*)$`,'i');
+
+export function splitOutlinePrefix(text){
+  const s=String(text??'');
+  if(!s.trim())return null;
+  const m=OUTLINE_SPLIT_RE.exec(s);
+  if(m)return {prefix:m[2],title:m[4],leading:m[1],sep:m[3],trailing:m[5]};
+  const alone=OUTLINE_ALONE_RE.exec(s);
+  if(alone)return {prefix:alone[2],title:'',leading:alone[1],sep:'',trailing:alone[3]};
+  return null;
+}
+
+export function formatOutlineTitle(title){
+  const parts=splitOutlinePrefix(title);
+  if(!parts)return escapeHTML(title);
+  const prefix=`${escapeHTML(parts.leading)}<span class="outline-prefix">${escapeHTML(parts.prefix)}</span>`;
+  return parts.title?`${prefix}${escapeHTML(parts.sep)}<span class="outline-title-text">${escapeHTML(parts.title)}</span>${escapeHTML(parts.trailing)}`:`${prefix}${escapeHTML(parts.trailing)}`;
+}
