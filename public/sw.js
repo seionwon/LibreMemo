@@ -12,8 +12,8 @@ const application=url=>{try{const u=new URL(url);return u.origin===BASE.origin&&
 // This checksum detects incomplete/mixed deployments; HTTPS supplies source authentication.
 const crcTable=Array.from({length:256},(_,i)=>{for(let b=0;b<8;b++)i=i&1?0xedb88320^(i>>>1):i>>>1;return i>>>0;});
 function checksum(bytes){let crc=0xffffffff;for(let i=0;i<bytes.length;i++)crc=crcTable[(crc^bytes[i])&255]^(crc>>>8);return(crc^0xffffffff)>>>0;}
-async function fetchVerified(url,expected){
-  if(expected!==undefined){
+async function fetchVerified(url,expected,isUpgrade=false){
+  if(!isUpgrade&&expected!==undefined){
     const cached=await fetch(new Request(url,{credentials:'same-origin'})).catch(()=>null);
     if(cached?.ok&&checksum(new Uint8Array(await cached.clone().arrayBuffer()))===expected)return cached;
   }
@@ -24,24 +24,29 @@ async function fetchVerified(url,expected){
 }
 async function prepare(){
   const cache=await caches.open(STORE),inflight=new Map();
-  const load=(url,name,expected)=>{
-    let task=inflight.get(name);
-    if(!task){task=fetchVerified(url,expected);if(expected!==undefined)inflight.set(name,task);}
-    return task.then(r=>r.clone());
-  };
   try{
     const prevNames=(await caches.keys()).filter(name=>name!==STORE&&name.startsWith('htmlmemo-')&&name.endsWith(':'+BASE.pathname));
     const prevCaches=await Promise.all(prevNames.map(async name=>({cache:await caches.open(name),digests:await read('digests/'+encodeURIComponent(name))})));
-    for(let offset=0;offset<SHELL.length;offset+=32)await Promise.all(SHELL.slice(offset,offset+32).map(async path=>{
+    const isUpgrade=prevCaches.length>0;
+    const load=(url,name,expected)=>{
+      let task=inflight.get(name);
+      if(!task){task=fetchVerified(url,expected,isUpgrade);if(expected!==undefined)inflight.set(name,task);}
+      return task.then(r=>r.clone());
+    };
+    const missing=[];
+    await Promise.all(SHELL.map(async path=>{
       const url=new URL(path,BASE),name=path==='./'?'index.html':path.slice(2),expected=DIGESTS[name];
       if(expected!==undefined){
         for(const prev of prevCaches){
           const hit=await prev.cache.match(url.href);
-          if(hit&&(prev.digests?.[name]===expected||!prev.digests&&checksum(new Uint8Array(await hit.clone().arrayBuffer()))===expected)){
+          if(hit&&(prev.digests?.[name]===expected||!prev.digests&&(name.startsWith('vendor/')&&name!=='vendor/office/genoffice.js'||checksum(new Uint8Array(await hit.clone().arrayBuffer()))===expected))){
             await cache.put(url.href,hit);return;
           }
         }
       }
+      missing.push({url,name,expected});
+    }));
+    for(let offset=0;offset<missing.length;offset+=64)await Promise.all(missing.slice(offset,offset+64).map(async({url,name,expected})=>{
       await cache.put(url.href,await load(url,name,expected));
     }));
     await locked(async()=>{if(!await read('selected'))await write('selected',identity);await write('latest',identity);await write('digests/'+encodeURIComponent(STORE),DIGESTS);});

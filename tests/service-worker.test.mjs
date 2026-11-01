@@ -105,6 +105,7 @@ test('new release reuses unchanged verified assets from previous cache and dedup
   await two.event('install');
   assert.equal(f.requests.some(u=>u.endsWith('styles.css')),false);
   assert.equal(f.requests.filter(u=>u===base||u===base+'index.html').length,1);
+  assert.equal(f.requests.filter(u=>u.endsWith('src/version.js')).length,1);
   await two.message('page',{type:'HTMLMEMO_UPDATE_APPLY',build:'htmlmemo-two'});
   assert.match(await(await two.fetch('styles.css',{id:'updated'})).text(),/one/);
 });
