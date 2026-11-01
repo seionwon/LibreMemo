@@ -440,11 +440,11 @@ export class Reader {
     this.doc.addEventListener('drop',event=>this.callbacks.onDrop?.(event));
     this.startFontObserver();
     this.doc.addEventListener('wheel', event => this.forwardWheel(event), {capture:true,passive:false});
-    this.doc.addEventListener('touchstart', event => this.startTouchScroll(event), {capture:true,passive:false});
+    this.doc.addEventListener('touchstart', event => { this.dismissMobileSidebar(event, event.touches?.[0]?.target || event.target); this.startTouchScroll(event); }, {capture:true,passive:false});
     this.doc.addEventListener('touchmove', event => this.moveTouchScroll(event), {capture:true,passive:false});
     this.doc.addEventListener('touchend', event => this.endTouchScroll(event), true);
     this.doc.addEventListener('touchcancel', event => this.endTouchScroll(event), true);
-    this.doc.addEventListener('pointerdown', event => { if(this.startTocResize(event))return; if(this.startMiddleScroll(event))return;this.stopMiddleScroll();this.callbacks.onSelectionDismiss?.(); this.pointerDown(event); }, true);
+    this.doc.addEventListener('pointerdown', event => { if(this.startTocResize(event))return; if(this.startMiddleScroll(event))return;this.stopMiddleScroll();this.callbacks.onSelectionDismiss?.(); this.dismissMobileSidebar(event); this.pointerDown(event); }, true);
     this.doc.addEventListener('mousedown', event => { if(this.startTocResize(event))return;this.selectSentenceAtClick(event); }, true);
     this.doc.addEventListener('dragstart', event => { if(this.annotationDrag||this.tocDrag||this.isTocResizeTarget(event))event.preventDefault(); }, true);
     this.doc.addEventListener('pointermove', event => { if(this.tocDrag)return; if(this.moveMiddleScroll(event))return;this.pointerMove(event); }, true);
@@ -1409,14 +1409,15 @@ export class Reader {
     this.syncAfterTocResize();
   }
   eventDocX(event) {
-    if (!event || !Number.isFinite(event.clientX)) return NaN;
+    const point = event?.touches?.[0] || event?.changedTouches?.[0] || event;
+    if (!point || !Number.isFinite(point.clientX)) return NaN;
     const hostDoc = this.host?.ownerDocument;
     const fromHost = hostDoc && hostDoc !== this.doc && (event.view === hostDoc.defaultView || event.target?.ownerDocument === hostDoc);
     if (fromHost) {
       const rect = this.tocDrag?.frameRect || this.frame?.getBoundingClientRect?.();
-      if (rect) return (event.clientX - rect.left) / (this.zoom || 1);
+      if (rect) return (point.clientX - rect.left) / (this.zoom || 1);
     }
-    return event.clientX;
+    return point.clientX;
   }
   isInsideTocSidebar(node) {
     const el = node?.nodeType === 1 ? node : node?.parentElement;
@@ -1432,6 +1433,41 @@ export class Reader {
     if (this.isInsideTocSidebar(el)) return true;
     if (this.topbarNode && (el === this.topbarNode || this.topbarNode.contains?.(el))) return true;
     return !!el.closest?.('[data-htmlmemo-doc-topbar],[data-htmlmemo-doc-topbar-item]');
+  }
+  isMobileSidebarInteraction(event) {
+    if (event?.pointerType === 'touch' || event?.type?.startsWith?.('touch')) return true;
+    const win = this.host?.ownerDocument?.defaultView || this.doc?.defaultView;
+    const width = win?.innerWidth || this.viewport?.clientWidth || 0;
+    return width > 0 && width <= 760;
+  }
+  isBodyTouchTarget(node, event = null) {
+    if (this.disposed || this.preparing || this.tocDrag) return false;
+    if (event && this.isTocResizeTarget(event)) return false;
+    const el = node?.nodeType === 1 ? node : node?.parentElement;
+    if (!el || this.isInsideTocOrTopbar(el) || this.isTocResizerNode(el)) return false;
+    if (el.closest?.('#reader-menu,[data-action="toggle-sidebar"],[aria-controls="reader-nav"],[aria-controls="sidebar"],.reader-head,.topbar,#topbar,.top-bar,#top-bar,[data-htmlmemo-ui],[data-htmlmemo-reading-controls]')) return false;
+    return true;
+  }
+  dismissMobileSidebar(event, target = event?.target) {
+    if (!this.isMobileSidebarInteraction(event) || !this.isBodyTouchTarget(target, event)) return false;
+    let dismissed = false;
+    if (this.callbacks.onDismissSidebar?.()) dismissed = true;
+    if (this.documentSidebarUI?.isConnected) {
+      const compact = this.doc?.documentElement?.hasAttribute?.('data-htmlmemo-compact-ui');
+      const drawerOpen = this.doc?.documentElement?.hasAttribute?.('data-htmlmemo-sidebar-open') || this.doc?.body?.classList?.contains?.('toc-open');
+      const sidebarOpen = compact ? (this.tocResize?.sidebar?.id === 'reader-nav' ? drawerOpen : !this.tocStrip || drawerOpen) : !this.tocStrip;
+      if (sidebarOpen) {
+        this.toggleDocumentSidebar(false);
+        dismissed = true;
+      }
+    } else if (this.tocResize?.sidebar?.isConnected && (!this.tocStrip || this.doc?.body?.classList?.contains?.('toc-open'))) {
+      this.doc?.getElementById?.('reader-close')?.click();
+      this.setDocumentSidebarDrawer(false);
+      this.applyTocWidth(TOC_MIN * this.sidebarUnit(), {persist: false, snapStrip: true});
+      this.syncAfterTocResize();
+      dismissed = true;
+    }
+    return dismissed;
   }
   isInteractiveControl(node) {
     const el = node?.nodeType === 1 ? node : node?.parentElement;
@@ -1450,14 +1486,16 @@ export class Reader {
     const info = this.ensureDocumentTocResize();
     if (!info?.sidebar?.isConnected) return false;
     const {sidebar, sidebarItem} = info;
-    const target = event?.target?.nodeType === 1 ? event.target : event?.target?.parentElement;
+    const rawTarget = event?.touches?.[0]?.target || event?.target;
+    const target = rawTarget?.nodeType === 1 ? rawTarget : rawTarget?.parentElement;
     if (this.isTocResizerNode(target)) return true;
     const isStrip = sidebar.hasAttribute('data-htmlmemo-toc-strip');
     if (isStrip && target && (target === sidebar || sidebar.contains?.(target) || (sidebarItem && (target === sidebarItem || sidebarItem.contains?.(target))))) return true;
     if (!isStrip && target && target !== sidebar && target !== sidebarItem) return false;
     const rect = (sidebarItem || sidebar).getBoundingClientRect?.();
     const clientX = this.eventDocX(event);
-    return !!(rect && rect.width > 0 && Number.isFinite(clientX) && clientX >= rect.right - 10 && clientX <= rect.right + 12 && (!rect.height || event.clientY == null || (event.clientY >= rect.top - 4 && event.clientY <= rect.bottom + 4)));
+    const clientY = (event?.touches?.[0] || event?.changedTouches?.[0] || event)?.clientY;
+    return !!(rect && rect.width > 0 && Number.isFinite(clientX) && clientX >= rect.right - 10 && clientX <= rect.right + 12 && (!rect.height || clientY == null || (clientY >= rect.top - 4 && clientY <= rect.bottom + 4)));
   }
   startTocResize(event) {
     if (this.disposed || (event.button != null && event.button !== 0)) return false;

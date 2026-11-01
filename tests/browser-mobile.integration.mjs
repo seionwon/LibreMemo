@@ -394,7 +394,13 @@ test('real Chrome: Pages-only low-resolution screens keep controls reachable and
     report.longOutlineTarget=await page.evaluate('window.longOutlineProof');
     await page.click('#toolbar [data-action=palette]');await page.waitFor('!document.querySelector("#tool-popover").hidden&&!!document.querySelector("#pen-width")');
     report.longOutlineAndToolbar=true;await writeFile(join(root,'test-results/pages-only-low-resolution-long-outline.png'),await page.screenshot());
-    await page.click('[data-popover-close]');await page.waitFor('document.querySelector("#data-folder-status").textContent==="폴더 저장 완료"');assert.deepEqual(chrome.errors,[]);report.status='pass';
+    await page.click('[data-popover-close]');
+    assert.equal(await page.evaluate('document.querySelector("#sidebar").hidden'),false);
+    const bodyPoint=await page.evaluate(`(()=>{const f=document.querySelector('.document-host:not([hidden]) iframe.document-frame'),b=f.getBoundingClientRect(),s=document.querySelector('#sidebar').getBoundingClientRect();return {x:Math.min(innerWidth-12,Math.max(s.right+12,b.right-20)),y:Math.round((b.top+b.bottom)/2)};})()`);
+    await send('touchStart',[bodyPoint]);await send('touchEnd');
+    await page.waitFor('document.querySelector("#sidebar").hidden');
+    report.bodyTouchClosesSidebar=true;
+    await page.waitFor('document.querySelector("#data-folder-status").textContent==="폴더 저장 완료"');assert.deepEqual(chrome.errors,[]);report.status='pass';
   }catch(error){report.status='failed';report.error=error.stack;if(chrome){report.errors=chrome.errors;report.state=await chrome.page.evaluate('({dialog:document.querySelector("#dialog")?.textContent,popover:document.querySelector("#tool-popover")?.textContent,longOutline:window.longOutlineProof})').catch(()=>null);await writeFile(join(root,'test-results/pages-only-low-resolution-failure.png'),await chrome.page.screenshot());}throw error;}
   finally{await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,'test-results/pages-only-low-resolution.json'),JSON.stringify(report,null,2));await chrome?.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));await rm(folder,{recursive:true,force:true});}
 });

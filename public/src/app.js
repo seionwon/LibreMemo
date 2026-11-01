@@ -481,6 +481,7 @@ async function openRecord(record, prepared = null, {deferReady = false, sourceId
     onPreferenceChange:()=>dataFolder?.schedule({settingsOnly:true}),
     onTextSelection:()=>{if(activeId===tab.id)showSelectionMenu(tab.reader);},
     onSelectionDismiss:()=>{if(popoverName==='selection'||popoverName.startsWith('tool-mode-'))closePopover();},
+    onDismissSidebar:()=>{if(activeId===tab.id&&!$('#sidebar').hidden&&!document.documentElement.hasAttribute('data-app-sidebar-resizing')){closeSidebar();return true;}return false;},
     onLink:url=>safely(openBrowser)(url),onKey:handleKey,requestText:promptText,onError:showError,onNotice:message=>toast(message),
     onPaste:event=>handleImagePaste(event),onDrop:event=>handleFileDrop(event),
     onDocumentFocus:()=>{if(activeId===tab.id)void toggleReaderFocus();},
@@ -1744,7 +1745,15 @@ function bindUI() {
   $('#library-filter').oninput=renderLibrary;$('#library-sort').onchange=safely(e=>{if(libraryTrash){trashSort=e.target.value;renderLibrary();return;}const [librarySort,librarySortDirection]=e.target.value.split(':');changePreferences({librarySort,librarySortDirection});});$$('[data-library-view]').forEach(button=>button.onclick=safely(()=>changePreferences({libraryView:button.dataset.libraryView})));$('#settings-button').onclick=settingsDialog;$('#web-help-button').onclick=()=>webHelpDialog();$('#paste-button').onclick=()=>pasteTextDialog();
   $('#library-trash').onclick=toggleLibraryTrash;$('#library-empty-trash').onclick=safely(emptyLibraryTrash);$('#library-new-folder').onclick=()=>libraryFolderNameDialog();$('#library-folder-up').onclick=()=>libraryTrash?toggleLibraryTrash():navigateLibraryFolder(libraryFolderById.get(libraryFolderId)?.parentId||'');$('#library-folder-help').onclick=()=>modal(`<div class="dialog-heading"><h2>서재 폴더 사용 안내</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>${$('#library-folder-help-content').innerHTML}<div class="dialog-actions"><button class="primary-button" data-dialog-close>확인</button></div>`);bindLibraryFolderDrag();
   $('#open-example').onclick=safely(async()=>{let html=await bundledExample();if(html===null){const response=await fetch('./example.html');if(!response.ok)throw new Error('예제 문서를 불러오지 못했습니다.');html=await response.text();}await createDocument({html,title:'천천히 읽는다는 것',viewport:{width:960,height:800}});});
+  const dismissWorkspaceMobileSidebar=event=>{
+    const target=event.touches?.[0]?.target||event.target;
+    if(!target?.closest?.('#workspaces')||target.closest('#sidebar,#toolbar,#tool-popover,[data-htmlmemo-reading-controls],[data-htmlmemo-ui],.mstts-player,.mstts-panel,.mstts-select-menu'))return;
+    if(!(event.pointerType==='touch'||event.type==='touchstart'||innerWidth<=760))return;
+    if(!$('#sidebar').hidden&&!document.documentElement.hasAttribute('data-app-sidebar-resizing'))closeSidebar();
+    reader()?.dismissMobileSidebar?.(event,reader()?.doc?.body);
+  };
   document.addEventListener('keydown',handleKey);document.addEventListener('pointerdown',event=>{if(!event.target.closest('#toolbar,#tool-popover,[data-htmlmemo-reading-controls]')&&!$('#tool-popover').hidden)closePopover();});
+  for(const type of ['pointerdown','touchstart'])$('#workspaces')?.addEventListener(type,dismissWorkspaceMobileSidebar,{passive:true});
   $('#dialog').addEventListener('click',event=>{if(event.target===$('#dialog')&&!$('#dialog [data-chrome-required],#dialog [data-folder-welcome]'))$('#dialog').close();});
   // A debounced reading position alone is not an unsaved edit. Real edits and
   // in-flight folder writes still protect the user from leaving too early.

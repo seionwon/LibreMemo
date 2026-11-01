@@ -356,3 +356,26 @@ test('full pane focus fits even a saved manual zoom and restores it on exit',()=
  a.root.classList.remove('reader-focus');r.setFocusLayout(false);assert.equal(r.zoom,.5);assert.equal(r.autoFit,false);}
  finally{if(prior===undefined)delete globalThis.innerWidth;else globalThis.innerWidth=prior;}
 });
+
+test('phone document body touch dismisses open app and document sidebars while keeping sidebar and header touches open',()=>{
+ const doc=new DOMParser().parseFromString('<html><head></head><body class="toc-open"><header class="topbar"><button id="prev">이전</button></header><header class="reader-head"><button id="reader-menu" aria-controls="reader-nav">☰</button></header><nav id="reader-nav" data-htmlmemo-native-sidebar><section data-htmlmemo-doc-sidebar-ui><button data-sidebar-view="outline">목차</button></section><a id="toc-link" href="#one">1절</a></nav><main id="reader-main"><article><p id="body-text">본문 문단</p></article></main></body></html>','text/html');
+ doc.documentElement.setAttribute('data-htmlmemo-compact-ui','');doc.documentElement.setAttribute('data-htmlmemo-sidebar-open','');
+ const r=Object.create(Reader.prototype);
+ r.doc=doc;r.viewport={clientWidth:390};r.host={ownerDocument:{defaultView:{innerWidth:390}}};
+ r.tocResize={sidebar:doc.querySelector('#reader-nav'),sidebarItem:doc.querySelector('#reader-nav')};
+ r.topbarNode=doc.querySelector('.topbar');r.documentSidebarUI=doc.querySelector('[data-htmlmemo-doc-sidebar-ui]');
+ let appDismissed=0,docToggled=[];
+ r.callbacks={onDismissSidebar:()=>{appDismissed++;return true;}};
+ r.toggleDocumentSidebar=open=>{docToggled.push(open);doc.documentElement.toggleAttribute('data-htmlmemo-sidebar-open',open);doc.body.classList.toggle('toc-open',open);};
+ for(const target of [doc.querySelector('#toc-link'),doc.querySelector('[data-sidebar-view]'),doc.querySelector('#prev'),doc.querySelector('#reader-menu')]){
+  assert.equal(r.dismissMobileSidebar({type:'touchstart',pointerType:'touch',target}),false);
+ }
+ assert.equal(appDismissed,0);assert.deepEqual(docToggled,[]);
+ r.host.ownerDocument.defaultView.innerWidth=1280;r.viewport.clientWidth=1280;
+ assert.equal(r.dismissMobileSidebar({type:'pointerdown',pointerType:'mouse',target:doc.querySelector('#body-text')}),false,'wide desktop mouse click keeps side-by-side sidebar open');
+ r.host.ownerDocument.defaultView.innerWidth=390;r.viewport.clientWidth=390;
+ assert.equal(r.dismissMobileSidebar({type:'touchstart',pointerType:'touch',target:doc.querySelector('#body-text')}),true);
+ assert.equal(appDismissed,1);assert.deepEqual(docToggled,[false]);
+ assert.equal(doc.documentElement.hasAttribute('data-htmlmemo-sidebar-open'),false);
+ assert.equal(doc.body.classList.contains('toc-open'),false);
+});
