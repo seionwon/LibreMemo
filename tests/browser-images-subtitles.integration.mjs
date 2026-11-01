@@ -56,7 +56,7 @@ test('real Chrome: Pages-only image formats keep original pixels, copies, shared
 test('real Chrome: Pages-only screenshot clipboard, iframe paste, pen alignment, phone, original archive and offline reopen',{timeout:240000},async()=>{
   const env=await environment();let chrome,receiver;
   try{
-    chrome=await launchChrome();receiver=await launchChrome();const page=chrome.page;await page.navigate(env.url);await receiver.page.navigate(env.url);
+    chrome=await launchChrome();const page=chrome.page;await page.navigate(env.url);await page.click('#library-tab');await page.waitFor('document.hasFocus()');
     await page.send('Browser.grantPermissions',{origin:new URL(env.url).origin,permissions:['clipboardReadWrite','clipboardSanitizedWrite']});
     const bytes=await readFile(join(root,'tests/fixtures/images/reading.png'));
     await page.evaluate(`navigator.clipboard.write([new ClipboardItem({'image/png':new Blob([Uint8Array.from(atob(${JSON.stringify(bytes.toString('base64'))}),c=>c.charCodeAt(0))],{type:'image/png'})})])`);
@@ -66,13 +66,15 @@ test('real Chrome: Pages-only screenshot clipboard, iframe paste, pen alignment,
     const checks=[];for(const percent of [75,125,50]){await zoom(page,percent);const after=await page.evaluate(geometry);assert.equal(after.length,2);for(let i=0;i<2;i++){assert.ok(Math.abs(after[i].x-before[i].x)<.003);assert.ok(Math.abs(after[i].y-before[i].y)<.003);}checks.push(percent);}
     await page.click(control('font-larger'));await saved(page,name,'window.__mediaRecord.metadata.view.fontScale===1.1');const larger=await page.evaluate(geometry);for(let i=0;i<2;i++){assert.ok(Math.abs(larger[i].x-before[i].x)<.003);assert.ok(Math.abs(larger[i].y-before[i].y)<.003);}
     await page.click('#toolbar [data-action=select]');await page.click('[data-sidebar-view=bookmarks]');await page.click('#add-bookmark');await page.evaluate('document.querySelector("#note-text").value="스크린샷 검토 위치"');await page.click('.note-form button[value=save]');await saved(page,name,'window.__mediaRecord.metadata.bookmarks.length===1');
-    const archive=await exportDocument(page,'archive');await chooseFile(receiver.page,archive,'screenshot.librememo');await saved(receiver.page,name,'window.__mediaRecord.metadata.annotations.length===2&&window.__mediaRecord.metadata.bookmarks.length===1');assert.equal(await receiver.page.evaluate(geometry+'.length'),2);
-    const html=await exportDocument(page,'html');await chooseFile(receiver.page,html,'screenshot-shared.html');await saved(receiver.page,'screenshot-shared.html','window.__mediaRecord.metadata.annotations.length===2');assert.equal(await receiver.page.evaluate(geometry+'.length'),2);
+    const archive=await exportDocument(page,'archive');
+    const html=await exportDocument(page,'html');
     // A real keyboard paste in the iframe must reach the app and the ordinary
     // duplicate choice, without overwriting annotations on the current image.
     await page.evaluate(`${doc}.body.tabIndex=-1;${doc}.body.focus()`);
     await page.send('Input.dispatchKeyEvent',{type:'keyDown',modifiers:2,key:'v',code:'KeyV',windowsVirtualKeyCode:86});await page.send('Input.dispatchKeyEvent',{type:'keyUp',modifiers:2,key:'v',code:'KeyV',windowsVirtualKeyCode:86});
     await page.waitFor('document.querySelector("dialog[open] [data-duplicate-import]")');await page.click('[data-duplicate-import] [value=cancel]');
+    receiver=await launchChrome();await receiver.page.navigate(env.url);await chooseFile(receiver.page,archive,'screenshot.librememo');await saved(receiver.page,name,'window.__mediaRecord.metadata.annotations.length===2&&window.__mediaRecord.metadata.bookmarks.length===1');assert.equal(await receiver.page.evaluate(geometry+'.length'),2);
+    await chooseFile(receiver.page,html,'screenshot-shared.html');await saved(receiver.page,'screenshot-shared.html','window.__mediaRecord.metadata.annotations.length===2');assert.equal(await receiver.page.evaluate(geometry+'.length'),2);
     await page.send('Emulation.setDeviceMetricsOverride',{width:320,height:640,deviceScaleFactor:2,mobile:true});
     if(await page.evaluate('!document.querySelector("#sidebar").hidden'))await page.click('#close-sidebar');await zoom(page,20);await page.evaluate(doc+'.defaultView.scrollTo(0,0)');
     assert.equal(await page.evaluate('document.documentElement.scrollWidth>innerWidth'),false);assert.equal(await page.evaluate(doc+'.getElementById("librememo-image").naturalWidth'),1600);await writeFile(join(root,'test-results/pages-only-screenshot-320.png'),await page.screenshot());
@@ -96,7 +98,7 @@ test('real Chrome: Pages-only subtitle formats share time outlines, text annotat
       await page.click('#sidebar [data-heading="1"]');assert.equal(await page.evaluate(doc+'.querySelector("#subtitle-section-1").getClientRects().length>0'),true);
       const selected=await page.evaluate(`(()=>{const d=${doc},walk=d.createTreeWalker(d.querySelector('[data-subtitles]'),NodeFilter.SHOW_TEXT);let n;while(n=walk.nextNode()){const at=n.textContent.indexOf('한국어');if(at<0)continue;n.parentElement.scrollIntoView({block:'center'});const range=d.createRange();range.setStart(n,at);range.setEnd(n,at+3);d.getSelection().removeAllRanges();d.getSelection().addRange(range);d.dispatchEvent(new Event('selectionchange'));return d.getSelection().toString();}})()`);assert.equal(selected,'한국어');
       await page.click('#toolbar [data-action=highlight]');await saved(page,name,'window.__mediaRecord.metadata.annotations.length===1');assert.equal(await page.evaluate(doc+'.querySelectorAll("[data-htmlmemo-mark]").length>0'),true);
-      await page.click('[data-sidebar-view=search]');await page.evaluate('const input=document.querySelector("#book-search");input.value="두 번째";input.dispatchEvent(new Event("input",{bubbles:true}));');await page.waitFor('document.querySelector("[data-whole-search-index]")');await page.click('[data-whole-search-index="0"]');
+      await page.click('[data-sidebar-view=search]');await page.evaluate('(()=>{const input=document.querySelector("#book-search");input.value="두 번째";input.dispatchEvent(new Event("input",{bubbles:true}));})()');await page.waitFor('document.querySelector("[data-whole-search-index]")');await page.click('[data-whole-search-index="0"]');
       results.push({format,original:true,outline:2,highlight:true,search:true});
     }
     const archive=await exportDocument(page,'archive');await chooseFile(receiver.page,archive,'captions.librememo');await saved(receiver.page,'자막.ssa','window.__mediaRecord.metadata.annotations.length===1');assert.equal(await receiver.page.evaluate(doc+'.querySelectorAll("[data-htmlmemo-mark]").length>0'),true);

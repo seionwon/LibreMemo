@@ -40,7 +40,7 @@ for(const [format,source] of Object.entries(subtitleFixtures))test('subtitles '+
   const warnings=[],cues=parseSubtitles(source,format,warnings);assert.equal(cues[0].start,1250);assert.equal(cues.at(-1).start,312000);assert.ok(cues[0].text.includes('한국어'));assert.deepEqual(warnings,[]);
   const file=new File([source],'lesson.'+format),local=await readLocalHTML(file,{identify:false});assert.equal(local.originalFile,file);assert.equal(local.snapshot.officeFormat,format);assert.equal(local.handle,null);
   const rendered=await renderOffice(new TextEncoder().encode(source),format,file.name),parsed=parseHTML(rendered.html),doc=documentFor(parsed.html),index=textIndex(doc),start=index.text.indexOf('한국어');
-  assert.equal(rendered.allowScripts,false);assert.equal(doc.querySelectorAll('h2').length,2);assert.ok(doc.querySelector('.subtitle-time[data-tts-skip]'));assert.ok(start>=0);
+  assert.equal(rendered.allowScripts,false);assert.equal(doc.querySelectorAll('h2').length,2);assert.equal(doc.querySelector('.subtitle-time[data-tts-skip]').textContent,'00:00:01.250 → 00:00:03.000');assert.ok(start>=0);
   wrapOffsets(doc,start,start+3,{'data-htmlmemo-mark':'caption'},'background:#ff0',index);
   parsed.metadata.annotations=[{id:'caption',type:'highlight',color:'#ffee00',opacity:.3,width:2,textAnchor:{start,end:start+3,quote:'한국어'}}];parsed.metadata.bookmarks=[{id:'b',title:'두 번째',top:200,left:0}];
   const archive=await createDocumentArchive({original:file,name:file.name,reading:new Blob([parsed.html],{type:'text/html'}),metadata:parsed.metadata}),restored=await readDocumentArchive(archive);

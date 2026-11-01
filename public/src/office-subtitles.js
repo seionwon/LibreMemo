@@ -6,7 +6,7 @@ function clock(value){
   if(!m||+m[2]>=60||+m[3]>=60)return null;
   return (+m[1]||0)*3600000+(+m[2])*60000+(+m[3])*1000+Number(m[4].padEnd(3,'0'));
 }
-export function subtitleTime(ms){const seconds=Math.floor(ms/1000),pad=n=>String(n).padStart(2,'0');return pad(Math.floor(seconds/3600))+':'+pad(Math.floor(seconds/60)%60)+':'+pad(seconds%60);}
+export function subtitleTime(ms,precise=false){const seconds=Math.floor(ms/1000),pad=n=>String(n).padStart(2,'0');return pad(Math.floor(seconds/3600))+':'+pad(Math.floor(seconds/60)%60)+':'+pad(seconds%60)+(precise?'.'+String(ms%1000).padStart(3,'0'):'');}
 const entities={amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",nbsp:' ',lrm:'\u200e',rlm:'\u200f'};
 function unescape(value){return value.replace(/&(#x[0-9a-f]{1,6}|#\d{1,7}|amp|lt|gt|quot|apos|nbsp|lrm|rlm);/gi,(whole,key)=>{if(key[0]!=='#')return entities[key.toLowerCase()];const number=parseInt(key.slice(/^#x/i.test(key)?2:1),/^#x/i.test(key)?16:10);return number>0&&number<=0x10ffff&&!(number>=0xd800&&number<=0xdfff)?String.fromCodePoint(number):'�';});}
 function cueText(value){
@@ -81,7 +81,7 @@ export function renderSubtitles(text,format,warnings=[]){
   for(const cue of cues){
     const next=Math.floor(cue.start/300000);
     if(next!==group){if(group>=0)parts.push('</section>');group=next;parts.push('<section id="subtitle-section-'+group+'"><h2 data-tts-skip>'+subtitleTime(group*300000)+' – '+subtitleTime((group+1)*300000)+'</h2>');}
-    parts.push('<div class="subtitle-cue" id="subtitle-cue-'+cue.index+'"><p class="subtitle-time" data-tts-skip>'+subtitleTime(cue.start)+(cue.end!=null?' → '+subtitleTime(cue.end):'')+'</p><p class="subtitle-text">'+(cue.speaker?'<strong>'+esc(cue.speaker)+'</strong> · ':'')+esc(cue.text).replace(/\n/g,'<br>')+'</p></div>');
+    parts.push('<div class="subtitle-cue" id="subtitle-cue-'+cue.index+'"><p class="subtitle-time" data-tts-skip>'+subtitleTime(cue.start,true)+(cue.end!=null?' → '+subtitleTime(cue.end,true):'')+'</p><p class="subtitle-text">'+(cue.speaker?'<strong>'+esc(cue.speaker)+'</strong> · ':'')+esc(cue.text).replace(/\n/g,'<br>')+'</p></div>');
   }
   parts.push('</section></article>');return parts.join('');
 }
