@@ -81,15 +81,7 @@ function clearReaderSidebarArtifacts(root) {
   // Several short-lived reader builds added controls and layout overrides to
   // the source document itself.  Clear only those namespaced artifacts when
   // opening or exporting a file, leaving the document's real TOC untouched.
-  root.querySelector?.('#htmlmemo-toc-toggle-style')?.remove();
-  root.querySelector?.('#htmlmemo-sidebar-style')?.remove();
-  root.querySelector?.('#htmlmemo-toc-resize-style')?.remove();
-  root.querySelector?.('#htmlmemo-doc-sidebar-style')?.remove();
-  root.querySelector?.('#htmlmemo-reading-controls-style')?.remove();
-  root.querySelector?.('#htmlmemo-reading-font-style')?.remove();
-  root.querySelector?.('#htmlmemo-reading-theme-style')?.remove();
-  for(const paint of root.querySelectorAll?.('[data-htmlmemo-tts-paint]')||[])paint.remove();
-  for(const controls of root.querySelectorAll?.('[data-htmlmemo-reading-controls]')||[])controls.remove();
+  for(const node of root.querySelectorAll?.('#htmlmemo-toc-toggle-style,#htmlmemo-sidebar-style,#htmlmemo-toc-resize-style,#htmlmemo-doc-sidebar-style,#htmlmemo-reading-controls-style,#htmlmemo-reading-font-style,#htmlmemo-reading-theme-style,[data-htmlmemo-tts-paint],[data-htmlmemo-reading-controls]')||[])node.remove();
   for(const group of root.querySelectorAll?.('[data-htmlmemo-reading-controls-group]')||[]){
     group.removeAttribute('data-htmlmemo-reading-controls-group');group.style?.removeProperty('--htmlmemo-controls-shift');
     if(group.hasAttribute('style')&&!group.getAttribute('style')?.trim())group.removeAttribute('style');
@@ -100,13 +92,11 @@ function clearReaderSidebarArtifacts(root) {
     if(slot)slot.replaceWith(part);else part.closest('[data-htmlmemo-native-sidebar]')?.append(part);
     part.removeAttribute('data-htmlmemo-book-search-part');
   }
-  for(const slot of root.querySelectorAll?.('[data-htmlmemo-book-search-slot]')||[])slot.remove();
+  for(const node of root.querySelectorAll?.('[data-htmlmemo-book-search-slot],[data-htmlmemo-doc-sidebar-ui],[data-htmlmemo-toc-toggle],[data-htmlmemo-toc-resizer]')||[])node.remove();
   for(const group of root.querySelectorAll?.('[data-htmlmemo-book-search-open]')||[]){group.toggleAttribute('open',group.getAttribute('data-htmlmemo-book-search-open')==='true');group.removeAttribute('data-htmlmemo-book-search-open');}
-  for(const panel of root.querySelectorAll?.('[data-htmlmemo-doc-sidebar-ui]')||[])panel.remove();
   for(const title of root.querySelectorAll?.('[data-htmlmemo-redundant-toc-title]')||[])title.removeAttribute('data-htmlmemo-redundant-toc-title');
   for(const warning of root.querySelectorAll?.('[data-htmlmemo-security-warning]')||[])warning.removeAttribute('data-htmlmemo-security-warning');
   for(const sidebar of root.querySelectorAll?.('[data-htmlmemo-native-sidebar],[data-htmlmemo-sidebar-view]')||[]){sidebar.removeAttribute('data-htmlmemo-native-sidebar');sidebar.removeAttribute('data-htmlmemo-sidebar-view');}
-  for (const element of root.querySelectorAll?.('[data-htmlmemo-toc-toggle],[data-htmlmemo-toc-resizer]') || []) element.remove();
   const nodes = [root, ...(root.querySelectorAll?.('[data-htmlmemo-toc-active],[data-htmlmemo-toc-main],[data-htmlmemo-toc-collapsed],[data-htmlmemo-sidebar-folded],[data-htmlmemo-sidebar-grid],[data-htmlmemo-sidebar-grid-item],[data-htmlmemo-sidebar-flex],[data-htmlmemo-toc-sidebar],[data-htmlmemo-toc-item],[data-htmlmemo-toc-strip],[data-htmlmemo-toc-item-strip],[data-htmlmemo-toc-resizer-bound],[data-htmlmemo-toc-resizer-bound-left],[data-htmlmemo-toc-resizing],[data-htmlmemo-topbar-active],[data-htmlmemo-doc-topbar],[data-htmlmemo-doc-topbar-item],[data-htmlmemo-topbar-grid],[data-htmlmemo-topbar-pad],[data-htmlmemo-topbar-offset],[data-htmlmemo-scroll-host],[style*="--htmlmemo-toc-grid-columns"],[style*="--htmlmemo-toc-width"],[style*="--htmlmemo-topbar-grid-rows"]') || [])];
   for (const element of nodes) {
     if (!element?.removeAttribute) continue;
@@ -142,12 +132,16 @@ export function savedMainFrame(doc) {
   }
   return frame;
 }
+const sanitizeDropTags=new Set(['object','embed','frame','frameset','base']);
+const sanitizeDropAttrs=new Set(['autofocus','ping','formaction']);
+const sanitizeUrlAttrs=new Set(['href','src','xlink:href','action']);
+const anchorSkipTags=new Set(['style','meta','link','template']);
 function* sanitizeTree(root, source, depth = 0, allowScripts = false, preserveData = false) {
   const mainFrame=savedMainFrame(root);
   for (const element of root.querySelectorAll('*')) {
     yield;
     const tag = element.localName;
-    if ((!allowScripts && tag === 'script' && !(preserveData&&/^(?:application\/json|application\/octet-stream)$/.test(element.type))) || ['object','embed','frame','frameset','base'].includes(tag)) { element.remove(); continue; }
+    if ((!allowScripts && tag === 'script' && !(preserveData&&/^(?:application\/json|application\/octet-stream)$/.test(element.type))) || sanitizeDropTags.has(tag)) { element.remove(); continue; }
     if (tag === 'iframe') {
       const html=element.getAttribute('srcdoc');
       if(!html||depth>=3){element.remove();continue;}
@@ -155,17 +149,18 @@ function* sanitizeTree(root, source, depth = 0, allowScripts = false, preserveDa
       element.setAttribute('srcdoc',nested.documentElement.outerHTML);element.setAttribute('sandbox',main?'allow-same-origin':allowScripts?'allow-scripts':'');element.removeAttribute('src');element.removeAttribute('allow');
     }
     if (tag === 'meta' && /^(refresh|content-security-policy)$/i.test(element.getAttribute('http-equiv') || '')) { element.remove(); continue; }
-    for (const attr of [...element.attributes]) {
-      if (!allowScripts && /^on/i.test(attr.name) || ['autofocus','ping','formaction'].includes(attr.name) || attr.name==='srcdoc'&&tag!=='iframe') element.removeAttribute(attr.name);
-      if (['href','src','xlink:href','action'].includes(attr.name)) {
-        const value = attr.value.trim().replace(/[\u0000-\u0020]/g, '');
-        if ((!allowScripts && /^javascript:/i.test(value) || /^vbscript:/i.test(value)) || /^(?:data:text\/html|data:image\/svg\+xml)/i.test(value) && !['img','image'].includes(tag)) element.removeAttribute(attr.name);
-        else if (tag === 'a' && attr.name === 'href' && !value.startsWith('#') && source && !(allowScripts && /^javascript:/i.test(value))) {
-          try { const resolved = new URL(attr.value, source); if (['http:','https:','mailto:','tel:'].includes(resolved.protocol)) element.setAttribute('href', resolved.href); else element.removeAttribute('href'); } catch { element.removeAttribute('href'); }
+    const attrs = element.attributes;
+    for (let i = attrs.length - 1; i >= 0; i--) {
+      const attr = attrs[i], name = attr.name;
+      if (name === 'contenteditable' || (!allowScripts && /^on/i.test(name)) || sanitizeDropAttrs.has(name) || (name === 'srcdoc' && tag !== 'iframe')) { element.removeAttribute(name); continue; }
+      if (sanitizeUrlAttrs.has(name)) {
+        const raw = attr.value, value = raw.trim().replace(/[\u0000-\u0020]/g, '');
+        if ((!allowScripts && /^javascript:/i.test(value) || /^vbscript:/i.test(value)) || /^(?:data:text\/html|data:image\/svg\+xml)/i.test(value) && !['img','image'].includes(tag)) element.removeAttribute(name);
+        else if (tag === 'a' && name === 'href' && !value.startsWith('#') && source && !(allowScripts && /^javascript:/i.test(value))) {
+          try { const resolved = new URL(raw, source); if (['http:','https:','mailto:','tel:'].includes(resolved.protocol)) element.setAttribute('href', resolved.href); else element.removeAttribute('href'); } catch { element.removeAttribute('href'); }
         }
       }
     }
-    element.removeAttribute('contenteditable');
     if (tag === 'form') { element.removeAttribute('action'); if (!allowScripts) element.setAttribute('inert', ''); }
     if (tag === 'template') yield* sanitizeTree(element.content, source, depth,allowScripts,preserveData);
   }
@@ -191,9 +186,9 @@ export async function prepareLoadedHTML(doc, defaults = {}, isCancelled = () => 
     for (;;) {
       if (isCancelled()) throw new DOMException('문서 열기가 취소되었습니다.','AbortError');
       const start = performance.now();
-      for (let count=0;count<4000;count++) {
+      for (let count=0;count<65536;count++) {
         const step=work.next();if(step.done)return step.value;
-        if((count&255)===255&&performance.now()-start>=8)break;
+        if((count&511)===511&&performance.now()-start>=12)break;
       }
       // Yield between bounded batches so the app stays responsive while opening.
       await new Promise(resolve=>setTimeout(resolve,0));
@@ -215,8 +210,11 @@ function* prepareHTML(html, defaults, {includeMetadata = false, document: loaded
   allowScripts = (allowScripts ?? defaults.execution?.allowScripts ?? embedded.execution?.allowScripts ?? false) === true;
   const book = inspectBookDocument(doc);
   if (book?.complete && !allowScripts) throw new Error('이 책은 화면 캡처로 보관하면 본문과 목차가 사라집니다. 완전한 원본 HTML 파일을 가져와 주세요.');
-  clearReaderSidebarArtifacts(doc);
-  cleanAnnotations(doc);
+  const mayHaveArtifacts = typeof html !== 'string' || html.includes('htmlmemo-');
+  if (mayHaveArtifacts) {
+    clearReaderSidebarArtifacts(doc);
+    cleanAnnotations(doc);
+  }
   yield* sanitizeTree(doc, source,0,allowScripts);
   for(const meta of doc.head.querySelectorAll('meta[charset],meta[http-equiv]'))if(meta.hasAttribute('charset')||/^content-type$/i.test(meta.getAttribute('http-equiv')))meta.remove();
   const charset=doc.createElement('meta');charset.setAttribute('charset','utf-8');doc.head.prepend(charset);
@@ -224,25 +222,35 @@ function* prepareHTML(html, defaults, {includeMetadata = false, document: loaded
   csp.content = allowScripts ? SCRIPT_CSP : LOCAL_CSP;
   doc.head.prepend(csp);
   let n = 0;
-  doc.body.setAttribute('data-htmlmemo-anchor', 'body');
   // Exported files can already contain targets created by the document's
   // scripts. Renumbering them disconnects their saved relative coordinates.
   const reservedAnchors = new Set();
-  for (const element of doc.body.querySelectorAll('[data-htmlmemo-anchor]')) {
-    yield;
-    const key = element.getAttribute('data-htmlmemo-anchor');
-    if (/^(?:n|js)\d+$/.test(key)) reservedAnchors.add(key);
+  if (mayHaveArtifacts && doc.body.querySelector('[data-htmlmemo-anchor]')) {
+    for (const element of doc.body.querySelectorAll('[data-htmlmemo-anchor]')) {
+      yield;
+      const key = element.getAttribute('data-htmlmemo-anchor');
+      if (/^(?:n|js)\d+$/.test(key)) reservedAnchors.add(key);
+    }
   }
-  const assignedAnchors = new Set(['body']);
-  for (const element of doc.body.querySelectorAll('*')) {
-    yield;
-    if (['style','meta','link','template'].includes(element.localName)) continue;
-    const key = element.getAttribute('data-htmlmemo-anchor');
-    if (reservedAnchors.has(key) && !assignedAnchors.has(key)) assignedAnchors.add(key);
-    else {
-      while (reservedAnchors.has('n' + n)) n++;
-      const next = 'n' + n++;
-      element.setAttribute('data-htmlmemo-anchor', next);assignedAnchors.add(next);
+  doc.body.setAttribute('data-htmlmemo-anchor', 'body');
+  if (reservedAnchors.size === 0) {
+    for (const element of doc.body.querySelectorAll('*')) {
+      yield;
+      if (anchorSkipTags.has(element.localName)) continue;
+      element.setAttribute('data-htmlmemo-anchor', 'n' + n++);
+    }
+  } else {
+    const assignedAnchors = new Set(['body']);
+    for (const element of doc.body.querySelectorAll('*')) {
+      yield;
+      if (anchorSkipTags.has(element.localName)) continue;
+      const key = element.getAttribute('data-htmlmemo-anchor');
+      if (reservedAnchors.has(key) && !assignedAnchors.has(key)) assignedAnchors.add(key);
+      else {
+        while (reservedAnchors.has('n' + n)) n++;
+        const next = 'n' + n++;
+        element.setAttribute('data-htmlmemo-anchor', next);assignedAnchors.add(next);
+      }
     }
   }
   const viewport = embedded.viewport || defaults.viewport || {width: 1100, height: 800};
@@ -297,10 +305,17 @@ export function serializeHTML(doc, metadata) {
   return '<!doctype html>\n' + clone.outerHTML;
 }
 function textWalker(doc,root) {
+  const hasSvg = root?.localName === 'svg' || !!root?.querySelector?.('svg');
+  let lastParent = null, lastAccepted = false;
   return doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
-      if (!node.textContent || node.parentElement?.closest('script,style,noscript,textarea,template,[data-htmlmemo-ui]') || node.parentElement?.closest('svg')&&!node.parentElement?.closest('foreignObject [data-office-text]')) return NodeFilter.FILTER_REJECT;
-      return NodeFilter.FILTER_ACCEPT;
+      if (!node.textContent) return NodeFilter.FILTER_REJECT;
+      const parent = node.parentElement;
+      if (!parent) return NodeFilter.FILTER_REJECT;
+      if (parent === lastParent) return lastAccepted ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      lastParent = parent;
+      lastAccepted = !parent.closest('script,style,noscript,textarea,template,[data-htmlmemo-ui]') && (!hasSvg || !parent.closest('svg') || !!parent.closest('foreignObject [data-office-text]'));
+      return lastAccepted ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
     },
   });
 }
@@ -313,7 +328,7 @@ export async function textIndexAsync(doc,root=doc.body,cancelled=()=>false) {
   const nodes=[],parts=[],walker=textWalker(doc,root);let length=0,count=0,start=performance.now();
   while(walker.nextNode()){
     const node=walker.currentNode,value=node.textContent;nodes.push({node,start:length,end:length+value.length});parts.push(value);length+=value.length;
-    if((++count&255)===0&&performance.now()-start>=8){await new Promise(resolve=>setTimeout(resolve,0));if(cancelled())return null;start=performance.now();}
+    if((++count&511)===0&&performance.now()-start>=12){await new Promise(resolve=>setTimeout(resolve,0));if(cancelled())return null;start=performance.now();}
   }
   return cancelled()?null:{nodes,text:parts.join('')};
 }

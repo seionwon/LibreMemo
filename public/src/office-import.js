@@ -8,7 +8,7 @@ export async function prepareOffice(snapshot,onProgress=()=>{}){
     const finish=(error,result)=>{
       clearTimeout(timer);worker?.terminate();
       if(error){reject(error);return;}
-      if(typeof result?.html==='string'&&result.html.length>=4*1024*1024)result={...result,html:null,file:new Blob([result.html],{type:'text/html;charset=utf-8'})};
+      if(typeof result?.html==='string'&&result.html.length>=1024*1024)result={...result,html:null,file:new Blob([result.html],{type:'text/html;charset=utf-8'})};
       resolve(result);
     };
     try{

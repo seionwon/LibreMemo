@@ -1803,6 +1803,7 @@ export class Reader {
         }
       }
       this.tocChecked = false;
+      this.cachedOutline = null;
       this.ensureDocumentTocResize();
       const sidebar=this.tocResize?.sidebar;
       if(sidebar&&unique.some(root=>sidebar.contains(root)||root.contains(sidebar)))this.syncTocSecurityWarnings();
@@ -3167,11 +3168,13 @@ export class Reader {
   }
   outline() {
     if(this.pdf)return this.pdf.entries||[];
+    if(this.cachedOutlineDoc===this.doc&&this.cachedOutline?.length&&this.cachedOutline.every(e=>e.node?.isConnected))return this.cachedOutline;
+    this.cachedOutlineDoc=this.doc;
     const slides=[...this.doc.querySelectorAll('article[data-office-slides] > .office-slide')];
-    if(slides.length)return slides.map((node,index)=>({node,level:1,title:this.slideOutlineTitle(node,index,slides.length)}));
+    if(slides.length)return (this.cachedOutline=slides.map((node,index)=>({node,level:1,title:this.slideOutlineTitle(node,index,slides.length)})));
     const entries=[...(this.doc.querySelector('template[data-ebook-outline]')?.content.querySelectorAll('a[href]')||[])].map(a=>({node:this.doc.getElementById(a.getAttribute('href').slice(1)),level:clamp(Number(a.dataset.level)||1,1,20),title:a.textContent.trim()})).filter(e=>e.node&&e.title);
-    if(entries.length)return entries;
-    return [...this.doc.querySelectorAll('h1,h2,h3,h4,h5,h6')].filter(n=>n.textContent.trim()&&!n.closest('[data-htmlmemo-ui]')).map(node=>({node,level:Number(node.localName[1]),title:node.textContent.trim()}));
+    if(entries.length)return (this.cachedOutline=entries);
+    return (this.cachedOutline=[...this.doc.querySelectorAll('h1,h2,h3,h4,h5,h6')].filter(n=>n.textContent.trim()&&!n.closest('[data-htmlmemo-ui]')).map(node=>({node,level:Number(node.localName[1]),title:node.textContent.trim()})));
   }
   addBookmark(title) {
     if(this.pdf){this.metadata.bookmarks.push({id:uid(),title,top:this.scrollTop/this.zoom,left:this.scrollLeft/this.zoom,...this.pdf.bookmarkLocation()});this.callbacks.onChange?.();return;}
