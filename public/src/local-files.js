@@ -2,10 +2,11 @@ import { LOCAL_CSP, SCRIPT_CSP, parseHTML } from './document.js';
 import { readMHTML } from './mhtml.js';
 import { isPDFFile, verifyPDF, PDF_ARCHIVE_MARKER, readPDFArchive } from './pdf-document.js';
 import {documentExtension,officeFormat,verifyOffice} from './office-formats.js';
+import {imageType,imageFileSize} from './image-formats.js';
 
 const isMHTML = file => /\.(?:mhtml|mht)$/i.test(file.name||'') || /^(?:multipart\/related|application\/x-mimearchive)(?:;|$)/i.test(file.type||'');
 const hasDocumentExtension = file => !!documentExtension(file?.name)||/\.librememo$/i.test(file?.name||'');
-export const isLocalHTMLFile = file => !!file && (isPDFFile(file)||hasDocumentExtension(file)||officeFormat(file) || /^(?:text\/html|multipart\/related|application\/x-mimearchive)(?:;|$)/i.test(file.type||''));
+export const isLocalHTMLFile = file => !!file && (isPDFFile(file)||hasDocumentExtension(file)||officeFormat(file)||imageType(file) || /^(?:text\/html|multipart\/related|application\/x-mimearchive)(?:;|$)/i.test(file.type||''));
 export function htmlExportName(name, annotations = false) {
   const value=String(name||'문서.html'),ext=documentExtension(value);return (ext?value.slice(0,-ext.length-1):value)+(annotations?'-주석':'')+'.html';
 }
@@ -103,7 +104,7 @@ export async function findLocalDuplicates(local, records, loadRecord) {
 export async function readLocalHTML(input, {native = false, allowScripts = false, identify = true} = {}) {
   const originalHandle = input?.kind === 'file' && typeof input.getFile === 'function' ? input : null;
   const file = originalHandle ? await originalHandle.getFile() : input;
-  if (!isLocalHTMLFile(file) || typeof file.text !== 'function') throw new Error('HTML, PDF, HWP·HWPX·HML, Office, OpenDocument, CSV·TSV, Markdown 또는 텍스트·JSON 파일을 선택해주세요.');
+  if (!isLocalHTMLFile(file) || typeof file.text !== 'function') throw new Error('HTML, PDF, HWP·HWPX·HML, Office, 전자책, 이미지·자막 등 지원하는 파일을 선택해주세요.');
   if(/\.librememo$/i.test(file.name||'')){
     const {readDocumentArchive}=await import('./document-archive.js');
     const archive=await readDocumentArchive(file),metadata=archive.metadata;
@@ -118,6 +119,11 @@ export async function readLocalHTML(input, {native = false, allowScripts = false
       snapshot={...local.snapshot,title:metadata.title,archiveMetadata:metadata};
     }
     return {snapshot,name:archive.original.name,handle:null,originalHandle,originalFile:archive.original,originalExact:archive.manifest.original.exact,originalReading:archive.manifest.reading.path===archive.manifest.original.path,sourceIdentity:originalIdentity,importArchiveIdentity};
+  }
+  if(imageType(file)){
+    imageFileSize(file);
+    const local={snapshot:{image:file,title:file.name},name:file.name,handle:null,originalHandle,originalFile:file,sourceIdentity:identify?await localFileIdentity(file):null,diskStamp:originalHandle?{modified:file.lastModified,size:file.size}:null};
+    localSources.set(local,file);return local;
   }
   const format=officeFormat(file);
   if(format){

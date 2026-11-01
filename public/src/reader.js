@@ -434,6 +434,10 @@ export class Reader {
       return;
     }
     this.bound = true;
+    // Clipboard/drop events inside the document iframe do not bubble to the app.
+    this.doc.addEventListener('paste',event=>this.callbacks.onPaste?.(event));
+    this.doc.addEventListener('dragover',event=>{if([...event.dataTransfer?.types||[]].includes('Files'))event.preventDefault();});
+    this.doc.addEventListener('drop',event=>this.callbacks.onDrop?.(event));
     this.startFontObserver();
     this.doc.addEventListener('wheel', event => this.forwardWheel(event), {capture:true,passive:false});
     this.doc.addEventListener('touchstart', event => this.startTouchScroll(event), {capture:true,passive:false});
@@ -1041,7 +1045,7 @@ export class Reader {
     this.readingFontSize ||= Number.parseFloat(this.doc.defaultView?.getComputedStyle?.(this.doc.body)?.fontSize)||18;
     let style=this.doc.getElementById('htmlmemo-reading-font-style');
     if(!style){style=this.doc.createElement('style');style.id='htmlmemo-reading-font-style';style.setAttribute('data-htmlmemo-ui','');this.doc.head.append(style);}
-    const css='body{font-size:'+(this.readingFontSize*scale).toFixed(3)+'px!important}article[data-office-slides]>.office-slide,article[data-office-pages]>.office-page,article[data-ebook]>.office-page,article[data-ebook]>.ebook-comic-page{max-width:'+(scale*100)+'%}';if(style.textContent!==css)style.textContent=css;
+    const css='body{font-size:'+(this.readingFontSize*scale).toFixed(3)+'px!important}article[data-office-slides]>.office-slide,article[data-office-pages]>.office-page,article[data-ebook]>.office-page,article[data-ebook]>.ebook-comic-page{max-width:'+(scale*100)+'%}'+(this.doc.querySelector('article[data-librememo-image]')?'article[data-librememo-image]{width:'+((this.metadata.viewport?.width||this.naturalWidth||1100)*scale)+'px;max-width:none}':'');if(style.textContent!==css)style.textContent=css;
   }
   setReadingFontScale(value) {
     if(!Number.isFinite(value)||this.disposed||this.preparing||this.topbarNode?.isConnected)return false;

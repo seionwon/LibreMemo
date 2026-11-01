@@ -129,6 +129,45 @@
         ],
         "application/zip": [
           ".librememo"
+        ],
+        "image/png": [
+          ".png",
+          ".apng"
+        ],
+        "image/jpeg": [
+          ".jpg",
+          ".jpeg",
+          ".jpe",
+          ".jfif"
+        ],
+        "image/webp": [
+          ".webp"
+        ],
+        "image/avif": [
+          ".avif"
+        ],
+        "image/gif": [
+          ".gif"
+        ],
+        "image/bmp": [
+          ".bmp"
+        ],
+        "image/svg+xml": [
+          ".svg"
+        ],
+        "application/x-subrip": [
+          ".srt"
+        ],
+        "text/vtt": [
+          ".vtt"
+        ],
+        "application/x-sami": [
+          ".smi",
+          ".sami"
+        ],
+        "text/x-ssa": [
+          ".ass",
+          ".ssa"
         ]
       }
     }

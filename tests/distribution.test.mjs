@@ -267,7 +267,7 @@ test('the settings icon preserves library, web opening, HTML import, app deliver
   assert.equal(doc.querySelector('#save-page').previousElementSibling.id,'library-tab');
   assert.equal(doc.querySelector('#library-tab').textContent,'');assert.equal(doc.querySelector('#library-tab').title,'내 서재');
   for(const id of ['#library-tab','#settings-button','#save-page'])assert.ok(doc.querySelector(id).closest('header'));
-  assert.deepEqual([...doc.querySelectorAll('#library .hero-actions button')].map(button=>button.id),['hero-import','paste-button']);
+  assert.deepEqual([...doc.querySelectorAll('#library .hero-actions button')].map(button=>button.id),['hero-import','paste-button','image-paste-button']);
   assert.ok(doc.querySelector('#hero-import').closest('#library'));assert.equal(doc.querySelector('#hero-import').textContent,'파일 가져오기');
   assert.equal(!!doc.querySelector('#choose-folder,#menu-folder'),false);
   assert.equal(doc.querySelector('#library-tab').getAttribute('aria-current'),'page');

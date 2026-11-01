@@ -6,6 +6,7 @@ import { Reader } from './reader.js';
 import { preparePDF, isPDFDocument } from './pdf-document.js';
 import {prepareOffice} from './office-import.js';
 import {OFFICE_MIMES} from './office-formats.js';
+import {IMAGE_MIMES,pastedImages,clipboardImageFile,isImagePasteTarget} from './image-formats.js';
 import { listDocuments, getDocument, trashDocument, restoreDocument, deleteDocument, deleteTrashedDocuments, getSetting, setSetting, saveDocumentHTML, listRevisionPeriods, listRevisionDay, adjacentRevisionDay, getRevision, putDocumentRevision, checkpointAnnotations, putDocumentView, putDocumentSourceIdentity, writeExternalHTML, updateLibraryFolders, onStorageChange, readLibrary } from './storage.js';
 import {readWebPage,pastedPage,PASTE_LIMIT,isWebSearch,BrowserTabs} from './web.js';
 import { readLocalHTML, droppedHTMLFiles, findLocalDuplicates, identifyLocalFile, htmlExportName } from './local-files.js';
@@ -45,7 +46,7 @@ const reader = () => active()?.reader;
 const savePicker = () => typeof window.showSaveFilePicker === 'function';
 const openPicker = () => typeof window.showOpenFilePicker === 'function';
 const htmlTypes = [{description:'HTML 문서',accept:{'text/html':['.html','.htm']}}];
-const importTypes = [{description:'문서 · 스프레드시트 · 슬라이드',accept:{'text/html':['.html','.htm'],'multipart/related':['.mhtml','.mht'],'application/x-mimearchive':['.mhtml','.mht'],'application/pdf':['.pdf'],'application/zip':['.librememo'],...OFFICE_MIMES}}];
+const importTypes = [{description:'문서 · 이미지 · 스프레드시트 · 슬라이드',accept:{'text/html':['.html','.htm'],'multipart/related':['.mhtml','.mht'],'application/x-mimearchive':['.mhtml','.mht'],'application/pdf':['.pdf'],'application/zip':['.librememo'],...OFFICE_MIMES,...IMAGE_MIMES}}];
 const safely = fn => (...args) => { try { Promise.resolve(fn(...args)).catch(showError); } catch(error) { showError(error); } };
 function toast(message, error = false) { const el=$('#toast'),security=isSecurityWarning(message);el.setAttribute('role',security?'alert':'status');el.textContent=message;el.classList.toggle('error',error);el.classList.toggle('security-warning',security);el.hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.hidden=true,error||security?6500:3500); }
 function showError(error) { if (error?.name !== 'AbortError') toast(error?.message || String(error),true); }
@@ -481,6 +482,7 @@ async function openRecord(record, prepared = null, {deferReady = false, sourceId
     onTextSelection:()=>{if(activeId===tab.id)showSelectionMenu(tab.reader);},
     onSelectionDismiss:()=>{if(popoverName==='selection'||popoverName.startsWith('tool-mode-'))closePopover();},
     onLink:url=>safely(openBrowser)(url),onKey:handleKey,requestText:promptText,onError:showError,onNotice:message=>toast(message),
+    onPaste:event=>handleImagePaste(event),onDrop:event=>handleFileDrop(event),
     onDocumentFocus:()=>{if(activeId===tab.id)void toggleReaderFocus();},
     onReadingAction:(action,button)=>{if(activeId===tab.id)toolAction(action,button);},
     onSidebarView:(mode,panel,documentReader)=>renderSidebar(mode,{panel,embedded:true,documentReader}),
@@ -550,7 +552,8 @@ async function createDocument(snapshot, handle = null, name = null, local = {}) 
   // Attach a rejection handler now; openRecord awaits it before baseline save.
   const identity=identifyLocalFile(local);identity.catch(()=>{});
   const office=!!snapshot.office;if(office){toast('문서를 읽는 중…');snapshot=await prepareOffice(snapshot);}
-  const parsed=snapshot.pdf?preparePDF(snapshot.pdf,{title:snapshot.title,metadata:snapshot.metadata,freshAnnotations:!!local.freshAnnotations}):snapshot.file ? {...parseHTML('<html><head></head><body></body></html>',{title:snapshot.title,execution:{allowScripts:!!snapshot.allowScripts}}),file:snapshot.file,nativeScroll:true,freshAnnotations:!!local.freshAnnotations} : parseHTML(snapshot.html,{title:snapshot.title,source:snapshot.url,viewport:snapshot.viewport,warnings:snapshot.warnings},{includeMetadata:true,allowScripts:snapshot.allowScripts,freshAnnotations:!!local.freshAnnotations});
+  if(snapshot.image){toast('이미지를 여는 중…');const {prepareImage}=await import('./image-document.js');snapshot=await prepareImage(snapshot);}
+  const parsed=snapshot.pdf?preparePDF(snapshot.pdf,{title:snapshot.title,metadata:snapshot.metadata,freshAnnotations:!!local.freshAnnotations}):snapshot.file ? {...parseHTML('<html><head></head><body></body></html>',{title:snapshot.title,viewport:snapshot.viewport,execution:{allowScripts:!!snapshot.allowScripts}}),file:snapshot.file,nativeScroll:true,freshAnnotations:!!local.freshAnnotations} : parseHTML(snapshot.html,{title:snapshot.title,source:snapshot.url,viewport:snapshot.viewport,warnings:snapshot.warnings},{includeMetadata:true,allowScripts:snapshot.allowScripts,freshAnnotations:!!local.freshAnnotations});
   if(snapshot.archiveMetadata){parsed.metadata=structuredClone(snapshot.archiveMetadata);if(local.freshAnnotations){parsed.metadata.annotations=[];parsed.metadata.bookmarks=[];parsed.metadata.view={scrollTop:0,scrollLeft:0,autoFit:true};}parsed.savedMetadata=true;}
   const title=parsed.metadata.title; const record={id:uid(),title,name:name||handle?.name||filename(title),source:parsed.metadata.source,created:Date.now(),modified:Date.now(),folderId:local.libraryFolderId??libraryFolderId,fileHandle:handle,originalHandle:local.originalHandle||null,metadata:parsed.metadata};
   if(snapshot.pdf)record.file=snapshot.pdf;else if(snapshot.file)record.file=snapshot.file;else record.html=parsed.html;
@@ -702,6 +705,43 @@ async function importFiles() {
   if(!openPicker()){$('#file-input').click();return;}
   let handles;try{handles=await window.showOpenFilePicker({types:importTypes,multiple:true});}catch(error){if(['SecurityError','NotSupportedError'].includes(error.name)){$('#file-input').click();return;}throw error;}
   for(const handle of handles)await openLocalFile(handle,parentId);
+}
+function imagePasteAllowed(event){
+  return !startupPending&&!folderSetupPending&&isImagePasteTarget(event.target)&&(!$('#dialog').open||!!$('#dialog [data-image-paste]'));
+}
+function handleImagePaste(event){
+  if(!imagePasteAllowed(event))return;
+  const files=pastedImages(event.clipboardData);if(!files.length)return;
+  event.preventDefault();event.stopPropagation();
+  if($('#dialog [data-image-paste]'))$('#dialog').close();
+  const parentId=libraryFolderId;
+  void (async()=>{for(const file of files)await openLocalFile(file,parentId);})().catch(showError);
+}
+function handleFileDrop(event){
+  if(![...(event.dataTransfer?.types||[])].includes('Files'))return;
+  event.preventDefault();
+  if(!imagePasteAllowed(event))return;
+  if($('#dialog [data-image-paste]'))$('#dialog').close();
+  const parentId=libraryFolderId,files=droppedHTMLFiles(event.dataTransfer);
+  void (async()=>{for(const file of await files)await openLocalFile(file,parentId);})().catch(showError);
+}
+function imagePasteDialog(){
+  modal(`<section data-image-paste><div class="dialog-heading"><h2>스크린샷·이미지 붙여넣기</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><div class="rounded-xl border border-dashed border-line bg-canvas p-5 text-center outline-none focus-visible:ring-2 focus-visible:ring-brand" data-image-paste-target tabindex="0" autofocus><p class="font-semibold">복사한 스크린샷을 여기 붙여넣으세요.</p><p class="mt-2 text-sm text-muted"><kbd>⌘V</kbd> / <kbd>Ctrl+V</kbd> · 이미지 파일을 끌어놓아도 됩니다.</p></div><p class="dialog-description small mt-3">Mac: Control + Shift + ⌘ + 4로 영역을 복사합니다.<br>Windows: Win + Shift + S로 영역을 복사합니다.<br>휴대폰: 스크린샷을 저장한 뒤 파일 가져오기에서 선택하세요.</p><p class="dialog-description small">원본을 보관하고 주석은 별도로 자동 저장합니다. PNG·JPEG·WebP·AVIF·GIF·BMP·SVG를 지원합니다.</p><p class="dialog-description small" data-image-paste-status role="status"></p><div class="dialog-actions"><button class="secondary-button" data-image-file>파일 가져오기</button><button class="primary-button" data-image-clipboard>클립보드에서 붙여넣기</button></div></section>`,dialog=>{
+    $('[data-image-file]',dialog).onclick=safely(async()=>{dialog.close();await importFiles();});
+    $('[data-image-clipboard]',dialog).onclick=async()=>{
+      const button=$('[data-image-clipboard]',dialog),status=$('[data-image-paste-status]',dialog),parentId=libraryFolderId;button.disabled=true;
+      try{
+        if(!navigator.clipboard?.read)throw Error('paste');
+        const items=await navigator.clipboard.read(),files=[];
+        for(const item of items){const type=item.types.find(type=>type==='image/png')||item.types.find(type=>Object.hasOwn(IMAGE_MIMES,type));if(type){const file=clipboardImageFile(await item.getType(type),files.length);if(file)files.push(file);}}
+        if(!dialog.open||!status.isConnected)return;
+        if(!files.length){status.textContent='클립보드에 이미지가 없습니다. 스크린샷이나 이미지를 먼저 복사해주세요.';return;}
+        dialog.close();for(const file of files)await openLocalFile(file,parentId);
+      }catch(error){if(dialog.open&&status.isConnected){status.textContent='위 붙여넣기 영역을 누른 뒤 ⌘V / Ctrl+V를 누르거나 파일 가져오기를 사용해주세요.';$('[data-image-paste-target]',dialog)?.focus();}else showError(error);}
+      finally{if(button.isConnected)button.disabled=false;}
+    };
+    requestAnimationFrame(()=>$('[data-image-paste-target]',dialog)?.focus());
+  });
 }
 function duplicateImportDialog(local, matches) {
   const choices=[...matches].sort((a,b)=>Number(!!b.metadata?.annotations?.length)-Number(!!a.metadata?.annotations?.length)||(b.modified||0)-(a.modified||0));
@@ -1698,6 +1738,7 @@ function bindUI() {
   addressForm.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();$('#address').blur();$('.tab.active .tab-select',$('#tabs'))?.focus();}});
   addressForm.onsubmit=safely(async event=>{event.preventDefault();const value=$('#address').value;$('.chrome').classList.remove('address-editing');$('#address').blur();await openBrowser(value,active()?.type!=='browser');});
   $('#save-page').onclick=safely(savePage);$('#hero-import').onclick=safely(importFiles);
+  $('#image-paste-button').onclick=imagePasteDialog;
   $('#file-input').onchange=safely(async event=>{const files=[...event.target.files],parentId=libraryFolderId;event.target.value='';for(const file of files)await openLocalFile(file,parentId);});
   $('#settings-file-input').onchange=safely(async event=>{const file=event.target.files[0];event.target.value='';if(file){await restoreSettings(file);settingsDialog();}});
   $('#library-filter').oninput=renderLibrary;$('#library-sort').onchange=safely(e=>{if(libraryTrash){trashSort=e.target.value;renderLibrary();return;}const [librarySort,librarySortDirection]=e.target.value.split(':');changePreferences({librarySort,librarySortDirection});});$$('[data-library-view]').forEach(button=>button.onclick=safely(()=>changePreferences({libraryView:button.dataset.libraryView})));$('#settings-button').onclick=settingsDialog;$('#web-help-button').onclick=()=>webHelpDialog();$('#paste-button').onclick=()=>pasteTextDialog();
@@ -1721,7 +1762,8 @@ function bindUI() {
     if(!editing)closePopover();applyToolbarPosition();
     requestAnimationFrame(()=>{if(!pop.hidden)positionPopover();revealActiveTab();});
   });
-  window.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('Files'))event.preventDefault();});window.addEventListener('drop',safely(async event=>{if(![...(event.dataTransfer.types||[])].includes('Files'))return;event.preventDefault();const parentId=libraryFolderId;for(const file of await droppedHTMLFiles(event.dataTransfer))await openLocalFile(file,parentId);}));
+  window.addEventListener('paste',handleImagePaste);
+  window.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('Files'))event.preventDefault();});window.addEventListener('drop',handleFileDrop);
 }
 function network() {$('#network-status').textContent=navigator.onLine?'온라인':'오프라인';$('#network-status').classList.toggle('offline',!navigator.onLine);}
 function fitHeader() {

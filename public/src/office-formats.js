@@ -1,5 +1,7 @@
-// Opening formats from GenOffice 36a509e8 (app-routing.ts), plus LibreMemo HTML/MHTML/PDF.
+import {IMAGE_EXTENSIONS} from './image-formats.js';
+// Opening formats from GenOffice 36a509e8 (app-routing.ts), plus LibreMemo HTML/MHTML/PDF/images.
 export const OFFICE_FORMATS={
+  srt:'subtitle',vtt:'subtitle',smi:'subtitle',sami:'subtitle',ass:'subtitle',ssa:'subtitle',
   epub:'ebook',epub3:'ebook',mobi:'ebook',azw:'ebook',azw3:'ebook',fb2:'ebook',fbz:'ebook','fb2.zip':'ebook',cbz:'ebook',
   hwp:'hangul',hwpx:'hangul',hml:'hangul',
   docx:'word',odt:'word',ott:'word',
@@ -8,6 +10,7 @@ export const OFFICE_FORMATS={
   md:'markdown',markdown:'markdown',txt:'text',json:'text',
 };
 export const OFFICE_MIMES={
+  'application/x-subrip':['.srt'],'text/vtt':['.vtt'],'application/x-sami':['.smi','.sami'],'text/x-ssa':['.ass','.ssa'],
   'application/epub+zip':['.epub','.epub3'],'application/x-mobipocket-ebook':['.mobi','.azw'],
   'application/vnd.amazon.mobi8-ebook':['.azw3'],'application/x-fictionbook+xml':['.fb2'],
   'application/x-zip-compressed-fb2':['.fbz','.fb2.zip'],'application/vnd.comicbook+zip':['.cbz'],
@@ -26,7 +29,7 @@ export const OFFICE_MIMES={
   'application/vnd.oasis.opendocument.presentation-template':['.otp'],
   'text/markdown':['.md','.markdown'],'text/plain':['.txt'],'application/json':['.json'],
 };
-export const DOCUMENT_EXTENSIONS=['html','htm','mhtml','mht','pdf',...Object.keys(OFFICE_FORMATS)];
+export const DOCUMENT_EXTENSIONS=['html','htm','mhtml','mht','pdf',...IMAGE_EXTENSIONS,...Object.keys(OFFICE_FORMATS)];
 const extensionsByLength=[...DOCUMENT_EXTENSIONS].sort((a,b)=>b.length-a.length);
 export function documentExtension(name){const value=String(name||'').toLowerCase();return extensionsByLength.find(ext=>value.endsWith('.'+ext))||null;}
 export function officeFormat(file){
@@ -38,7 +41,8 @@ export const OFFICE_MAX_BYTES=100*1024*1024;
 export async function verifyOffice(file,format){
   if(!file.size)throw Error('문서 파일이 비어 있습니다.');
   if(file.size>OFFICE_MAX_BYTES)throw Error('이 형식은 100MB 이하의 파일을 열 수 있습니다. 문서를 나누어 저장한 뒤 가져와 주세요.');
-  if(['markdown','text'].includes(OFFICE_FORMATS[format])||['csv','tsv'].includes(format))return;
+  if(OFFICE_FORMATS[format]==='subtitle'&&file.size>8*1024*1024)throw Error('자막 파일은 8MB 이하로 나누어 가져와 주세요.');
+  if(['markdown','text','subtitle'].includes(OFFICE_FORMATS[format])||['csv','tsv'].includes(format))return;
   if(OFFICE_FORMATS[format]==='ebook')return; // Bounded worker validates structure, encryption and resource sizes.
   const b=new Uint8Array(await file.slice(0,8).arrayBuffer());
   const zip=b[0]===0x50&&b[1]===0x4b&&b[2]===3&&b[3]===4;

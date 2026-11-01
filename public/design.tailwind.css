@@ -406,7 +406,7 @@ html[data-app-sidebar-resizing] iframe{pointer-events:none!important}
 #library .hero{padding:12px 0;min-height:0}
 #library .hero-copy{display:flex;align-items:center;justify-content:space-between;gap:12px}
 #library .hero .eyebrow,#library .hero-description,#library .feature-tags{display:none}
-#library .hero-actions{flex:0 0 auto;margin:0;gap:6px;flex-wrap:nowrap}
+#library .hero-actions{flex:0 1 auto;min-width:0;margin:0;gap:6px;flex-wrap:wrap}
 #library .hero-actions .secondary-button{height:28px;min-width:0;padding:5px 10px;font-size:11px;border-radius:6px}
 [data-single-file-guide]{overflow-wrap:anywhere}
 #library .library-help{display:flex;flex-shrink:0;gap:4px;width:fit-content;max-width:100%;min-height:20px;margin:0 0 0 auto;padding:0;font-size:10px;text-decoration:underline;text-underline-offset:2px}
