@@ -1,4 +1,4 @@
-import {revealAppOutline,revealDocumentControl} from './document-controls.mjs';
+import {revealAppOutline,revealDocumentControl,clickDocumentControl} from './document-controls.mjs';
 // Shared UI and user actions through the shipped app, in CI/trusted Chrome only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -203,4 +203,26 @@ test('real Chrome: Pages-only malicious-file messages have a readable warning co
     assert.equal(warning.role,'alert');assert.equal(warning.security,true);assert.equal(warning.background,'rgb(153, 27, 27)');assert.equal(warning.color,'rgb(255, 255, 255)');
     await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,'test-results/pages-only-security-warning-390.png'),await page.screenshot());await writeFile(join(root,'test-results/pages-only-security-warning.json'),JSON.stringify({status:'pass',warning,errors:[]},null,2));assert.deepEqual(chrome.errors,[]);
   }finally{await chrome?.close();await env.close();}
+});
+
+test('real Chrome: Pages-only malicious-file messages inside the TOC keep a warning color across themes and updates',{timeout:120000},async()=>{
+  const env=await environment();let chrome;const states=[],message='악성코드가 포함되어 있는 파일입니다.';
+  try{
+    chrome=await launchChrome();const page=chrome.page;await viewport(page,1280);await page.navigate(env.url);
+    const source=(await readFile(join(root,'tests/fixtures/source-toolbar.html'),'utf8')).replace('<h2>목차</h2>','<h2>목차</h2><details><summary>블로그</summary><a href="#first">블로그 글</a></details><p id="toc-warning">'+message+'</p><button id="clear-warning" onclick="document.querySelector(\'#toc-warning\').textContent=\'정상적으로 열었습니다.\'">정상 상태</button><button id="restore-warning" onclick="document.querySelector(\'#toc-warning\').innerHTML=\'악성&lt;strong&gt;코드가 포함되어 있는&lt;/strong&gt; 파일입니다.\'">경고 상태</button>').replace('<p>화면과 버튼 모양만 비교하는 합성 문서입니다.</p>','<p>화면과 버튼 모양만 비교하는 합성 문서입니다.</p><p id="body-message">'+message+'</p>');
+    await chooseFile(page,Buffer.from(source),'목차 경고.html');await page.waitFor(`${doc}.querySelector('#toc-warning[data-htmlmemo-security-warning]')`);
+    const colors=expression=>page.evaluate(`(()=>{const n=${expression},d=n.ownerDocument,s=d.defaultView.getComputedStyle(n);return {text:n.textContent,color:s.color,background:s.backgroundColor,border:s.borderColor,marked:n.hasAttribute('data-htmlmemo-security-warning')};})()`);
+    const check=state=>{assert.equal(state.text,message);assert.equal(state.marked,true);assert.equal(state.color,'rgb(255, 255, 255)');assert.equal(state.background,'rgb(153, 27, 27)');};
+    const theme=async mode=>{await page.click('#settings-button');await page.evaluate(`(()=>{const s=document.querySelector('#appearance');s.value=${JSON.stringify(mode)};s.dispatchEvent(new Event('change',{bubbles:true}));})()`);await page.click('#dialog [data-dialog-close]');};
+    for(const width of [1280,390])for(const mode of ['light','dark']){
+      await viewport(page,width);await theme(mode);await revealDocumentControl(page,'#toc-warning');const state={kind:'native',width,theme:mode,...await colors(doc+`.querySelector('#toc-warning')`)};check(state);assert.equal(await page.evaluate(`${doc}.querySelector('#body-message').hasAttribute('data-htmlmemo-security-warning')`),false);states.push(state);
+      await writeFile(join(root,`test-results/pages-only-toc-security-warning-${mode}-${width}.png`),await page.screenshot());
+    }
+    await clickDocumentControl(page,'#clear-warning');await page.waitFor(`!${doc}.querySelector('#toc-warning').hasAttribute('data-htmlmemo-security-warning')`);
+    await clickDocumentControl(page,'#restore-warning');await page.waitFor(`${doc}.querySelector('#toc-warning[data-htmlmemo-security-warning] strong')`);check(await colors(doc+`.querySelector('#toc-warning')`));
+    await page.click('#library-tab');await page.click('#paste-button');await page.evaluate(`document.querySelector('#paste-text').value=${JSON.stringify('# '+message+'\n\n본문입니다.\n\n# 정상 목차\n\n정상적인 본문입니다.')}`);await page.click('#paste-save');await page.waitFor('!!document.querySelector("#sidebar [data-htmlmemo-security-warning]")');await page.click('#sidebar [data-htmlmemo-security-warning]');check(await colors('document.querySelector("#sidebar [data-htmlmemo-security-warning]")'));
+    states.push({kind:'generated',width:390,theme:'dark',...await colors('document.querySelector("#sidebar [data-htmlmemo-security-warning]")')});assert.deepEqual(chrome.errors,[]);
+    await writeFile(join(root,'test-results/pages-only-toc-security-warning.json'),JSON.stringify({status:'pass',states,dynamicWarningClears:true,dynamicNestedWarningReturns:true,bodyUnchanged:true,errors:[]},null,2));
+  }catch(error){if(chrome){await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,'test-results/pages-only-toc-security-warning-failure.json'),JSON.stringify({states,error:error.message,errors:chrome.errors},null,2));await writeFile(join(root,'test-results/pages-only-toc-security-warning-failure.png'),await chrome.page.screenshot());}throw error;}
+  finally{await chrome?.close();await env.close();}
 });

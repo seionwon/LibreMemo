@@ -3,7 +3,7 @@ import { PdfReader } from './pdf-reader.js';
 import {bookmarkTextAnchor,captureBookmarkLocations,findBookmarkText} from './bookmark-location.js';
 import { SearchIndexCache } from './search-index.js';
 import { IsolatedRuntime,needsIsolatedRuntime } from './isolated-runtime.js';
-import { clamp, uid, icon, sidebarWidthAction } from './utils.js';
+import { clamp, uid, icon, sidebarWidthAction, isSecurityWarning } from './utils.js';
 import { History, TEXT_TOOLS, DRAW_TOOLS, FILL_TOOLS } from './model.js';
 import { LAYER_ID, LOCAL_CSP, parseHTML, savedMainFrame, prepareLoadedHTML, cleanAnnotations, textIndex, selectionAnchor, resolveTextAnchor, wrapOffsets, rangeFromOffsets, sentenceOffsets, serializeHTML, inspectBookDocument, drawingTargetQuote, describeDrawingTarget, currentSection, bookmarkAnchorTarget } from './document.js';
 
@@ -1098,6 +1098,7 @@ export class Reader {
   setupDocumentSidebar() {
     const sidebar=this.tocResize?.sidebar;
     if(this.preparing||this.disposed||!sidebar?.isConnected||!this.callbacks?.onSidebarView)return;
+    this.syncTocSecurityWarnings();
     if(this.documentSidebarUI?.isConnected&&sidebar.contains(this.documentSidebarUI))return;
     const panel=this.doc.createElement('section');panel.setAttribute('data-htmlmemo-ui','');panel.setAttribute('data-htmlmemo-doc-sidebar-ui','');
     // Keep the source TOC in place; the native search is parked separately below.
@@ -1110,6 +1111,19 @@ export class Reader {
     this.setupDocumentBookSearch();
     this.showDocumentSidebarView(this.documentSidebarMode||'outline');
     if(!this.initialTocCollapsed){this.initialTocCollapsed=true;this.collapseDocumentToc();}
+  }
+  syncTocSecurityWarnings(){
+    const sidebar=this.tocResize?.sidebar;if(!sidebar?.isConnected)return;
+    // Mark the smallest warning containers, preserving source nodes, links and
+    // text offsets. Never turn an entire branch or the sidebar into an alert.
+    const containsWarning=new WeakSet();
+    for(const node of [...sidebar.querySelectorAll('*')].reverse()){
+      if(node.closest('script,style,noscript,template,[data-htmlmemo-ui]'))continue;
+      const descendant=[...node.children].some(child=>containsWarning.has(child));
+      const warning=!descendant&&isSecurityWarning(node.textContent);
+      node.toggleAttribute('data-htmlmemo-security-warning',warning);
+      if(warning||descendant)containsWarning.add(node);
+    }
   }
   showDocumentSidebarView(mode,{reveal=true}={}) {
     if(!['outline','search','annotations','bookmarks'].includes(mode)||!this.documentSidebarUI?.isConnected)return;
@@ -1127,6 +1141,7 @@ export class Reader {
     this.callbacks.onSidebarView(mode,this.documentSidebarUI,this);
     if(search){if(mode==='search'){this.documentSidebarUI.querySelector('.sidebar-content').prepend(search);search.hidden=false;}else this.documentSidebarUI.append(search);}
     this.syncDocumentBookSearchResults();
+    if(mode==='outline')this.syncTocSecurityWarnings();
     if(reveal&&!this.tocStrip)this.setDocumentSidebarDrawer(true);
     if(mode==='outline'&&Number.isFinite(this.documentTocScrollTop))sidebar.scrollTop=this.documentTocScrollTop;
     else if(mode!==previous)sidebar.scrollTop=0;
@@ -1747,6 +1762,8 @@ export class Reader {
       }
       this.tocChecked = false;
       this.ensureDocumentTocResize();
+      const sidebar=this.tocResize?.sidebar;
+      if(sidebar&&unique.some(root=>sidebar.contains(root)||root.contains(sidebar)))this.syncTocSecurityWarnings();
       if (added > 0) {
         this.initialHTML = null;
         this.measure();

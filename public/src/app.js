@@ -1,4 +1,4 @@
-import { $, $$, icon, escapeHTML as esc, uid, filename, normalizeURL, displayHost, formatDate, formatBytes, download, sidebarWidthAction, readerSidebarCSS } from './utils.js';
+import { $, $$, icon, escapeHTML as esc, uid, filename, normalizeURL, displayHost, formatDate, formatBytes, download, sidebarWidthAction, readerSidebarCSS, isSecurityWarning } from './utils.js';
 import { parseHTML, SCRIPT_CSP, serializeBookSource } from './document.js';
 import { SaveQueue, AnnotationCheckpoints, ANNOTATION_LABELS } from './model.js';
 import { openEditionProbe, migrateAnnotations } from './migrate.js';
@@ -47,7 +47,6 @@ const openPicker = () => typeof window.showOpenFilePicker === 'function';
 const htmlTypes = [{description:'HTML 문서',accept:{'text/html':['.html','.htm']}}];
 const importTypes = [{description:'문서 · 스프레드시트 · 슬라이드',accept:{'text/html':['.html','.htm'],'multipart/related':['.mhtml','.mht'],'application/x-mimearchive':['.mhtml','.mht'],'application/pdf':['.pdf'],'application/zip':['.librememo'],...OFFICE_MIMES}}];
 const safely = fn => (...args) => { try { Promise.resolve(fn(...args)).catch(showError); } catch(error) { showError(error); } };
-function isSecurityWarning(message){return /악성\s*코드.*(?:포함|감지)|malicious\s+(?:code|file)|(?:contains|detected|blocked).*malware/i.test(String(message));}
 function toast(message, error = false) { const el=$('#toast'),security=isSecurityWarning(message);el.setAttribute('role',security?'alert':'status');el.textContent=message;el.classList.toggle('error',error);el.classList.toggle('security-warning',security);el.hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.hidden=true,error||security?6500:3500); }
 function showError(error) { if (error?.name !== 'AbortError') toast(error?.message || String(error),true); }
 function setButton(selector, name, label = '') { $(selector).innerHTML=icon(name)+(label ? `<span>${label}</span>`:''); }
@@ -1286,7 +1285,7 @@ function renderOutlineTree(outline,r){
     while(stack.length&&stack.at(-1).level>=node.level)stack.pop();
     (stack.at(-1)?.children||roots).push(node);stack.push(node);
   });
-  const row=item=>`<button class="outline-item" data-heading="${item.index}" title="${esc(item.title)}">${esc(item.title)}</button>`;
+  const row=item=>`<button class="outline-item" data-heading="${item.index}"${isSecurityWarning(item.title)?' data-htmlmemo-security-warning':''} title="${esc(item.title)}">${esc(item.title)}</button>`;
   const branch=item=>item.children.length?`<details class="outline-group" data-outline-group="${item.index}"${r.outlineTreeOpen.get(String(item.index))?' open':''}><summary>${row(item)}</summary><div class="outline-group-body">${item.children.map(branch).join('')}</div></details>`:row(item);
   return `<div class="sidebar-outline-tree">${roots.map(branch).join('')}</div>`;
 }
@@ -1323,7 +1322,7 @@ function styleNativeSidebar(panel) {
     const style=doc.createElement('style');style.id='htmlmemo-doc-sidebar-style';style.setAttribute('data-htmlmemo-ui','');style.textContent=rules.join('\n')+'\n::highlight(htmlmemo-book-search){background:#f0a85b80;color:inherit}';doc.head.append(style);
   }
   const theme=getComputedStyle(document.documentElement);
-  const names=['--bg','--surface','--surface-muted','--text','--muted','--line','--green','--green-light','--app-font'];
+  const names=['--bg','--surface','--surface-muted','--text','--muted','--line','--green','--green-light','--app-font','--color-security-warning','--color-security-warning-ink','--color-security-warning-border'];
   for(const name of names)panel.style.setProperty(name,theme.getPropertyValue(name));
   const style=doc.getElementById('htmlmemo-doc-sidebar-style');style.sidebarRules??=style.textContent;
   style.textContent=style.sidebarRules+'\n[data-htmlmemo-native-sidebar],[data-htmlmemo-toc-resizer],[data-htmlmemo-toc-resizer-bound]{'+names.map(name=>name+':'+theme.getPropertyValue(name)).join(';')+'}';

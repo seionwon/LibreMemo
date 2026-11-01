@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import {DOMParser} from 'linkedom';
-import {$, $$, icon, escapeHTML,sidebarWidthAction} from '../public/src/utils.js';
+import {$, $$, icon, escapeHTML,sidebarWidthAction,isSecurityWarning} from '../public/src/utils.js';
 import {Reader} from '../public/src/reader.js';
 import {ANNOTATION_LABELS} from '../public/src/model.js';
 import {documentFor,installDOM} from './dom.mjs';
@@ -19,7 +19,7 @@ function sidebar() {
     outline:()=>[{node:'heading-1',level:1,title:'첫 번째 절'}],jump:node=>calls.headings.push(node),jumpAnnotation:id=>calls.annotations.push(id),jumpBookmark(id){const mark=this.metadata.bookmarks.find(m=>m.id===id);this.scrollTop=mark.top*this.zoom;this.scrollLeft=mark.left*this.zoom;},
     search(query){this.searchQuery=query;calls.search.push(query);this.searchResults=query?[{quote:'찾은 문장: '+query}]:[];this.searchPosition=this.searchResults.length?0:-1;return this.searchResults;},nextSearch(direction){calls.next.push(direction);if(this.searchResults?.length)this.searchPosition=Math.max(0,Math.min(this.searchResults.length-1,this.searchPosition+direction));}};
   let current=r;
-  const context=vm.createContext({ANNOTATION_LABELS,sidebarWidthAction,document:doc,$:(selector,root=doc)=>$(selector,root),$$:(selector,root=doc)=>$$(selector,root),icon,esc:escapeHTML,
+  const context=vm.createContext({ANNOTATION_LABELS,sidebarWidthAction,isSecurityWarning,document:doc,$:(selector,root=doc)=>$(selector,root),$$:(selector,root=doc)=>$$(selector,root),icon,esc:escapeHTML,
     reader:()=>current,active:()=>({queue:{schedule(){calls.saved++;}}}),closePopover(){},toolAction(){},innerWidth:1280,window:doc.createElement('div'),preferences:{sidebarWidth:300},changePreferences(patch){Object.assign(context.preferences,patch);calls.sizes.push(patch.sidebarWidth);context.applyAppSidebarWidth();},
     getComputedStyle:()=>({getPropertyValue:()=>''}),showError:error=>calls.errors.push(error.message),
     setTimeout(fn){const id=++timerId;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);}});

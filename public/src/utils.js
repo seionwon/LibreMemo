@@ -3,6 +3,7 @@ export const $$ = (selector, root = document) => [...root.querySelectorAll(selec
 export const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const uid = () => crypto.randomUUID();
 export const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+export function isSecurityWarning(message){return /악성\s*코드.*(?:포함|감지)|malicious\s+(?:code|file)|(?:contains|detected|blocked).*malware/i.test(String(message).replace(/\s+/g,' '));}
 export function filename(title) { return (title || '웹 페이지').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/\.+$/g, '').slice(0, 100).trim() + '.html'; }
 export function normalizeURL(input) {
   const value = input.trim();

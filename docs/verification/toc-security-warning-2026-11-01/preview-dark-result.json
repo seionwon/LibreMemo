@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "status": 200,
+  "title": "목차 경고색 검증",
+  "url": "http://127.0.0.1:4173/dark.html",
+  "results": [
+    {
+      "type": "wait",
+      "selector": "#toc-warning"
+    },
+    {
+      "type": "text",
+      "selector": "#toc-warning",
+      "text": "악성코드가 포함되어 있는 파일입니다."
+    }
+  ],
+  "errors": [],
+  "screenshot": "preview-dark-390.png",
+  "scope": "Static native-sidebar markup using compiled app CSS; not the complete app import flow"
+}
