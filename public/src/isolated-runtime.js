@@ -164,8 +164,8 @@ function bootstrap(channel,preferences,mutationRoots) {
 
 /** Source code runs in an opaque origin. Only inert, sanitized DOM comes back. */
 export class IsolatedRuntime {
-  constructor({host,doc,source,storage=[],onStorage=()=>{},onNavigate=()=>{},onScroll=()=>{},onError=()=>{}}) {
-    this.host=host;this.doc=doc;this.source=source;this.storage=cleanSourceStorage(storage);this.onStorage=onStorage;this.onNavigate=onNavigate;this.onScroll=onScroll;this.onError=onError;this.channel=crypto.randomUUID();this.queue=Promise.resolve();this.disposed=false;this.listeners=[];this.nodes=new Map();this.attributes=new Map();this.controlRevisions=new Map();this.inputRevision=0;
+  constructor({host,doc,source,storage=[],onStorage=()=>{},onNavigate=()=>{},onScroll=()=>{},onPatch=()=>{},onError=()=>{}}) {
+    this.host=host;this.doc=doc;this.source=source;this.storage=cleanSourceStorage(storage);this.onStorage=onStorage;this.onNavigate=onNavigate;this.onScroll=onScroll;this.onPatch=onPatch;this.onError=onError;this.channel=crypto.randomUUID();this.queue=Promise.resolve();this.disposed=false;this.listeners=[];this.nodes=new Map();this.attributes=new Map();this.controlRevisions=new Map();this.inputRevision=0;
   }
   async start() {
     const owner=this.host.ownerDocument,win=owner.defaultView;
@@ -246,6 +246,7 @@ export class IsolatedRuntime {
       this.copyAttributes(this.doc.documentElement,next.documentElement);this.copyAttributes(this.doc.body,next.body);this.copyAttributes(this.doc.head,next.head);
       this.doc.documentElement.setAttribute('data-htmlmemo-isolated-runtime','');
       this.index(this.doc.documentElement);
+      this.onPatch();
       clearTimeout(this.timer);const done=this.resolve;this.resolve=this.reject=null;done();return;
     }
     if(value.type!=='patches'||!Array.isArray(value.patches)||value.patches.length>10000||JSON.stringify(value.patches).length>MAX_HTML)return;
@@ -271,12 +272,14 @@ export class IsolatedRuntime {
         this.index(target);
       }
     }
+    this.onPatch();
   }
   index(root) {for(const node of [root,...root.querySelectorAll('['+ID+']')]){const id=node.getAttribute(ID);if(validId(id)){this.nodes.set(id,node);if(!this.attributes.has(id))this.attributes.set(id,new Map([...node.attributes].map(a=>[a.name,a.value])));}}}
   copyAttributes(target,source) {
     // App-owned marks/layout/runtime state are never author-controlled RPC.
     const app=name=>name.startsWith('data-htmlmemo-')&&name!==ID,previous=this.attributes.get(target.getAttribute(ID)),next=new Map([...source.attributes].map(a=>[a.name,a.value]));
     for(const name of new Set([...(previous?.keys()||[...target.attributes].map(a=>a.name)),...next.keys()])){
+      if(name==='disabled'&&target.hasAttribute('data-htmlmemo-source-max')){target.setAttribute('data-htmlmemo-source-max',String(next.has('disabled')));continue;}
       if(app(name)||previous&&previous.get(name)===next.get(name))continue;
       if(name==='open'&&target.localName==='details'&&target.hasAttribute('data-htmlmemo-book-search-open'))continue;
       if(name==='style'&&previous){

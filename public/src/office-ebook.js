@@ -157,7 +157,7 @@ export async function renderEbook(bytes,format,warnings){
       embedded+=data.length;if(embedded>MAX_TEXT)throw Error('전자책 그림·글꼴 합계가 너무 큽니다.');
       const result='data:'+mime+';base64,'+bytes64(data);cached.set(url,result);return result;
     }
-    const declCache=new WeakMap(),sheetCache=new Map(),fontFaces=new Set(),inlineStyleCache=new Map();
+    const declCache=new WeakMap(),sheetCache=new Map(),fontFaces=new Set(),inlineStyleCache=new Map(),reflowable=book.rendition?.layout!=='pre-paginated';
     async function declarations(style,index,depth){
       const hit=declCache.get(style);if(hit)return hit;
       let output='',hasLocalUrl=false;
@@ -175,7 +175,11 @@ export async function renderEbook(bytes,format,warnings){
             value=value.replace(match[0],'url("'+replacement+'")');
           }
         }
-        if(valid)output+=prop+':'+value+(style.getPropertyPriority(prop)?' !important':'')+';';
+        if(reflowable&&prop==='font-size'){
+          const m=/^\s*(\d*\.?\d+)(px|pt)\s*$/i.exec(value);
+          if(m){const n=Number(m[1])/(m[2].toLowerCase()==='pt'?12:16);if(n>0)value=Number(n.toFixed(4))+'rem';}
+        }
+        if(valid)output+=prop+':'+value+(style.getPropertyPriority(prop)&&!(reflowable&&prop==='font-size')?' !important':'')+';';
       }
       const res={css:output,hasLocalUrl};
       if(!hasLocalUrl)declCache.set(style,res);
