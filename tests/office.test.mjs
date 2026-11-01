@@ -65,7 +65,7 @@ test('Unsafe XML, archive paths, expansion bombs, empty, encrypted and mismatche
   for(const [name,value,pattern] of [['word/document.xml','<!DOCTYPE test [<!ENTITY x SYSTEM "https://example.invalid/">]><w:document/>',/엔터티/],['../bad.xml','<x/>',/경로/]]){
     const zip=await JSZip.loadAsync(fixtures.docx);zip.file(name,value);await assert.rejects(renderOffice(await zip.generateAsync({type:'uint8array'}),'docx','bad'),pattern);
   }
-  const bomb=new JSZip();bomb.file('large.xml','x'.repeat(65*1024*1024));await assert.rejects(inspectOfficeZip(await bomb.generateAsync({type:'uint8array',compression:'DEFLATE'}),'docx',[]),/limit|exceed/);
+  const bomb=await new JSZip().file('large.xml','x').generateAsync({type:'uint8array',compression:'DEFLATE'});const bombView=new DataView(bomb.buffer,bomb.byteOffset,bomb.byteLength);for(let i=0;i+46<=bomb.length;i++)if(bombView.getUint32(i,true)===0x02014b50){bombView.setUint32(i+24,513*1024*1024,true);break;}await assert.rejects(inspectOfficeZip(bomb,'docx',[]),/limit|exceed/);
   await assert.rejects(verifyOffice(new File([],'empty.docx'),'docx'),/비어/);await assert.rejects(verifyOffice(new File(['not a zip'],'bad.docx'),'docx'),/손상/);
   await assert.rejects(verifyOffice(new File([new Uint8Array([0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1])],'locked.docx'),'docx'),/암호/);
 });

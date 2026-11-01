@@ -237,7 +237,7 @@ function extractSlideTitle(slide,tree,slideNo){
 }
 export function renderSlides(opened,warnings){
   const media=mediaResolver(opened.archive),issues=new Set(),metrics=new BrowserMetrics(),total=opened.deck.slides.length;
-  if(total>2000)throw Error('슬라이드가 2,000장을 넘는 문서는 나누어 가져와 주세요.');
+  if(total>10000)throw Error('슬라이드가 10,000장을 넘는 문서는 나누어 가져와 주세요.');
   const outline=[];
   const body=opened.deck.slides.map((slide,index)=>{
     const tree=buildRenderSlide(slide,opened.deck.size,{fitWidthPx:960,media,metrics,slideNo:index+1}),paint=paintFactory('office-slide-'+index);

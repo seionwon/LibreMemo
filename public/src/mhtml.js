@@ -15,9 +15,9 @@ function contentType(value='text/plain') {
   return {type,params};
 }
 function parsePart(raw,parts,depth=0) {
-  if(depth>12||parts.length>=10000)throw new Error('MHTML 파일에 중첩된 문서나 리소스가 너무 많습니다. HTML 단일 파일로 저장해 주세요.');
+  if(depth>24||parts.length>=50000)throw new Error('MHTML 파일에 중첩된 문서나 리소스가 너무 많습니다. HTML 단일 파일로 저장해 주세요.');
   const separator=/\r?\n\r?\n/.exec(raw);
-  if(!separator||separator.index>1024*1024)throw malformed();
+  if(!separator||separator.index>8*1024*1024)throw malformed();
   const headers={};
   for(const line of raw.slice(0,separator.index).replace(/\r?\n[\t ]+/g,' ').split(/\r?\n/)){
     const colon=line.indexOf(':');if(colon>0)headers[line.slice(0,colon).trim().toLowerCase()]=line.slice(colon+1).trim();

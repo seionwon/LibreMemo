@@ -43,7 +43,7 @@ export async function inspectImage(file){
 async function decodeImage(blob){
   const url=URL.createObjectURL(blob),image=new Image();
   try{
-    await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{image.src='';reject(Error('이미지를 여는 시간이 너무 오래 걸립니다. 다른 사본으로 시도해주세요.'));},20000);image.onload=()=>{clearTimeout(timer);resolve();};image.onerror=()=>{clearTimeout(timer);reject(Error('이 이미지를 표시하지 못했습니다. 파일이 손상되었거나 Chrome에서 지원하지 않는 이미지입니다.'));};image.src=url;});
+    await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{image.src='';reject(Error('이미지를 여는 시간이 너무 오래 걸립니다. 다른 사본으로 시도해주세요.'));},60000);image.onload=()=>{clearTimeout(timer);resolve();};image.onerror=()=>{clearTimeout(timer);reject(Error('이 이미지를 표시하지 못했습니다. 파일이 손상되었거나 Chrome에서 지원하지 않는 이미지입니다.'));};image.src=url;});
     return {image,...imageDimensions(image.naturalWidth,image.naturalHeight)};
   }catch(error){image.src='';throw error;}finally{URL.revokeObjectURL(url);}
 }
@@ -74,7 +74,7 @@ export async function prepareImage(snapshot){
 async function hasPNGAnimation(blob){
   // PNG chunks preceding IDAT are tiny in ordinary screenshots; read only their
   // headers and skip payloads, including large color profiles or metadata.
-  let count=0;for(let at=8;at+12<=blob.size;){if(++count>10000)throw Error('이미지의 관리 정보가 너무 많습니다. PNG 사본으로 다시 저장해주세요.');const b=new Uint8Array(await blob.slice(at,at+8).arrayBuffer()),type=String.fromCharCode(...b.subarray(4)),length=new DataView(b.buffer).getUint32(0);if(type==='acTL')return true;if(type==='IDAT'||type==='IEND')return false;if(at+12+length>blob.size)break;at+=12+length;}return false;
+  let count=0;for(let at=8;at+12<=blob.size;){if(++count>100000)throw Error('이미지의 관리 정보가 너무 많습니다. PNG 사본으로 다시 저장해주세요.');const b=new Uint8Array(await blob.slice(at,at+8).arrayBuffer()),type=String.fromCharCode(...b.subarray(4)),length=new DataView(b.buffer).getUint32(0);if(type==='acTL')return true;if(type==='IDAT'||type==='IEND')return false;if(at+12+length>blob.size)break;at+=12+length;}return false;
 }
 async function isAnimated(blob,type){
   if(type==='image/gif')return true;if(type==='image/png')return hasPNGAnimation(blob);

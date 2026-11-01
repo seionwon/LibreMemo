@@ -2,7 +2,7 @@ import {EPUB,MOBI,makeFB2,makeComicBook,InertDOMParser,resourceBlobs,parseCSS,ac
 import {esc,safeLink} from './office-common.js';
 import {inspectOfficeZip} from './office-render.js';
 
-const MAX_PART=32*1024*1024,MAX_TEXT=64*1024*1024;
+const MAX_PART=256*1024*1024,MAX_TEXT=500*1024*1024;
 const parser=new InertDOMParser();
 const imageMimes={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',svg:'image/svg+xml',bmp:'image/bmp',avif:'image/avif',jxl:'image/jxl',woff:'font/woff',woff2:'font/woff2',ttf:'font/ttf',otf:'font/otf',css:'text/css'};
 function bytes64(bytes){let s='';for(let i=0;i<bytes.length;i+=16384)s+=String.fromCharCode(...bytes.subarray(i,i+16384));return btoa(s);}
@@ -25,7 +25,7 @@ export function validateMOBI(bytes){
   }
 }
 export function validateFB2(bytes){
-  if(bytes.length>MAX_PART)throw Error('FB2 파일은 32MB 이하로 나누어 가져와 주세요.');
+  if(bytes.length>MAX_PART)throw Error('FB2 파일은 256MB 이하로 나누어 가져와 주세요.');
   const head=new TextDecoder().decode(bytes.subarray(0,300));
   const encoding=bytes[0]===255&&bytes[1]===254?'utf-16le':bytes[0]===254&&bytes[1]===255?'utf-16be':head.match(/encoding\s*=\s*["']([^"']+)/i)?.[1]||'utf-8';
   let text;try{text=new TextDecoder(encoding,{fatal:true}).decode(bytes);}catch{throw Error('FB2 문자 인코딩을 읽지 못했습니다.');}
@@ -72,7 +72,7 @@ export async function renderEbook(bytes,format,warnings){
       validateMOBI(bytes);
       book=await new MOBI({unzlib:async data=>{const reader=new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate')).getReader(),parts=[];let n=0;try{for(;;){const {done,value}=await reader.read();if(done)break;n+=value.length;if(n>MAX_PART)throw Error('압축된 글꼴이 너무 큽니다.');parts.push(value);}}finally{await reader.cancel();}return new Uint8Array(await new Blob(parts).arrayBuffer());}}).open(new Blob([bytes]));
     }
-    if(!book.sections?.length||book.sections.length>2000)throw Error('전자책은 1~2,000개 부분으로 나누어진 파일을 열 수 있습니다.');
+    if(!book.sections?.length||book.sections.length>10000)throw Error('전자책은 1~10,000개 부분으로 나누어진 파일을 열 수 있습니다.');
     const docs=[],ids=new Map(),idMaps=[],sections=book.sections;let total=0;
     for(let index=0;index<sections.length;index++){
       if(typeof sections[index].load!=='function'&&sections[index].linear==='no'){docs.push(null);idMaps.push(new Map());continue;}
@@ -96,7 +96,7 @@ export async function renderEbook(bytes,format,warnings){
       }catch{return null;}
     }
     const outline=[];
-    async function toc(items,level=1){if(level>20)return;for(const item of items||[]){if(outline.length>=10000)throw Error('전자책 목차가 너무 큽니다.');const href=await target(item.href);if(href&&item.label)outline.push({href,title:String(item.label).slice(0,1000),level});await toc(item.subitems,level+1);}}
+    async function toc(items,level=1){if(level>20)return;for(const item of items||[]){if(outline.length>=50000)throw Error('전자책 목차가 너무 큽니다.');const href=await target(item.href);if(href&&item.label)outline.push({href,title:String(item.label).slice(0,1000),level});await toc(item.subitems,level+1);}}
     await toc(book.toc);
     const links=new Map();
     for(let index=0;index<docs.length;index++)for(const a of docs[index]?.querySelectorAll('a[href]')||[]){
@@ -128,7 +128,7 @@ export async function renderEbook(bytes,format,warnings){
       if(valid)output+=prop+':'+value+(style.getPropertyPriority(prop)?' !important':'')+';';
     }return output;}
     async function stylesheet(text,index,depth=0,seen=new Set()){
-      if(depth>12||text.length>2*1024*1024)return '';let sheet;try{sheet=parseCSS(text);}catch{warnings.push('해석할 수 없는 전자책 스타일 일부는 기본 모양으로 표시합니다.');return '';}
+      if(depth>12||text.length>16*1024*1024)return '';let sheet;try{sheet=parseCSS(text);}catch{warnings.push('해석할 수 없는 전자책 스타일 일부는 기본 모양으로 표시합니다.');return '';}
       let result='';const scope='#ebook-section-'+index;
       async function rules(list){for(const rule of list){
         if(rule.type===1){
@@ -147,7 +147,7 @@ export async function renderEbook(bytes,format,warnings){
     }
     const bodies=[];let outputBytes=0;
     for(let index=0;index<docs.length;index++){
-      const doc=docs[index];if(!doc)continue;const nodes=[...doc.body.querySelectorAll('*')];if(nodes.length>200000)throw Error('전자책의 한 부분에 개체가 너무 많습니다.');
+      const doc=docs[index];if(!doc)continue;const nodes=[...doc.body.querySelectorAll('*')];if(nodes.length>1000000)throw Error('전자책의 한 부분에 개체가 너무 많습니다.');
       let css='';for(const el of doc.querySelectorAll('style,link[rel=stylesheet]')){
         const text=el.localName==='style'?el.textContent:resourceBlobs.has(el.getAttribute('href'))?await resourceBlobs.get(el.getAttribute('href')).text():'';
         css+=await stylesheet(text,index);el.remove();

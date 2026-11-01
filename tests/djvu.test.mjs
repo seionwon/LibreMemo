@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {deflateSync} from 'node:zlib';
 import {createHash} from 'node:crypto';
 import init,{WasmDocument,wasmSimd128Supported} from '../public/vendor/djvu/djvu_rs.js';
-import {inspectDjvu,djvuTextLayer,renderDjvu} from '../public/src/office-djvu.js';
+import {inspectDjvu,djvuTextLayer,renderDjvu,DJVU_MAX_PAGES,DJVU_MAX_OUTPUT} from '../public/src/office-djvu.js';
 import {readLocalHTML,droppedHTMLFiles,findLocalDuplicates,localFileIdentity} from '../public/src/local-files.js';
 import {parseHTML,textIndex,serializeHTML,wrapOffsets} from '../public/src/document.js';
 import {createDocumentArchive,readDocumentArchive} from '../public/src/document-archive.js';
@@ -56,6 +56,7 @@ test('DjVu input checks reject truncated containers, oversized rasters and indir
   const indirect=djvuForm('DJVM',[iffChunk('DIRM',Buffer.from([1,0,1]))]);assert.throws(()=>inspectDjvu(indirect),/단일 파일/);
   const broken=Buffer.from(bytes);broken.writeUInt32BE(0xffffffff,20);assert.throws(()=>inspectDjvu(broken),/내부 길이/);
   const unknown=Buffer.from(bytes);unknown.write('FAIL',12);assert.throws(()=>inspectDjvu(unknown),/올바른 DjVu/);
+  assert.equal(DJVU_MAX_PAGES,10000);assert.equal(DJVU_MAX_OUTPUT,2*1024*1024*1024);
 });
 test('DjVu OCR escapes markup and rejects unbounded or non-finite boxes',()=>{
   const zone={t:'<img src=x onerror=alert(1)> & 한글',x:0,y:0,w:100,h:20},html=djvuTextLayer([zone],200,100,()=>100),doc=documentFor('<html><body><svg>'+html+'</svg></body></html>');assert.equal(doc.querySelector('img,script,iframe'),null);assert.match(doc.body.textContent,/<img src=x onerror=alert\(1\)> & 한글/);

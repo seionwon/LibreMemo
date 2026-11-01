@@ -75,7 +75,7 @@ test('DRM, malformed, entity expansion and unsafe ebook ZIP paths fail with no l
   const parts=epubParts();parts['META-INF/encryption.xml']='<encryption><EncryptedData><EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes256-cbc"/></EncryptedData></encryption>';
   await assert.rejects(rendered(await ebookZip(parts),'epub'),/DRM|암호/);
   const mobi=fixtures.mobi.slice(),view=new DataView(mobi.buffer);view.setUint16(view.getUint32(78)+12,2);assert.throws(()=>validateMOBI(mobi),/DRM/);
-  view.setUint16(view.getUint32(78)+12,0);view.setUint32(view.getUint32(78)+4,65*1024*1024);assert.throws(()=>validateMOBI(mobi),/너무 큽/);
+  view.setUint16(view.getUint32(78)+12,0);view.setUint32(view.getUint32(78)+4,501*1024*1024);assert.throws(()=>validateMOBI(mobi),/너무 큽/);
   for(const format of ['mobi','azw3','epub','fb2','cbz'])await assert.rejects(rendered(new Uint8Array([1,2,3,4]),format));
   for(const content of ['<!DOCTYPE FictionBook [<!ENTITY x SYSTEM "file:///private">]>'+fb2Source(),'<html>not FB2</html>'])assert.throws(()=>validateFB2(new TextEncoder().encode(content)),/엔터티|형식/);
   for(const [name,content] of [['../bad.xml','<x/>'],['OEBPS/chapter1.xhtml','<!DOCTYPE html [<!ENTITY x "oops">]><html/>']])await assert.rejects(rendered(await ebookZip({...epubParts(),[name]:content}),'epub'),/경로|엔터티/);

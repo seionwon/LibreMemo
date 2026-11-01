@@ -39,11 +39,11 @@ export function officeFormat(file){
   if(ext)return Object.hasOwn(OFFICE_FORMATS,ext)?ext:null;
   return OFFICE_MIMES[String(file?.type||'').split(';')[0].toLowerCase()]?.[0].slice(1)||null;
 }
-export const OFFICE_MAX_BYTES=100*1024*1024;
+export const OFFICE_MAX_BYTES=1024*1024*1024;
 export async function verifyOffice(file,format){
   if(!file.size)throw Error('문서 파일이 비어 있습니다.');
-  if(file.size>OFFICE_MAX_BYTES)throw Error('이 형식은 100MB 이하의 파일을 열 수 있습니다. 문서를 나누어 저장한 뒤 가져와 주세요.');
-  if(OFFICE_FORMATS[format]==='subtitle'&&file.size>8*1024*1024)throw Error('자막 파일은 8MB 이하로 나누어 가져와 주세요.');
+  if(file.size>OFFICE_MAX_BYTES)throw Error('이 형식은 1GB 이하의 파일을 열 수 있습니다. 문서를 나누어 저장한 뒤 가져와 주세요.');
+  if(OFFICE_FORMATS[format]==='subtitle'&&file.size>128*1024*1024)throw Error('자막 파일은 128MB 이하로 나누어 가져와 주세요.');
   if(['markdown','text','subtitle'].includes(OFFICE_FORMATS[format])||['csv','tsv'].includes(format))return;
   if(OFFICE_FORMATS[format]==='ebook')return; // Bounded worker validates structure, encryption and resource sizes.
   const b=new Uint8Array(await file.slice(0,8).arrayBuffer());

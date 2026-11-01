@@ -1,11 +1,11 @@
 import {read,utils} from '../vendor/office/sheets.js';
 import {decodeCsvBuffer,parseCsv} from '../vendor/office/genoffice.js';
 import {esc,number,color,safeLink} from './office-common.js';
-const MAX_CELLS=250000,MAX_ROWS=50000,MAX_COLS=1024;
+const MAX_CELLS=2000000,MAX_ROWS=200000,MAX_COLS=4096;
 function checkedRange(sheet){
   const range=utils.decode_range(sheet['!fullref']||sheet['!ref']||'A1');
   const rows=range.e.r-range.s.r+1,cols=range.e.c-range.s.c+1;
-  if(rows>MAX_ROWS||cols>MAX_COLS||rows*cols>MAX_CELLS)throw Error('시트의 표시 범위가 너무 큽니다. 시트당 50,000행·1,024열·250,000칸 이하로 나누어 가져와 주세요.');
+  if(rows>MAX_ROWS||cols>MAX_COLS||rows*cols>MAX_CELLS)throw Error('시트의 표시 범위가 너무 큽니다. 시트당 200,000행·4,096열·2,000,000칸 이하로 나누어 가져와 주세요.');
   return range;
 }
 export function renderSheets(bytes,format,warnings){
@@ -13,15 +13,15 @@ export function renderSheets(bytes,format,warnings){
   if(format==='csv'||format==='tsv'){
     const rows=parseCsv(decodeCsvBuffer(bytes,'euc-kr'),format==='tsv'?'\t':undefined);
     const cols=rows.reduce((max,row)=>Math.max(max,row.length),0);
-    if(rows.length>MAX_ROWS||cols>MAX_COLS||rows.length*cols>MAX_CELLS)throw Error('표가 너무 큽니다. 50,000행·1,024열·250,000칸 이하로 나누어 가져와 주세요.');
+    if(rows.length>MAX_ROWS||cols>MAX_COLS||rows.length*cols>MAX_CELLS)throw Error('표가 너무 큽니다. 200,000행·4,096열·2,000,000칸 이하로 나누어 가져와 주세요.');
     workbook=utils.book_new();utils.book_append_sheet(workbook,utils.aoa_to_sheet(rows),'시트 1');
   }else workbook=read(bytes,{type:'array',cellStyles:true,cellNF:true,cellDates:false,cellHTML:false,bookVBA:false,sheetRows:MAX_ROWS+1});
   if(!workbook.SheetNames.length)throw Error('읽을 수 있는 시트가 없습니다.');
-  if(workbook.SheetNames.length>256)throw Error('시트가 256개를 넘는 문서는 나누어 가져와 주세요.');
+  if(workbook.SheetNames.length>1024)throw Error('시트가 1,024개를 넘는 문서는 나누어 가져와 주세요.');
   let total=0,uncached=false;
   const body=workbook.SheetNames.map((name,index)=>{
     const sheet=workbook.Sheets[name],range=checkedRange(sheet),rows=range.e.r-range.s.r+1,cols=range.e.c-range.s.c+1;
-    total+=rows*cols;if(total>MAX_CELLS*2)throw Error('통합 문서의 표시 범위가 500,000칸을 넘습니다. 시트를 나누어 가져와 주세요.');
+    total+=rows*cols;if(total>MAX_CELLS*2)throw Error('통합 문서의 표시 범위가 4,000,000칸을 넘습니다. 시트를 나누어 가져와 주세요.');
     const merges=new Map(),covered=new Set();
     for(const merge of sheet['!merges']||[]){
       const sr=Math.max(range.s.r,merge.s.r),er=Math.min(range.e.r,merge.e.r),sc=Math.max(range.s.c,merge.s.c),ec=Math.min(range.e.c,merge.e.c);

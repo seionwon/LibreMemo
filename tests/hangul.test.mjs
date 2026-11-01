@@ -41,7 +41,7 @@ test('wide letter spacing uses original text offsets rather than inventing space
 test('HML encoding, root and entity checks run before WASM; mismatched extensions and malformed archives fail',async()=>{
   const utf16=new Uint8Array(Buffer.from('\ufeff'+hmlText.replace('UTF-8','UTF-16'),'utf16le'));validateHML(utf16);assert.match((await renderOffice(utf16,'hml','UTF16')).html,/office-page/);
   for(const source of ['<!DOCTYPE HWPML [<!ENTITY x SYSTEM "https://bad.invalid">]>'+hmlText,'<html>not HML</html>'])assert.throws(()=>validateHML(new TextEncoder().encode(source)),/엔터티|문서 형식/);
-  assert.throws(()=>validateHML(new Uint8Array(16*1024*1024+1)),/16MB/);
+  assert.throws(()=>validateHML({length:256*1024*1024+1}),/256MB/);
   await assert.rejects(renderOffice(fixtures.hml,'hwp','wrong.hwp'),/확장자/);
   await assert.rejects(verifyOffice(new File(['bad'],'bad.hwp'),'hwp'),/손상/);
   await assert.rejects(renderOffice(new Uint8Array([0x50,0x4b,3,4]),'hwpx','bad.hwpx'));
