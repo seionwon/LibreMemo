@@ -350,9 +350,57 @@ export function createReadAloud(reader) {
   // (a code box): the DOM range then covers the whole box, and the follow-scroll yanks the view up
   // to the top of that range before the next sentence brings it back.
   var BLOCK = 'p, li, h1, h2, h3, h4, h5, h6, blockquote, pre, td, th, dt, dd, figcaption, section, article, div, nav, aside, header, footer, main, details, summary, table, tr';
-  function blockOf(n) { var e = n.parentElement; return e ? e.closest(BLOCK) : null; }
+  function blockOf(n) {
+    var e = n.parentElement;
+    if (!e) return null;
+    if (e.closest('.rhwp-text, .djvu-text')) return e.closest('.office-page, [data-djvu-page], svg');
+    return e.closest(BLOCK);
+  }
+  function hasBrInScope(scope, brCache) {
+    if (!scope || !scope.querySelector) return false;
+    if (!brCache.has(scope)) brCache.set(scope, !!scope.querySelector('br'));
+    return brCache.get(scope);
+  }
+  function lineBreakBetween(a, b, scope, brCache) {
+    if (!a || !b || !hasBrInScope(scope, brCache)) return false;
+    var cur = a;
+    while (cur && cur !== scope) {
+      var sib = cur.nextSibling;
+      while (sib) {
+        if (sib === b || (sib.contains && sib.contains(b))) return false;
+        if (sib.localName === 'br' || (sib.querySelector && sib.querySelector('br'))) return true;
+        sib = sib.nextSibling;
+      }
+      cur = cur.parentNode;
+    }
+    return false;
+  }
+  function slideLineOf(pe, prevLine) {
+    if (!pe || pe.closest('.rhwp-text, .djvu-text')) return null;
+    var fo = pe.closest('foreignObject');
+    if (fo) {
+      var inner = pe.closest(BLOCK);
+      if (inner && fo.contains(inner)) return null;
+      var group = fo.closest('g, svg'), x = parseFloat(fo.getAttribute('x')), y = parseFloat(fo.getAttribute('y'));
+      var w = parseFloat(fo.getAttribute('width')) || 0, h = parseFloat(fo.getAttribute('height')) || 16;
+      var endX = Number.isFinite(x) ? x + Math.max(0, w - h / 1.5) : NaN;
+      if (prevLine && prevLine.kind === 'fo' && prevLine.group === group && Number.isFinite(y) && Number.isFinite(prevLine.y) &&
+          Math.abs(y - prevLine.y) <= Math.max(h, prevLine.h) * 0.45 && (!Number.isFinite(x) || !Number.isFinite(prevLine.x) || x >= prevLine.x - 4)) {
+        var joined = fo !== prevLine.node;
+        var gap = joined && Number.isFinite(x) && Number.isFinite(prevLine.endX) ? x - prevLine.endX : 0;
+        return { kind: 'fo', token: prevLine.token, group: group, x: x, y: y, w: w, h: h, endX: Number.isFinite(endX) ? endX : prevLine.endX, joined: joined, gap: gap, node: fo };
+      }
+      return { kind: 'fo', token: fo, group: group, x: x, y: y, w: w, h: h, endX: endX, joined: false, gap: 0, node: fo };
+    }
+    var svgText = pe.closest('text');
+    if (svgText) {
+      var standalone = !!pe.closest('.office-slide, .office-page, .ebook-fixed-page') || prevLine?.kind === 'svg-text';
+      return { kind: 'svg-text', token: standalone ? svgText : null, group: svgText.closest('g, svg'), node: svgText };
+    }
+    return null;
+  }
   function buildIndex(root, range = null) {
-    var parts = [], mathRanges = [], text = '', prevBlock = null;
+    var parts = [], mathRanges = [], text = '', prevBlock = null, prevNode = null, prevSlideLine = null, prevPdfSpan = null, brCache = new WeakMap();
     var walker = D.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode: function (n) {
         var pe = n.parentElement;
@@ -368,9 +416,23 @@ export function createReadAloud(reader) {
       var to = range && range.endContainer === n ? range.endOffset : n.data.length;
       if (to <= from) continue;
       var data = n.data.slice(from,to), pe2 = n.parentElement;
-      var blk = blockOf(n);
+      var slideLine = slideLineOf(pe2, prevSlideLine);
+      var blk = slideLine?.token || blockOf(n);
+      var pdfSpan = pe2 ? pe2.closest('[data-pdf-text]') : null;
       if (prevBlock && blk !== prevBlock) text += '\n';   // block boundary = sentence boundary
-      prevBlock = blk;
+      else if (prevNode && lineBreakBetween(prevNode, n, blk || root, brCache)) text += '\n';
+      else if (pdfSpan && prevPdfSpan && pdfSpan !== prevPdfSpan) {
+        var top1 = parseFloat(prevPdfSpan.style?.top), top2 = parseFloat(pdfSpan.style?.top);
+        var left1 = parseFloat(prevPdfSpan.style?.left), left2 = parseFloat(pdfSpan.style?.left);
+        if ((!prevPdfSpan.style?.top && !pdfSpan.style?.top) || (Number.isFinite(top1) && Number.isFinite(top2) && Math.abs(top1 - top2) > 0.4) || (Number.isFinite(left1) && Number.isFinite(left2) && left2 < left1 - 0.5)) text += '\n';
+        else if (!/\s$/.test(text) && !/^\s/.test(data)) text += ' ';
+      } else if (slideLine?.joined && !/\s$/.test(text) && !/^\s/.test(data) && (/[.!?…。]$/.test(text) || slideLine.gap > Math.min(slideLine.h, prevSlideLine.h) * 0.15)) {
+        text += ' ';
+      } else if (prevNode && pe2 !== prevNode.parentElement && /[.!?…。]$/.test(text) && !/^\s/.test(data) &&
+          (/[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(data.charAt(0)) || pe2?.closest('.rhwp-text, .djvu-text') !== prevNode.parentElement?.closest('.rhwp-text, .djvu-text'))) {
+        text += ' ';
+      }
+      prevBlock = blk; prevNode = n; prevSlideLine = slideLine; prevPdfSpan = pdfSpan;
       if (pe2 && pe2.closest('annotation')) mathRanges.push({ start: text.length, end: text.length + data.length, tex: data });
       parts.push({ node: n, start: text.length, offset:from, length:to-from, diagram:!!pe2.closest('svg') });
       text += data;
@@ -483,8 +545,18 @@ export function createReadAloud(reader) {
     }
     groups.push({from,to:end,diagram});
     for (const group of groups) {
+      if (group.diagram) continue;
       const range=D.createRange();range.setStart(group.from.node,group.from.offset);range.setEnd(group.to.node,group.to.offset);
-      ranges[Number(group.diagram)].push(range);
+      ranges[0].push(range);
+    }
+    for (let i=start.part;i<=end.part;i++) {
+      const part=idx.parts[i];
+      if (!part.diagram) continue;
+      const fromOffset=i===start.part?start.offset:part.offset;
+      const toOffset=i===end.part?end.offset:part.offset+part.length;
+      if (toOffset<=fromOffset||!/\S/.test(part.node.data.slice(fromOffset,toOffset))) continue;
+      const range=D.createRange();range.setStart(part.node,fromOffset);range.setEnd(part.node,toOffset);
+      ranges[1].push(range);
     }
     clearPaint();
     if(ranges[0].length)CSS.highlights.set('mstts',new R.Highlight(...ranges[0]));
@@ -806,8 +878,8 @@ export function createReadAloud(reader) {
       if (CSS && CSS.highlights && R.Highlight) {
         var s = posAt(idx.parts, sent.start, false), e = posAt(idx.parts, sent.end, true);
         if (s && e) {
-          var r = D.createRange();
-          r.setStart(s.node, s.offset); r.setEnd(e.node, e.offset);
+          var r = D.createRange(), sPart = idx.parts[s.part];
+          r.setStart(s.node, s.offset); r.setEnd(s.node, s.node === e.node ? e.offset : sPart.offset + sPart.length);
           paintSentence(s,e);
           // The FIRST client rect (the sentence's first line), not the union: a union spanning a
           // block boundary is hundreds of pixels tall and would scroll to somewhere nobody is reading.

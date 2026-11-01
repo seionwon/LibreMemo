@@ -222,3 +222,53 @@ test('failed selection autoplay stays retryable within its range without automat
     a.win.failUtterance=false;a.engine.speak=speak;a.play();assert.equal(a.spoken.length,before+1);assert.equal(a.spoken.at(-1).text,'두 번째 문장입니다.');assert.ok(a.button('일시정지'));
   }
 });
+test('PPTX slides, PDF text layers, HWP/DjVu pages and br-separated lines highlight only the active sentence',()=>{
+  const slideHtml='<html><body><main data-tts-root><article class="wm-doc" data-office-slides><section class="office-slide" id="office-slide-1"><svg viewBox="0 0 960 540">'
+    +'<g transform="translate(48 28)"><foreignObject x="8" y="4" width="620" height="32"><span data-office-text style="display:inline-block">질문을 클래스별로 구분하여 텍스트모델을 만들어 봅시다.</span></foreignObject></g>'
+    +'<g transform="translate(48 92)"><foreignObject x="8" y="6" width="140" height="24"><span data-office-text style="display:inline-block">클래스명</span></foreignObject></g>'
+    +'<g transform="translate(220 92)"><foreignObject x="8" y="6" width="160" height="24"><span data-office-text style="display:inline-block">질문 </span></foreignObject><foreignObject x="68" y="6" width="120" height="24"><span data-office-text style="display:inline-block">(5개 이상)</span></foreignObject></g>'
+    +'<g transform="translate(48 140)"><foreignObject x="8" y="20" width="140" height="24"><span data-office-text style="display:inline-block">어린 시절</span></foreignObject></g>'
+    +'<g transform="translate(220 140)"><foreignObject x="8" y="6" width="260" height="22"><span data-office-text style="display:inline-block">어린 시절은 어땠나요?</span></foreignObject><foreignObject x="8" y="30" width="300" height="22"><span data-office-text style="display:inline-block">어릴 적은 어떤 시간을 보냈나요?</span></foreignObject></g>'
+    +'</svg></section></article></main></body></html>';
+  const a=fixture({paint:true,html:slideHtml});
+  const spans=[...a.doc.querySelectorAll('[data-office-text]')];
+  spans.forEach((span,i)=>{span.getBoundingClientRect=()=>({left:40,top:80+i*28,bottom:102+i*28,width:180,height:22});});
+  const measuredNodes=[];
+  const origRange=a.doc.createRange;
+  a.doc.createRange=()=>{
+    const r=origRange();
+    r.getClientRects=()=>{
+      measuredNodes.push({start:r.startContainer,end:r.endContainer});
+      const idx=spans.findIndex(s=>s.firstChild===r.startContainer);
+      return idx>=0?[{left:40,top:80+idx*28,width:120,height:20}]:[];
+    };
+    return r;
+  };
+  a.play();
+  const expected=['질문을 클래스별로 구분하여 텍스트모델을 만들어 봅시다.','클래스명','질문 (다섯 개 이상)','어린 시절','어린 시절은 어땠나요?','어릴 적은 어떤 시간을 보냈나요?'];
+  assert.equal(a.ui.querySelector('.mstts-count').textContent,'1/'+expected.length);
+  for(let i=0;i<expected.length;i++){
+    if(i>0)a.clickButton('다음 문장');
+    assert.equal(a.spoken.at(-1).text,expected[i]);
+    const boxes=a.doc.querySelectorAll('[data-htmlmemo-tts-paint] > div');
+    assert.equal(boxes.length,expected[i]==='질문 (다섯 개 이상)'?2:1);
+    assert.ok(measuredNodes.every(m=>m.start===m.end&&m.start.nodeType===3));
+  }
+  a.player.dispose();
+
+  const otherHtml='<html><body><main data-tts-root>'
+    +'<div class="textLayer"><span data-pdf-text style="top:10%;left:8%">첫째 줄 문장입니다.</span><span data-pdf-text style="top:18%;left:8%">둘째 줄 제목</span><span data-pdf-text style="top:26%;left:8%">셋째 줄 문장입니다.</span></div>'
+    +'<section class="office-page"><svg><foreignObject><p data-office-text class="rhwp-text"><span>한글 </span><span>첫 문장입니다.\n</span></p></foreignObject><foreignObject><p data-office-text class="rhwp-text"><span>한글 둘째 문장입니다.\n</span></p></foreignObject></svg></section>'
+    +'<section data-djvu-page><svg><foreignObject><p data-office-text class="djvu-text">스캔 </p></foreignObject><foreignObject><p data-office-text class="djvu-text">문장입니다.\n</p></foreignObject></svg></section>'
+    +'<p>자막 첫째 줄입니다.<br>자막 둘째 줄입니다.</p>'
+    +'</main></body></html>';
+  const b=fixture({paint:true,html:otherHtml});
+  [...b.doc.querySelectorAll('[data-pdf-text],.rhwp-text,.djvu-text,p')].forEach((el,i)=>{el.getBoundingClientRect=()=>({left:20,top:80+i*24,bottom:100+i*24,width:140,height:20});});
+  b.play();
+  const otherExpected=['첫째 줄 문장입니다.','둘째 줄 제목','셋째 줄 문장입니다.','한글 첫 문장입니다.','한글 둘째 문장입니다.','스캔 문장입니다.','자막 첫째 줄입니다.','자막 둘째 줄입니다.'];
+  for(let i=0;i<otherExpected.length;i++){
+    if(i>0)b.clickButton('다음 문장');
+    assert.equal(b.spoken.at(-1).text,otherExpected[i]);
+  }
+  b.player.dispose();
+});

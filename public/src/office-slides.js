@@ -95,7 +95,7 @@ function textLayout(layout){
     const ls=Math.max(-size*.12,n(run.letterSpacingPx)+n(run.justifyExtraPx));
     const family="'"+font(run.fontFamily).replace(/'/g,'')+"',sans-serif";
     const style='font-family:'+family+';font-size:'+size+'px;line-height:1;white-space:pre;color:'+color(run.color,'#202633')+';font-weight:'+(run.bold?'700':'400')+';font-style:'+(run.italic?'italic':'normal')+(Math.abs(ls)>=.05?';letter-spacing:'+n(ls)+'px':'')+(run.underline||run.strike?';text-decoration:'+([run.underline?'underline':'',run.strike?'line-through':''].filter(Boolean).join(' ')):'')+(run.rtl?';direction:rtl;unicode-bidi:plaintext':'');
-    let text='<foreignObject x="'+rx+'" y="'+top+'" width="'+Math.max(size,n(run.widthPx)+size)+'" height="'+size*1.5+'" overflow="visible"'+(rotation?' transform="rotate('+rotation+' '+rx+' '+by+')"':'')+'><span xmlns="http://www.w3.org/1999/xhtml" data-office-text style="display:block;'+esc(style)+'">'+esc(run.text)+'</span></foreignObject>';
+    let text='<foreignObject x="'+rx+'" y="'+top+'" width="'+Math.max(size,n(run.widthPx)+size)+'" height="'+size*1.5+'" overflow="visible"'+(rotation?' transform="rotate('+rotation+' '+rx+' '+by+')"':'')+'><span xmlns="http://www.w3.org/1999/xhtml" data-office-text style="display:inline-block;'+esc(style)+'">'+esc(run.text)+'</span></foreignObject>';
     const href=/^slide:\d+$/.test(run.link||'')?'#office-slide-'+run.link.slice(6):safeLink(run.link);
     if(href)text='<a href="'+esc(href)+'">'+text+'</a>';
     if(run.highlight)text='<rect x="'+rx+'" y="'+n(by-size*.85)+'" width="'+n(run.widthPx)+'" height="'+n(size*1.15)+'" fill="'+esc(color(run.highlight,'transparent'))+'"/>'+text;
