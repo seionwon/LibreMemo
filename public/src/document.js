@@ -255,7 +255,7 @@ function* prepareHTML(html, defaults, {includeMetadata = false, document: loaded
     warnings: [...new Set([...(Array.isArray(embedded.warnings) ? embedded.warnings : defaults.warnings || []), ...(book && !book.complete ? [BOOK_DATA_MISSING] : [])])].filter(w=>typeof w==='string').slice(0,5000),
   };
   if(view.sourceStorage)metadata.view.sourceStorage=cleanSourceStorage(view.sourceStorage);
-  if(Number.isFinite(view.fontScale))metadata.view.fontScale=Math.min(2.4,Math.max(.6,view.fontScale));
+  if(Number.isFinite(view.fontScale))metadata.view.fontScale=Math.min(3.2,Math.max(.6,view.fontScale));
   if(['system','light','dark'].includes(view.readingTheme))metadata.view.readingTheme=view.readingTheme;
   if(validPDFPosition(view.pdfPosition))metadata.view.pdfPosition={page:view.pdfPosition.page,y:view.pdfPosition.y};
   if(bookmarks.some(mark=>mark.pdfPosition!=null&&!validPDFPosition(mark.pdfPosition)))throw Error('PDF 북마크 위치가 손상되었습니다.');

@@ -111,7 +111,12 @@ test('font changes preserve document text and annotations and save a bounded set
   r.setupReadingControls();assert.match(doc.querySelector('#htmlmemo-reading-font-style').textContent,/19\.800px/);assert.equal(doc.body.getAttribute('style'),sourceBody);
   r.plainReadingButtons.larger.onclick();assert.equal(writes.length,2);assert.equal(writes[1].fontScale,1.21);
   assert.equal(textIndex(doc).text,before);assert.deepEqual(r.metadata.annotations,notes);assert.equal(r.setReadingFontScale(NaN),false);
-  r.setReadingFontScale(100);assert.equal(r.metadata.view.fontScale,2.4);assert.equal(r.plainReadingButtons.larger.disabled,true);
+  r.setReadingFontScale(2.4);assert.equal(r.metadata.view.fontScale,2.4);assert.equal(r.plainReadingButtons.larger.disabled,false);
+  r.plainReadingButtons.larger.onclick();assert.equal(r.metadata.view.fontScale,2.64);assert.equal(r.plainReadingButtons.larger.disabled,false);
+  r.plainReadingButtons.larger.onclick();assert.equal(r.metadata.view.fontScale,2.904);assert.equal(r.plainReadingButtons.larger.disabled,false);
+  r.plainReadingButtons.larger.onclick();assert.equal(r.metadata.view.fontScale,3.2);assert.equal(r.plainReadingButtons.larger.disabled,true);
+  assert.equal(parseHTML(serializeHTML(doc,r.metadata)).metadata.view.fontScale,3.2);
+  r.setReadingFontScale(100);assert.equal(r.metadata.view.fontScale,3.2);assert.equal(r.plainReadingButtons.larger.disabled,true);
   r.setReadingFontScale(-100);assert.equal(r.metadata.view.fontScale,.6);assert.equal(r.plainReadingButtons.smaller.disabled,true);
   const saved=serializeHTML(doc,r.metadata);assert.doesNotMatch(saved,/htmlmemo-reading-font-style|data-htmlmemo-reading-controls/);
   assert.equal(parseHTML(saved).metadata.view.fontScale,.6);assert.equal(textIndex(documentFor(parseHTML(saved).html)).text,before);

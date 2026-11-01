@@ -963,7 +963,7 @@ export class Reader {
       const sidebar=this.host.ownerDocument.getElementById('sidebar');menu.setAttribute('aria-expanded',String(sidebar?.hidden===false&&sidebar.annotationReader===this));
       back.disabled=!this.linkHistory?.length;const location=(nodes.length?current+1:0)+' / '+nodes.length;if(position.textContent!==location)position.textContent=location;
       previous.disabled=current<=0;next.disabled=current>=nodes.length-1;
-      const scale=this.readingFontScale();smaller.disabled=scale<=.6;larger.disabled=scale>=2.4;
+      const scale=this.readingFontScale();smaller.disabled=scale<=.6;larger.disabled=scale>=3.2;
       if(theme.value!==this.readingTheme())for(const option of theme.querySelectorAll('option'))option.selected=option.value===this.readingTheme();
       this.readingControls.dataset.theme=this.resolvedReadingTheme();
     }
@@ -1016,7 +1016,7 @@ export class Reader {
     this.readingHeadingCursor={node:target,top:this.scrollTop};
     this.rememberPosition();this.updateReadingControls();this.callbacks.onView?.();return true;
   }
-  readingFontScale() { return Number.isFinite(this.metadata.view?.fontScale)?clamp(this.metadata.view.fontScale,.6,2.4):1; }
+  readingFontScale() { return Number.isFinite(this.metadata.view?.fontScale)?clamp(this.metadata.view.fontScale,.6,3.2):1; }
   readingTheme() { return ['system','light','dark'].includes(this.metadata.view?.readingTheme)?this.metadata.view.readingTheme:'system'; }
   resolvedReadingTheme() { const value=this.readingTheme();return value==='system'?(this.readingThemeQuery?.matches?'dark':'light'):value; }
   applyReadingTheme() {
@@ -1049,7 +1049,7 @@ export class Reader {
   }
   setReadingFontScale(value) {
     if(!Number.isFinite(value)||this.disposed||this.preparing||this.topbarNode?.isConnected)return false;
-    const scale=Math.round(clamp(value,.6,2.4)*10000)/10000;if(scale===this.readingFontScale())return false;
+    const raw=clamp(value,.6,3.2),scale=raw>=3.1944?3.2:Math.round(raw*10000)/10000;if(scale===this.readingFontScale())return false;
     this.cancelAnnotationDrag();if(this.pdf)this.autoFit=false;this.metadata.view.fontScale=scale;this.applyReadingFont();
     this.measure();this.renderDrawingLayer();this.readAloud?.refreshPaint?.();
     // Font scale was already applied to view above; unchanged scroll offsets
