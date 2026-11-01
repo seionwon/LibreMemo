@@ -27,7 +27,7 @@ async function saved(page,name,condition='true'){
 }
 async function exportDocument(page,mode){
   await page.evaluate(`(async()=>{window.__mediaExport=await(await navigator.storage.getDirectory()).getFileHandle('image-subtitle-export.${mode==='archive'?'librememo':'html'}',{create:true});window.showSaveFilePicker=async()=>window.__mediaExport;})()`);
-  await chooseDocumentExport(page,mode);await page.waitFor('document.querySelector("#toast").textContent.includes("내보냈습니다")');
+  await chooseDocumentExport(page,mode);await page.waitFor('(async()=>!document.querySelector("#dialog").open&&document.querySelector("#toast").textContent.includes("내보냈습니다")&&(await window.__mediaExport.getFile()).size>0)()',60000);
   return Buffer.from(await page.evaluate(`(async()=>{const bytes=new Uint8Array(await(await window.__mediaExport.getFile()).arrayBuffer());let s='';for(let i=0;i<bytes.length;i+=16384)s+=String.fromCharCode(...bytes.subarray(i,i+16384));return btoa(s);})()`),'base64');
 }
 async function fail(page,name){await writeFile(join(root,'test-results/pages-only-'+name+'-failure.png'),await page.screenshot());console.error(name,await page.evaluate('({toast:document.querySelector("#toast")?.textContent,status:document.querySelector("#status-left")?.textContent,dialog:document.querySelector("#dialog[open]")?.textContent})'));}
@@ -82,7 +82,7 @@ test('real Chrome: Pages-only screenshot clipboard, iframe paste, pen alignment,
     await page.click('#library-tab');await page.click('#image-paste-button');await writeFile(join(root,'test-results/pages-only-screenshot-paste.png'),await page.screenshot());await page.click('[data-image-paste] [data-dialog-close]');
     await page.evaluate('navigator.serviceWorker.ready');await page.waitFor('!!navigator.serviceWorker.controller',45000);await page.send('Network.enable');await page.send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});await page.navigate(env.url);await page.click('#library-tab');await page.click('#document-grid [data-open]');await saved(page,name,'window.__mediaRecord.metadata.annotations.length===2');
     assert.deepEqual(chrome.errors,[]);assert.deepEqual(receiver.errors,[]);await writeFile(join(root,'test-results/pages-only-screenshot-annotations.json'),JSON.stringify({status:'pass',clipboard:true,iframePaste:true,zoomPercent:checks,fontScale:1.1,annotations:2,bookmarks:1,archive:true,html:true,phone:320,offline:true,errors:[]},null,2));
-  }catch(error){if(chrome)await fail(chrome.page,'screenshot');throw error;}finally{await receiver?.close();await chrome?.close();await env.close();}
+  }catch(error){if(chrome)await fail(chrome.page,'screenshot');if(receiver)await fail(receiver.page,'screenshot-receiver');throw error;}finally{await receiver?.close();await chrome?.close();await env.close();}
 });
 
 test('real Chrome: Pages-only subtitle formats share time outlines, text annotations, search and portable originals',{timeout:210000},async()=>{
@@ -131,5 +131,5 @@ test('real Chrome: Pages-only DjVu pages share tools, search, precise drawings, 
     await page.evaluate('navigator.serviceWorker.ready');await page.waitFor('!!navigator.serviceWorker.controller',45000);await page.send('Network.enable');await page.send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});await page.navigate(env.url);await chooseFile(page,await readFile(join(root,'tests/fixtures/djvu/second.djv')),'오프라인.djv');await saved(page,'오프라인.djv');assert.equal(await page.evaluate(doc+'.querySelectorAll("[data-djvu-page]").length'),1);
     await chooseFile(page,Buffer.from('AT&TFORMinvalid'),'broken.djvu');await page.waitFor('document.querySelector("#toast").textContent.includes("손상")');assert.equal(await page.evaluate('(async()=> (await(await import("./src/storage.js")).listDocuments()).some(r=>r.name==="broken.djvu"))()'),false);
     assert.deepEqual(chrome.errors,[]);assert.deepEqual(receiver.errors,[]);await writeFile(join(root,'test-results/pages-only-djvu.json'),JSON.stringify({status:'pass',pages:2,original:true,nativePixels:[1600,1000],highlight:true,pen:true,zoom:[75,125,50],fontScale:1.1,search:true,bookmarks:1,archive:true,html:true,offlineNewDjvImport:true,phone:320,errors:[]},null,2));
-  }catch(error){if(chrome)await fail(chrome.page,'djvu');throw error;}finally{await receiver?.close();await chrome?.close();await env.close();}
+  }catch(error){if(chrome)await fail(chrome.page,'djvu');if(receiver)await fail(receiver.page,'djvu-receiver');throw error;}finally{await receiver?.close();await chrome?.close();await env.close();}
 });

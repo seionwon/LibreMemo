@@ -61,6 +61,9 @@ test('DjVu OCR escapes markup and rejects unbounded or non-finite boxes',()=>{
   const zone={t:'<img src=x onerror=alert(1)> & 한글',x:0,y:0,w:100,h:20},html=djvuTextLayer([zone],200,100,()=>100),doc=documentFor('<html><body><svg>'+html+'</svg></body></html>');assert.equal(doc.querySelector('img,script,iframe'),null);assert.match(doc.body.textContent,/<img src=x onerror=alert\(1\)> & 한글/);
   for(const patch of [{w:Infinity},{x:-1},{h:1e8},{t:[]}])assert.throws(()=>djvuTextLayer([{...zone,...patch}],200,100,()=>100),/위치/);
 });
+test('character-level DjVu OCR keeps source word boundaries for Korean search and TTS',()=>{
+  const zones=['한','국','어','문','서'].map((t,i)=>({t,x:i*10,y:0,w:10,h:20})),html=djvuTextLayer(zones,200,100,()=>10,'한국어 문서\n'),doc=documentFor('<html><body><svg>'+html+'</svg></body></html>');assert.equal(textIndex(doc).text,'한국어 문서\n');
+});
 test('DjVu decoder and its transitive licenses are immutable local offline assets',async()=>{
   const upstream=JSON.parse(await readFile('public/vendor/djvu/UPSTREAM.json','utf8'));assert.equal(upstream.version,'0.43.0');assert.equal(upstream.license,'MIT');
   for(const [name,hash] of Object.entries(upstream.files)){assert.ok(APP_FILES.includes('vendor/djvu/'+name));const data=await readFile('public/vendor/djvu/'+name);assert.equal(createHash('sha256').update(data).digest('hex'),hash);assert.deepEqual(data,await readFile('node_modules/djvu-rs/'+name));}

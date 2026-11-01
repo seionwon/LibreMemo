@@ -38,9 +38,10 @@ export function inspectDjvu(input){
   const end=12+v.getUint32(8);if(end!==b.length&&!(end+1===b.length&&(end&1)))throw Error('DjVu 전체 파일 길이가 맞지 않습니다.');
   scan(4,end,0);return {pages:count};
 }
-export function djvuTextLayer(zones,width,height,measure){
+export function djvuTextLayer(zones,width,height,measure,plain=''){
   if(!Array.isArray(zones)||zones.length>100000)throw Error('DjVu 한 쪽의 문자 위치 정보가 너무 큽니다.');
-  let chars=0;
+  let cursor=0,chars=0,locate=!!plain;
+  const offsets=zones.map(z=>{const at=locate&&typeof z?.t==='string'?plain.indexOf(z.t,cursor):-1;if(at>=0)cursor=at+z.t.length;else locate=false;return at;});
   return zones.map((z,i)=>{
     if(typeof z?.t!=='string'||!['x','y','w','h'].every(k=>Number.isFinite(z[k])&&z[k]>=0)||z.x>width||z.y>height||z.w>width||z.h>height)throw Error('DjVu의 문자 위치가 올바르지 않습니다.');
     if(!z.t.trim()||!z.w||!z.h)return '';
@@ -48,7 +49,14 @@ export function djvuTextLayer(zones,width,height,measure){
     const text=z.t.replace(/\s+/gu,' '),size=z.h,natural=measure(text,size),scale=z.w/Math.max(.1,natural);
     if(!Number.isFinite(scale)||scale<=0)throw Error('DjVu의 문자 폭을 표시하지 못했습니다.');
     const next=zones[i+1],newline=!next||Math.abs(next.y-z.y)>Math.max(z.h,next.h)*.5;
-    return '<foreignObject x="'+z.x+'" y="'+z.y+'" width="'+z.w+'" height="'+z.h+'" overflow="visible"><p xmlns="http://www.w3.org/1999/xhtml" data-office-text class="djvu-text" style="margin:0;padding:0;white-space:pre;line-height:1;color:transparent;font-size:'+size+'px;font-family:sans-serif;transform-origin:0 0;transform:scaleX('+scale+')">'+esc(text)+(newline?'\n':' ')+'</p></foreignObject>';
+    let separator=newline?'\n':next.x-z.x-z.w>Math.min(z.h,next.h)*.15?' ':'';
+    // Leaf zones can be individual characters. Prefer the source text's exact
+    // word boundaries; inserting a space after every leaf breaks Korean search.
+    if(offsets[i]>=0&&(!next||offsets[i+1]>=0)){
+      const gap=plain.slice(offsets[i]+z.t.length,next?offsets[i+1]:plain.length);
+      if(/^\s*$/u.test(gap))separator=/[\r\n\v\f\u2028\u2029]/u.test(gap)?'\n':gap?' ':'';
+    }
+    return '<foreignObject x="'+z.x+'" y="'+z.y+'" width="'+z.w+'" height="'+z.h+'" overflow="visible"><p xmlns="http://www.w3.org/1999/xhtml" data-office-text class="djvu-text" style="margin:0;padding:0;white-space:pre;line-height:1;color:transparent;font-size:'+size+'px;font-family:sans-serif;transform-origin:0 0;transform:scaleX('+scale+')">'+esc(text)+separator+'</p></foreignObject>';
   }).join('');
 }
 async function pngParts(blob){
@@ -72,8 +80,9 @@ export async function renderDjvu(bytes,title,{initialize=()=>ready??=init(),enco
         const pixels=page.render(dpi);if(pixels.length!==width*height*4)throw Error('DjVu 쪽의 이미지 크기가 맞지 않습니다.');
         const png=await encode(pixels,width,height);total+=Math.ceil(png.size/3)*4;
         if(total>DJVU_MAX_OUTPUT)throw Error('DjVu 읽기 화면이 256MB를 넘습니다. 문서를 나누어 가져와 주세요.');
-        const raw=page.text_zones_json(dpi),plain=page.text()||'',zones=raw?JSON.parse(raw):[],overlay=djvuTextLayer(zones,width,height,measure);
+        const raw=page.text_zones_json(dpi),plain=page.text()||'';
         if(plain.length>1000000)throw Error('DjVu 한 쪽의 문자가 너무 많습니다.');
+        const zones=raw?JSON.parse(raw):[],overlay=djvuTextLayer(zones,width,height,measure,plain);
         // Position-less text remains accessible as a separate transcript. Do not
         // invent OCR rectangles over the image when the file supplies none.
         const transcript=!overlay&&plain.trim()?'<p class="office-note" data-tts-skip>이 쪽의 문자 정보 · 원본에 글자별 위치가 없습니다.</p><pre class="office-plain">'+esc(plain)+'</pre>':'';
