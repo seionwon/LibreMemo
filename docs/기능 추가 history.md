@@ -5579,7 +5579,7 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
 | --- | --- |
 | ID | hist-20261102-003 |
 | 변경 종류 | PDF 텍스트 주석(`captureRects`, `snapRectInk`, `renderTextMarks`, `previewText`, `pdfExportPlan`) 세로 높이 보정·기준선 직하단 정렬·단어 잉크 경계 스냅 · 전 포맷 밑줄 간격(`text-underline-offset`, `text-decoration-skip-ink`) 및 한글(`office-hangul.js`) 공백 구간 연속 밑줄 정렬 |
-| 상태 | 로컬 검증 완료 · 1.9.7 GitHub Pages 게시 진행 |
+| 상태 | 로컬 검증 완료 · 1.9.7 GitHub Pages 게시 완료 |
 
 - **목적·원인:**
   1. PDF 문서에서 텍스트 밑줄(`underline`)을 그으면 두 가지 문제로 인해 밑줄이 글자 바로 아래가 아니라 아래쪽 줄의 글자 상단에 닿거나 좌우 단어 경계가 어긋났습니다:
@@ -5594,4 +5594,25 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
   2. **모든 문서 포맷의 밑줄 위치·연속성 통일([`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js), [`public/src/office-hangul.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/office-hangul.js)):**
      - [`render`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L3145-L3155)에서 모든 비-PDF 포맷의 밑줄 스타일을 글자 크기에 비례하는 `text-underline-offset: 0.1em; text-decoration-skip-ink: none`으로 변경하고, 드래그 미리보기([`previewTextAnnotation`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L2920))도 동일한 비율(`0.84` / `0.53`)로 맞췄습니다.
      - [`office-hangul.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/office-hangul.js#L98)의 단어 간격 `<span data-rhwp-gap>`에 `vertical-align: top`과 내부 마크 `width: 100%` 스타일을 부여해 한글(HWP/HWPX/HML) 문서에서도 여러 단어에 걸친 밑줄·형광펜이 높낮이 어긋남이나 끊김 없이 이어지도록 했습니다.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 907개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800) 실제 브라우저 검증 통과, `https://seionwon.github.io/LibreMemo/src/version.js`에서 `1.9.7` 온라인 게시 확인.
+
+<a id="hist-20261102-004"></a>
+### 2026-11-02 02:56:00 +09:00 — PDF 및 모든 문서 포맷에서 형광펜 세로 높이 조정과 위·아래 줄 겹침 방지
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261102-004 |
+| 변경 종류 | PDF 텍스트 주석(`captureRects`, `renderTextMarks`, `previewText`, `pdfExportPlan`) 상·하단 글자 영역 축소 및 인접 줄 형광펜 겹침 분리 · 전 포맷 형광펜(`reader.js`) 상·하단 여백(`linear-gradient` 13%–91%) 적용 |
+| 상태 | 로컬 검증 완료 · 1.9.8 GitHub Pages 게시 진행 |
+
+- **목적·원인:**
+  1. PDF 문서에서 연속된 위·아래 줄에 형광펜(`highlight`)을 칠하면, [`captureRects`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js#L228-L250)가 브라우저 대체 글꼴의 내부 리딩이 포함된 `r.top`(`span` 상단보다도 위로 돌출된 위치)부터 시작해 세로 폭이 실제 글자 높이보다 과도하게 커지고, 그 결과 위 줄 형광펜 하단과 아래 줄 형광펜 상단이 서로 겹쳐 진한 띠가 생기거나 인접 줄의 디센더·어센더를 침범했습니다.
+  2. PDF 외의 일반 문서 포맷(HTML, EPUB, DOCX, PPTX, HWP/HWPX/HML, DjVu, 마크다운 등)에서도 인라인 `<span data-htmlmemo-mark>`에 단색 `background`를 그대로 칠하면 글꼴 내부 어센트·디센트 박스 전체(`~1.3em`)가 칠해져 줄 간격이 좁은 문단(`line-height: 1.0–1.25`)에서 위·아래 줄 형광펜이 서로 겹치는 문제가 있었습니다.
+- **동작·보존:**
+  1. **PDF 형광펜 세로 글자 영역 축소 및 인접 줄 겹침 자동 분리([`public/src/pdf-reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js), [`public/src/pdf-export-plan.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-export-plan.js)):**
+     - [`captureRects`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js#L236-L238)에서 `.textLayer` `<span>` 박스의 상단 여백(`13%`)과 하단 여백(`7%`)을 제외한 실제 글자 본체 구간(`spanBox.top + spanBox.height * 0.13` ~ `spanBox.top + spanBox.height * 0.93`, 높이 `0.80 * spanBox.height`)만 포착하도록 조정하고, 이에 맞춰 밑줄(`y + h * 0.88`)과 취소선(`y + h * 0.55`) 비율도 베이스라인과 소문자 중앙에 일치시켰습니다.
+     - [`renderTextMarks`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js#L258-L274)에서 같은 쪽의 연속된 줄에 있는 형광펜 사각형(`hItems`)들이 세로로 닿거나 겹칠 경우(이전에 저장된 주석이나 줄 간격이 극도로 좁은 PDF 포함) 중간 경계를 기준으로 미세 간격(`gap`)을 두고 자동 분리되도록 보강했습니다.
+  2. **모든 문서 포맷에서 형광펜 세로 폭 축소 및 줄 간 간격 확보([`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js)):**
+     - [`render`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L3153-L3154)에서 비-PDF 포맷의 형광펜 스타일을 `background: linear-gradient(transparent 13%, ${fill} 13%, ${fill} 91%, transparent 91%)`로 적용하고 `box-decoration-break: clone`과 결합해, 모든 줄에서 글자 상·하단 내부 리딩(`13%` / `9%`)을 투명하게 비워 줄 간격이 `1.0`인 문서(PPTX, HWP, DjVu 등)에서도 위·아래 줄 형광펜이 절대 겹치지 않도록 했습니다.
+     - 드래그 이동 미리보기([`previewTextAnnotation`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L2920))의 형광펜 사각형도 동일하게 `y + rect.height * 0.13`, 높이 `rect.height * 0.78`로 일치시켰습니다.
 - **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 907개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800) 실제 브라우저 검증 통과.

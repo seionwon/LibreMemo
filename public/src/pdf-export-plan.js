@@ -19,7 +19,7 @@ export async function pdfExportPlan(reader,{signal,onProgress=()=>{}}={}){
     check();const a=annotations[index];
     if(TEXT_TOOLS.includes(a.type)){
       if(!a.pdfRects?.length)throw Error('PDF 쪽을 확인할 수 없는 글자 주석이 있습니다. 원본 포함 보관 파일을 사용해주세요.');
-      for(const box of a.pdfRects){const v=await viewport(box.page),point=(x,y)=>v.convertToPdfPoint(x*v.width,y*v.height),bh=box.h*(a.type==='underline'?.84:1);items.push({id:a.id,page:box.page,type:a.type,color:a.color,opacity:a.opacity,width:a.width/CSS_SCALE,contents:a.textAnchor.quote,quad:[...point(box.x,box.y),...point(box.x+box.w,box.y),...point(box.x,box.y+bh),...point(box.x+box.w,box.y+bh)]});}
+      for(const box of a.pdfRects){const v=await viewport(box.page),point=(x,y)=>v.convertToPdfPoint(x*v.width,y*v.height),bh=box.h*(a.type==='underline'?.88:1);items.push({id:a.id,page:box.page,type:a.type,color:a.color,opacity:a.opacity,width:a.width/CSS_SCALE,contents:a.textAnchor.quote,quad:[...point(box.x,box.y),...point(box.x+box.w,box.y),...point(box.x,box.y+bh),...point(box.x+box.w,box.y+bh)]});}
     }else{
       const number=a.pdfPage||Number(/^n(\d+)$/.exec(a.anchor||'')?.[1]);
       if(!Number.isInteger(number)||number<1||number>reader.pdf.count||!a.anchor||a.points.some(p=>p.x<0||p.x>1||p.y<0||p.y>1))throw Error('쪽 밖에 걸친 그림 또는 위치를 확인하지 못한 주석이 있습니다. 원본 포함 보관 파일은 이 주석도 그대로 보존합니다.');

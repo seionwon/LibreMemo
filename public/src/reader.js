@@ -2917,7 +2917,7 @@ export class Reader {
     for(const rect of range?.getClientRects?.()||[]){
       if(!rect.width||!rect.height)continue;
       const x=rect.left-origin.left,y=rect.top-origin.top;
-      this.preview.append(a.type==='highlight'?svg(this.doc,'rect',{x,y,width:rect.width,height:rect.height,fill:a.color,opacity:a.opacity}):svg(this.doc,'path',{d:`M${x},${y+rect.height*(a.type==='underline'?.84:.53)}h${rect.width}`,fill:'none',stroke:a.color,'stroke-width':a.width}));
+      this.preview.append(a.type==='highlight'?svg(this.doc,'rect',{x,y:y+rect.height*.13,width:rect.width,height:rect.height*.78,fill:a.color,opacity:a.opacity}):svg(this.doc,'path',{d:`M${x},${y+rect.height*(a.type==='underline'?.84:.53)}h${rect.width}`,fill:'none',stroke:a.color,'stroke-width':a.width}));
     }
   }
   moveAnnotationDrag(event) {
@@ -3150,7 +3150,8 @@ export class Reader {
     for (const annotation of textAnnotations) {
       if (!this.annotationInSection(annotation,section)) continue;
       const resolved = resolveTextAnchor(index, annotation.textAnchor); if (!resolved) continue;
-      const style = annotation.type === 'highlight' ? `background:${annotation.color}${Math.round(annotation.opacity * 255).toString(16).padStart(2,'0')};color:inherit` : `text-decoration-line:${annotation.type === 'underline' ? 'underline' : 'line-through'};text-decoration-color:${annotation.color};text-decoration-thickness:${annotation.width}px;text-underline-offset:0.1em;text-decoration-skip-ink:none`;
+      const fill = `${annotation.color}${Math.round(annotation.opacity * 255).toString(16).padStart(2,'0')}`;
+      const style = annotation.type === 'highlight' ? `background:linear-gradient(transparent 13%,${fill} 13%,${fill} 91%,transparent 91%);color:inherit` : `text-decoration-line:${annotation.type === 'underline' ? 'underline' : 'line-through'};text-decoration-color:${annotation.color};text-decoration-thickness:${annotation.width}px;text-underline-offset:0.1em;text-decoration-skip-ink:none`;
       wrapOffsets(this.doc, resolved.start, resolved.end, {'data-htmlmemo-mark':'','data-htmlmemo-id':annotation.id}, style,index);
     }
     // Annotation restoration already made a current index. Adopt it instead

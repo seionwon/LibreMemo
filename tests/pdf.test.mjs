@@ -104,8 +104,10 @@ test('PDF underline and strike marks align below the baseline and snap substring
   const annotations=[{id:'u1',type:'underline',color:'#ef4444',width:3,opacity:1,textAnchor:{start:21,end:30,quote:'artefacts'},pdfPage:1,pdfRects:[]}];
   Object.assign(pdf,{doc,disposed:false,scale:1,slots:new Map([[1,slot]]),size:()=>({width:1000,height:200}),reader:{zoom:1,metadata:{title:'T',annotations,bookmarks:[]},layerOrigin:()=>({left:0,top:0})},count:1,pdf:{getPage:async()=>({getViewport:()=>({width:1000,height:200,convertToPdfPoint:(x,y)=>[x,200-y]})})}});pdf.reader.pdf=pdf;
   const rects=pdf.captureRects({intersectsNode:()=>true,startContainer:node,endContainer:node,startOffset:20,endOffset:30});
-  assert.equal(rects.length,1);assert.equal(Math.round(rects[0].h*200),70);assert.ok(Math.abs(rects[0].x*1000-679)<=2);assert.ok(Math.abs((rects[0].x+rects[0].w)*1000-900)<=2);
+  assert.equal(rects.length,1);assert.equal(Math.round(rects[0].y*200*10)/10,23.1);assert.equal(Math.round(rects[0].h*200),56);assert.ok(Math.abs(rects[0].x*1000-679)<=2);assert.ok(Math.abs((rects[0].x+rects[0].w)*1000-900)<=2);
   annotations[0].pdfRects=rects;pdf.renderTextMarks();
-  const pathD=slot.marks.querySelector('path').getAttribute('d');assert.match(pathD,/^M679(?:\.\d+)? 72\.8h221(?:\.\d+)?$/);
-  const plan=await pdfExportPlan(pdf.reader);assert.ok(Math.abs(plan.annotations[0].quad[5]-(200-72.8))<0.5);
+  const pathD=slot.marks.querySelector('path').getAttribute('d');assert.match(pathD,/^M679(?:\.\d+)? 72\.38\d*h221(?:\.\d+)?$/);
+  const plan=await pdfExportPlan(pdf.reader);assert.ok(Math.abs(plan.annotations[0].quad[5]-(200-72.38))<0.5);
+  annotations.push({id:'h1',type:'highlight',color:'#edcf67',width:3,opacity:.35,textAnchor:{start:0,end:5,quote:'line1'},pdfPage:1,pdfRects:[{page:1,x:.1,y:.2,w:.5,h:.3}]},{id:'h2',type:'highlight',color:'#edcf67',width:3,opacity:.35,textAnchor:{start:6,end:11,quote:'line2'},pdfPage:1,pdfRects:[{page:1,x:.1,y:.4,w:.5,h:.3}]});
+  pdf.renderTextMarks();const [r1,r2]=[...slot.marks.querySelectorAll('rect')];assert.ok(Number(r1.getAttribute('y'))+Number(r1.getAttribute('height'))<Number(r2.getAttribute('y')));
 });

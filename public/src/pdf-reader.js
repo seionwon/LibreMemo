@@ -234,7 +234,7 @@ export class PdfReader{
         const sub=from>0||to<text.length,snapLeft=sub&&(from===0||/\s/u.test(text[from-1])),snapRight=sub&&(to===text.length||/\s/u.test(text[to]));
         const part=this.doc.createRange();part.setStart(run.node,from);part.setEnd(run.node,to);const box=slot.node.getBoundingClientRect(),span=run.node.parentElement,spanBox=!span?.style?.getPropertyValue?.('--rotate')&&span?.getBoundingClientRect?.();
         for(const r of part.getClientRects()){
-          const top=r.top,bottom=spanBox?.height>0&&spanBox.bottom>top+1?Math.min(r.bottom,spanBox.bottom):r.bottom;
+          const top=spanBox?.height>0?Math.max(r.top,spanBox.top+spanBox.height*.13):r.top+r.height*.2,bottom=spanBox?.height>0&&spanBox.bottom>top+1?Math.min(r.bottom,spanBox.top+spanBox.height*.93):r.bottom-r.height*.15;
           let x=clamp((r.left-box.left)/box.width,0,1),y=clamp((top-box.top)/box.height,0,1),w=Math.min(r.width/box.width,1-x),h=Math.min((bottom-top)/box.height,1-y);
           if(w>0&&h>0){
             if(sub&&slot.image?.canvas)({x,w}=this.snapRectInk(slot,{x,y,w,h},snapLeft,snapRight));
@@ -258,15 +258,17 @@ export class PdfReader{
   renderTextMarks(){
     if(this.disposed)return;
     for(const slot of this.slots.values()){
-      slot.marks?.remove();const layer=svg(this.doc,'svg',{class:'htmlmemo-pdf-marks',viewBox:'0 0 '+this.size(slot.page).width+' '+this.size(slot.page).height,'data-htmlmemo-ui':''});slot.marks=layer;
+      slot.marks?.remove();const layer=svg(this.doc,'svg',{class:'htmlmemo-pdf-marks',viewBox:'0 0 '+this.size(slot.page).width+' '+this.size(slot.page).height,'data-htmlmemo-ui':''}),hItems=[];slot.marks=layer;
       for(const a of this.reader.metadata.annotations){if(!TEXT_TOOLS.includes(a.type)||!a.pdfRects)continue;
         for(const rect of a.pdfRects){if(rect.page!==slot.page)continue;const width=this.size(slot.page).width,height=this.size(slot.page).height,x=rect.x*width,y=rect.y*height,w=rect.w*width,h=rect.h*height;
           const group=svg(this.doc,'g',{'data-htmlmemo-id':a.id,'data-htmlmemo-pdf-mark':''});
-          if(a.type==='highlight')group.append(svg(this.doc,'rect',{x,y,width:w,height:h,fill:a.color,opacity:a.opacity,'pointer-events':'all'}));
-          else{const lineY=y+h*(a.type==='strike'?.53:.84);group.append(svg(this.doc,'path',{d:`M${x} ${lineY}h${w}`,fill:'none',stroke:a.color,'stroke-width':a.width,'pointer-events':'stroke'}));group.append(svg(this.doc,'path',{d:`M${x} ${lineY}h${w}`,fill:'none',stroke:'transparent','stroke-width':Math.max(a.width,12/(this.reader.zoom*this.scale)),'data-htmlmemo-hit':a.id,'pointer-events':'stroke'}));}
+          if(a.type==='highlight'){const node=svg(this.doc,'rect',{x,y,width:w,height:h,fill:a.color,opacity:a.opacity,'pointer-events':'all'});group.append(node);hItems.push({node,x,y,w,h});}
+          else{const lineY=y+h*(a.type==='strike'?.55:.88);group.append(svg(this.doc,'path',{d:`M${x} ${lineY}h${w}`,fill:'none',stroke:a.color,'stroke-width':a.width,'pointer-events':'stroke'}));group.append(svg(this.doc,'path',{d:`M${x} ${lineY}h${w}`,fill:'none',stroke:'transparent','stroke-width':Math.max(a.width,12/(this.reader.zoom*this.scale)),'data-htmlmemo-hit':a.id,'pointer-events':'stroke'}));}
           layer.append(group);
         }
       }
+      hItems.sort((a,b)=>a.y-b.y);
+      for(let i=0;i<hItems.length;i++)for(let j=i+1;j<hItems.length;j++){const u=hItems[i],v=hItems[j];if(v.y<=u.y+u.h*.25||Math.min(u.x+u.w,v.x+v.w)<=Math.max(u.x,v.x))continue;const gap=Math.min(2,Math.min(u.h,v.h)*.06);if(u.y+u.h>v.y-gap){const mid=(u.y+u.h+v.y)/2;u.h=Math.max(2,mid-gap/2-u.y);v.h=Math.max(2,v.y+v.h-(mid+gap/2));v.y=mid+gap/2;u.node.setAttribute('height',String(u.h));v.node.setAttribute('y',String(v.y));v.node.setAttribute('height',String(v.h));}}
       slot.inner.append(layer);
     }
   }
@@ -277,7 +279,7 @@ export class PdfReader{
     const start=entry.start+offset,end=Math.min(start+drag.annotation.textAnchor.quote.length,index.text.length),range=rangeFromOffsets(this.doc,start,end,index);if(!range)return null;
     const rects=this.captureRects(range);if(!rects.length)return null;return {...drag.annotation,textAnchor:selectionAnchor(this.doc,range,index),pdfPage:rects[0].page,pdfRects:rects};
   }
-  previewText(a,layer){const origin=this.reader.layerOrigin();for(const b of a.pdfRects||[]){const box=this.slots.get(b.page)?.node.getBoundingClientRect();if(!box)continue;const x=box.left-origin.left+b.x*box.width,y=box.top-origin.top+b.y*box.height,w=b.w*box.width,h=b.h*box.height;layer.append(a.type==='highlight'?svg(this.doc,'rect',{x,y,width:w,height:h,fill:a.color,opacity:a.opacity}):svg(this.doc,'path',{d:`M${x} ${y+h*(a.type==='strike'?.53:.84)}h${w}`,stroke:a.color,'stroke-width':a.width,fill:'none'}));}}
+  previewText(a,layer){const origin=this.reader.layerOrigin();for(const b of a.pdfRects||[]){const box=this.slots.get(b.page)?.node.getBoundingClientRect();if(!box)continue;const x=box.left-origin.left+b.x*box.width,y=box.top-origin.top+b.y*box.height,w=b.w*box.width,h=b.h*box.height;layer.append(a.type==='highlight'?svg(this.doc,'rect',{x,y,width:w,height:h,fill:a.color,opacity:a.opacity}):svg(this.doc,'path',{d:`M${x} ${y+h*(a.type==='strike'?.55:.88)}h${w}`,stroke:a.color,'stroke-width':a.width,fill:'none'}));}}
   bookmarkLocation(){
     const pdfPosition=this.position(),slot=this.slots.get(pdfPosition.page),index=slot?.text?textIndex(this.doc,slot.text):null;
     if(!index?.nodes.length)return {pdfPosition};
