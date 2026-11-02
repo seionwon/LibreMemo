@@ -4,24 +4,11 @@ import {bookmarkTextAnchor,captureBookmarkLocations,findBookmarkText} from './bo
 import { SearchIndexCache } from './search-index.js';
 import { IsolatedRuntime,needsIsolatedRuntime } from './isolated-runtime.js';
 import { clamp, uid, icon, sidebarWidthAction, isSecurityWarning } from './utils.js';
-import { History, TEXT_TOOLS, DRAW_TOOLS, FILL_TOOLS } from './model.js';
+import { History, TEXT_TOOLS, DRAW_TOOLS, FILL_TOOLS, READING_FONTS, READING_FONT_FAMILIES, MONO_READING_FONTS, normalizeReadingFontFamily } from './model.js';
 import { LAYER_ID, LOCAL_CSP, parseHTML, savedMainFrame, prepareLoadedHTML, cleanAnnotations, textIndex, selectionAnchor, resolveTextAnchor, wrapOffsets, rangeFromOffsets, sentenceOffsets, serializeHTML, inspectBookDocument, drawingTargetQuote, describeDrawingTarget, currentSection, bookmarkAnchorTarget } from './document.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const TOC_WIDTH_KEY = 'htmlmemo-doc-toc-width-v1', TOC_EXPANDED_WIDTH_KEY = 'htmlmemo-doc-toc-expanded-width-v1', TOC_MIN = 8, TOC_STRIP_SNAP = 48, TOC_MAX = 640, TOC_DEFAULT = 260;
-const READING_FONTS = [
-  ['default', '기본'],
-  ['sans', '고딕'],
-  ['serif', '명조'],
-  ['dotum', '돋움'],
-  ['mono', '고정폭'],
-];
-const READING_FONT_FAMILIES = {
-  sans: "'Pretendard','Apple SD Gothic Neo','Malgun Gothic','Noto Sans CJK KR','Noto Sans KR',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
-  serif: "'AppleMyungjo','NanumMyeongjo','KoPubWorldBatang','Batang','Noto Serif CJK KR','Noto Serif KR',Georgia,'Times New Roman',serif",
-  dotum: "'AppleGothic','Dotum','Gulim','NanumBarunGothic','Noto Sans KR',Arial,Helvetica,sans-serif",
-  mono: "'D2Coding','SFMono-Regular',Menlo,Monaco,Consolas,'Liberation Mono','Courier New',ui-monospace,monospace",
-};
 const svg = (doc, tag, attrs = {}) => { const node = doc.createElementNS(NS, tag); for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value)); return node; };
 export class Reader {
   constructor(host, parsed, callbacks) {
@@ -1065,14 +1052,14 @@ export class Reader {
     return true;
   }
   readingFontFamily() {
-    const value=this.metadata?.view?.fontFamily;
-    return Object.hasOwn(READING_FONT_FAMILIES,value)?value:'default';
+    const value=normalizeReadingFontFamily(this.metadata?.view?.fontFamily);
+    return value&&Object.hasOwn(READING_FONT_FAMILIES,value)?value:'default';
   }
   readingFontFamilyCss(forSourceTopbar=false) {
     if(!this.supportsReadingFontFamily())return '';
     const family=this.readingFontFamily(),stack=READING_FONT_FAMILIES[family];
     if(!stack)return '';
-    const codeExcl=family==='mono'?'':':not(pre):not(code):not(kbd):not(samp):not(var)';
+    const codeExcl=MONO_READING_FONTS.has(family)?'':':not(pre):not(code):not(kbd):not(samp):not(var)';
     const commonExcl=`${codeExcl}:not(math):not(math *):not(.katex):not(.katex *):not([class*="icon"]):not([class*="fa-"]):not([data-htmlmemo-ui]):not([data-htmlmemo-ui] *)`;
     if(forSourceTopbar){
       const roots=['#reader-content','main:not([data-htmlmemo-ui])','article:not([data-htmlmemo-ui])','.reader-content','.book-content'];
@@ -1082,7 +1069,7 @@ export class Reader {
     return `:root,body{--font-sans:${stack}!important;--font-body:${stack}!important;--reader-font:${stack}!important}body,body ${commonExcl}{font-family:${stack}!important}`;
   }
   setReadingFontFamily(value) {
-    const next=value==='default'?'default':Object.hasOwn(READING_FONT_FAMILIES,value)?value:null;
+    const next=normalizeReadingFontFamily(value);
     if(!next||this.disposed||this.preparing||!this.supportsReadingFontFamily()||next===this.readingFontFamily())return false;
     this.cancelAnnotationDrag?.();
     const readingAnchor=this.captureReadingAnchor?.();

@@ -1,6 +1,6 @@
 // LibreMemo document archive v1: an ordinary ZIP, immutable source + current state.
 // Stored entries are Blobs. A gigabyte source is never made into one JS array/string.
-import {validateAnnotations,validPDFPosition,cleanSourceStorage} from './model.js';
+import {validateAnnotations,validPDFPosition,cleanSourceStorage,normalizeReadingFontFamily} from './model.js';
 const encoder=new TextEncoder(),decoder=new TextDecoder('utf-8',{fatal:true});
 export const ARCHIVE_FORMAT='librememo-document';
 export const ARCHIVE_VERSION=1;
@@ -28,7 +28,8 @@ export function archiveMetadata(value){
   for(const key of ['width','height'])if(Number.isFinite(value.viewport?.[key]))result.viewport[key]=Math.max(1,Math.min(100000,value.viewport[key]));
   for(const key of ['scrollTop','scrollLeft','zoom','fontScale','tocWidth'])if(Number.isFinite(value.view?.[key]))result.view[key]=Math.max(0,Math.min(1e12,value.view[key]));
   if(Number.isInteger(value.view?.sourceFontSteps)&&value.view.sourceFontSteps>=1&&value.view.sourceFontSteps<=3)result.view.sourceFontSteps=value.view.sourceFontSteps;
-  if(['sans','serif','dotum','mono'].includes(value.view?.fontFamily))result.view.fontFamily=value.view.fontFamily;
+  const fontFamily=normalizeReadingFontFamily(value.view?.fontFamily);
+  if(fontFamily&&fontFamily!=='default')result.view.fontFamily=fontFamily;
   if(typeof value.view?.autoFit==='boolean')result.view.autoFit=value.view.autoFit;
   if(['system','light','dark'].includes(value.view?.readingTheme))result.view.readingTheme=value.view.readingTheme;
   if(validPDFPosition(value.view?.pdfPosition))result.view.pdfPosition=structuredClone(value.view.pdfPosition);

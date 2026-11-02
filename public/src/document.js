@@ -1,4 +1,4 @@
-import { FORMAT_VERSION, validateAnnotations, cleanSourceStorage,validPDFPosition } from './model.js';
+import { FORMAT_VERSION, validateAnnotations, cleanSourceStorage,validPDFPosition, normalizeReadingFontFamily } from './model.js';
 
 export const LAYER_ID = 'htmlmemo-annotation-layer';
 export const DATA_ID = 'htmlmemo-data';
@@ -269,7 +269,8 @@ function* prepareHTML(html, defaults, {includeMetadata = false, document: loaded
   if(view.sourceStorage)metadata.view.sourceStorage=cleanSourceStorage(view.sourceStorage);
   if(Number.isFinite(view.fontScale))metadata.view.fontScale=Math.min(3.2,Math.max(.6,view.fontScale));
   if(Number.isInteger(view.sourceFontSteps)&&view.sourceFontSteps>=1&&view.sourceFontSteps<=3)metadata.view.sourceFontSteps=view.sourceFontSteps;
-  if(['sans','serif','dotum','mono'].includes(view.fontFamily))metadata.view.fontFamily=view.fontFamily;
+  const fontFamily=normalizeReadingFontFamily(view.fontFamily);
+  if(fontFamily&&fontFamily!=='default')metadata.view.fontFamily=fontFamily;
   if(['system','light','dark'].includes(view.readingTheme))metadata.view.readingTheme=view.readingTheme;
   if(validPDFPosition(view.pdfPosition))metadata.view.pdfPosition={page:view.pdfPosition.page,y:view.pdfPosition.y};
   if(bookmarks.some(mark=>mark.pdfPosition!=null&&!validPDFPosition(mark.pdfPosition)))throw Error('PDF 북마크 위치가 손상되었습니다.');

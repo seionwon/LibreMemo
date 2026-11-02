@@ -3,6 +3,119 @@ export const TEXT_TOOLS = ['highlight', 'underline', 'strike'];
 export const DRAW_TOOLS = ['pen', 'rect', 'circle', 'ellipse', 'arrow', 'area', 'area-underline'];
 export const FILL_TOOLS = ['rect', 'circle', 'ellipse'];
 export const ANNOTATION_LABELS = {pen:'펜 그림',highlight:'형광펜',underline:'밑줄',strike:'취소선',note:'메모',text:'텍스트',rect:'사각형',circle:'원',ellipse:'타원',arrow:'화살표',area:'영역 강조','area-underline':'영역 밑줄'};
+export const READING_FONTS = [
+  ['default', '기본'],
+  ['sans', '고딕'],
+  ['serif', '명조'],
+  ['dotum', '돋움'],
+  ['mono', '고정폭'],
+  ['Pretendard', '프리텐다드 (Pretendard)'],
+  ['Apple SD Gothic Neo', '애플 SD 산돌고딕 Neo'],
+  ['Malgun Gothic', '맑은 고딕'],
+  ['NanumGothic', '나눔고딕'],
+  ['NanumBarunGothic', '나눔바른고딕'],
+  ['NanumSquare', '나눔스퀘어'],
+  ['Noto Sans KR', '본고딕 (Noto Sans KR)'],
+  ['KoPubWorldDotum', 'KoPub 돋움'],
+  ['Dotum', '돋움 (Dotum)'],
+  ['Gulim', '굴림 (Gulim)'],
+  ['AppleMyungjo', '애플명조 (AppleMyungjo)'],
+  ['NanumMyeongjo', '나눔명조'],
+  ['Noto Serif KR', '본명조 (Noto Serif KR)'],
+  ['MaruBuri', '마루 부리 (MaruBuri)'],
+  ['RIDIBatang', '리디바탕 (RIDIBatang)'],
+  ['KoPubWorldBatang', 'KoPub 바탕'],
+  ['Batang', '바탕 (Batang)'],
+  ['Gungsuh', '궁서 (Gungsuh)'],
+  ['D2Coding', 'D2Coding'],
+  ['NanumGothicCoding', '나눔고딕코딩'],
+  ['Consolas', 'Consolas'],
+  ['Menlo', 'Menlo'],
+  ['Courier New', 'Courier New'],
+  ['Arial', 'Arial'],
+  ['Helvetica', 'Helvetica'],
+  ['Verdana', 'Verdana'],
+  ['Georgia', 'Georgia'],
+  ['Times New Roman', 'Times New Roman'],
+];
+export const READING_FONT_FAMILIES = {
+  sans: "'Pretendard','Apple SD Gothic Neo','Malgun Gothic','Noto Sans CJK KR','Noto Sans KR',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+  serif: "'AppleMyungjo','NanumMyeongjo','KoPubWorldBatang','Batang','Noto Serif CJK KR','Noto Serif KR',Georgia,'Times New Roman',serif",
+  dotum: "'AppleGothic','Dotum','Gulim','NanumBarunGothic','Noto Sans KR',Arial,Helvetica,sans-serif",
+  mono: "'D2Coding','SFMono-Regular',Menlo,Monaco,Consolas,'Liberation Mono','Courier New',ui-monospace,monospace",
+  Pretendard: "'Pretendard','Pretendard Variable','Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif",
+  'Apple SD Gothic Neo': "'Apple SD Gothic Neo','Pretendard','Malgun Gothic','Noto Sans KR',sans-serif",
+  'Malgun Gothic': "'Malgun Gothic','맑은 고딕','Apple SD Gothic Neo','Noto Sans KR',sans-serif",
+  NanumGothic: "'NanumGothic','Nanum Gothic','나눔고딕','Apple SD Gothic Neo','Malgun Gothic',sans-serif",
+  NanumBarunGothic: "'NanumBarunGothic','Nanum Barun Gothic','나눔바른고딕','NanumGothic','Apple SD Gothic Neo','Malgun Gothic',sans-serif",
+  NanumSquare: "'NanumSquare','Nanum Square','나눔스퀘어','NanumGothic','Apple SD Gothic Neo','Malgun Gothic',sans-serif",
+  'Noto Sans KR': "'Noto Sans KR','Noto Sans CJK KR','본고딕','Source Han Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif",
+  KoPubWorldDotum: "'KoPubWorldDotum','KoPubDotum','KoPub 돋움','Dotum','Apple SD Gothic Neo','Malgun Gothic',sans-serif",
+  Dotum: "'Dotum','돋움','AppleGothic','Apple SD Gothic Neo','Malgun Gothic',sans-serif",
+  Gulim: "'Gulim','굴림','Dotum','AppleGothic','Malgun Gothic',sans-serif",
+  AppleMyungjo: "'AppleMyungjo','애플명조','NanumMyeongjo','Batang','Noto Serif KR',serif",
+  NanumMyeongjo: "'NanumMyeongjo','Nanum Myeongjo','나눔명조','AppleMyungjo','Batang','Noto Serif KR',serif",
+  'Noto Serif KR': "'Noto Serif KR','Noto Serif CJK KR','본명조','Source Han Serif KR','NanumMyeongjo','AppleMyungjo','Batang',serif",
+  MaruBuri: "'MaruBuri','Maru Buri','마루 부리','NanumMyeongjo','AppleMyungjo','Batang',serif",
+  RIDIBatang: "'RIDIBatang','리디바탕','NanumMyeongjo','AppleMyungjo','Batang',serif",
+  KoPubWorldBatang: "'KoPubWorldBatang','KoPubBatang','KoPub 바탕','Batang','NanumMyeongjo','AppleMyungjo',serif",
+  Batang: "'Batang','바탕','BatangChe','AppleMyungjo','NanumMyeongjo',serif",
+  Gungsuh: "'Gungsuh','궁서','GungsuhChe','Batang','AppleMyungjo',serif",
+  D2Coding: "'D2Coding','D2Coding ligature','NanumGothicCoding',Menlo,Consolas,'Courier New',ui-monospace,monospace",
+  NanumGothicCoding: "'NanumGothicCoding','Nanum Gothic Coding','나눔고딕코딩','D2Coding',Menlo,Consolas,'Courier New',ui-monospace,monospace",
+  Consolas: "Consolas,'D2Coding',Menlo,Monaco,'Courier New',ui-monospace,monospace",
+  Menlo: "Menlo,'SFMono-Regular',Monaco,Consolas,'D2Coding','Courier New',ui-monospace,monospace",
+  'Courier New': "'Courier New',Courier,'D2Coding',Menlo,Consolas,monospace",
+  Arial: "Arial,Helvetica,'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif",
+  Helvetica: "Helvetica,'Helvetica Neue',Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif",
+  Verdana: "Verdana,Geneva,Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif",
+  Georgia: "Georgia,'Times New Roman','AppleMyungjo','NanumMyeongjo','Batang',serif",
+  'Times New Roman': "'Times New Roman',Times,Georgia,'AppleMyungjo','NanumMyeongjo','Batang',serif",
+};
+export const MONO_READING_FONTS = new Set(['mono', 'D2Coding', 'NanumGothicCoding', 'Consolas', 'Menlo', 'Courier New']);
+const READING_FONT_LOOKUP = (() => {
+  const map = new Map([['default', 'default'], ['기본', 'default'], ['고딕', 'sans'], ['명조', 'serif'], ['고정폭', 'mono']]);
+  const aliases = {
+    Pretendard: ['프리텐다드', 'Pretendard Variable'],
+    'Apple SD Gothic Neo': ['애플 SD 산돌고딕 Neo', '산돌고딕', 'AppleSDGothicNeo'],
+    'Malgun Gothic': ['맑은 고딕', '맑은고딕', 'MalgunGothic'],
+    NanumGothic: ['나눔고딕', '나눔 고딕', 'Nanum Gothic'],
+    NanumBarunGothic: ['나눔바른고딕', '나눔 바른고딕', 'Nanum Barun Gothic'],
+    NanumSquare: ['나눔스퀘어', '나눔 스퀘어', 'Nanum Square'],
+    'Noto Sans KR': ['본고딕', 'Noto Sans CJK KR', 'Source Han Sans KR'],
+    KoPubWorldDotum: ['KoPub 돋움', 'KoPub돋움', 'KoPubDotum'],
+    Dotum: ['돋움체', 'AppleGothic'],
+    Gulim: ['굴림', '굴림체'],
+    AppleMyungjo: ['애플명조', '애플 명조'],
+    NanumMyeongjo: ['나눔명조', '나눔 명조', 'Nanum Myeongjo'],
+    'Noto Serif KR': ['본명조', 'Noto Serif CJK KR', 'Source Han Serif KR'],
+    MaruBuri: ['마루 부리', '마루부리', 'Maru Buri'],
+    RIDIBatang: ['리디바탕', '리디 바탕'],
+    KoPubWorldBatang: ['KoPub 바탕', 'KoPub바탕', 'KoPubBatang'],
+    Batang: ['바탕', '바탕체'],
+    Gungsuh: ['궁서', '궁서체'],
+    NanumGothicCoding: ['나눔고딕코딩', '나눔 고딕 코딩', 'Nanum Gothic Coding'],
+  };
+  for (const [key, label] of READING_FONTS) {
+    map.set(key, key);
+    if (!map.has(key.toLowerCase())) map.set(key.toLowerCase(), key);
+    if (!map.has(label)) map.set(label, key);
+    if (!map.has(label.toLowerCase())) map.set(label.toLowerCase(), key);
+  }
+  for (const [key, names] of Object.entries(aliases)) {
+    for (const name of names) {
+      if (!map.has(name)) map.set(name, key);
+      if (!map.has(name.toLowerCase())) map.set(name.toLowerCase(), key);
+    }
+  }
+  return map;
+})();
+export function normalizeReadingFontFamily(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().replace(/^['"]+|['"]+$/g, '');
+  if (!trimmed) return null;
+  return READING_FONT_LOOKUP.get(trimmed) || READING_FONT_LOOKUP.get(trimmed.toLowerCase()) || null;
+}
 export function validPDFPosition(value){return value&&Number.isInteger(value.page)&&value.page>=1&&value.page<=100000&&Number.isFinite(value.y)&&value.y>=0&&value.y<=1;}
 export function validateAnnotations(value) {
   if (!Array.isArray(value)) throw new Error('주석 데이터 형식이 올바르지 않습니다.');

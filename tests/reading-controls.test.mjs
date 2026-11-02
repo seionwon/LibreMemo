@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Reader} from '../public/src/reader.js';
+import {READING_FONTS} from '../public/src/model.js';
 import {parseHTML,serializeHTML,textIndex} from '../public/src/document.js';
 import {documentFor,installDOM} from './dom.mjs';
 installDOM();
@@ -48,7 +49,12 @@ test('plain documents copy the HTML reader header with its title, navigation, po
   assert.equal(r.plainReadingButtons.previous.hidden,false);assert.equal(r.plainReadingButtons.next.hidden,false);
   assert.equal(r.plainReadingButtons.position.textContent,'0 / 0');assert.equal(r.plainReadingButtons.title.textContent,doc.title);
   assert.deepEqual([...r.plainReadingButtons.theme.querySelectorAll('option')].map(option=>[option.value,option.textContent]),[['system','시스템'],['light','밝게'],['dark','어둡게']]);
-  assert.deepEqual([...r.plainReadingButtons.font.querySelectorAll('option')].map(option=>[option.value,option.textContent]),[['default','기본'],['sans','고딕'],['serif','명조'],['dotum','돋움'],['mono','고정폭']]);
+  assert.deepEqual([...r.plainReadingButtons.font.querySelectorAll('option')].map(option=>[option.value,option.textContent]),READING_FONTS);
+  assert.deepEqual([...r.plainReadingButtons.font.querySelectorAll('option')].slice(0,5).map(option=>[option.value,option.textContent]),[['default','기본'],['sans','고딕'],['serif','명조'],['dotum','돋움'],['mono','고정폭']]);
+  assert.ok(r.plainReadingButtons.font.querySelector('option[value="Malgun Gothic"]'));
+  assert.ok(r.plainReadingButtons.font.querySelector('option[value="NanumMyeongjo"]'));
+  assert.ok(r.plainReadingButtons.font.querySelector('option[value="Pretendard"]'));
+  assert.ok(r.plainReadingButtons.font.querySelector('option[value="D2Coding"]'));
   assert.equal(r.plainReadingButtons.font.disabled,false);
   assert.equal(r.speechControl.nextElementSibling,r.plainReadingButtons.smaller);
   assert.ok(r.speechControl.querySelector('svg'));assert.equal(r.speechControls.isConnected,false);
@@ -275,16 +281,30 @@ test('font family selector changes font family when possible, disables for fixed
   assert.equal(r.setReadingFontFamily('mono'),true);
   assert.equal(r.metadata.view.fontFamily,'mono');
   assert.match(doc.querySelector('#htmlmemo-reading-font-style').textContent,/D2Coding/);
+  assert.equal(r.setReadingFontFamily('Malgun Gothic'),true);
+  assert.equal(r.metadata.view.fontFamily,'Malgun Gothic');
+  assert.equal(r.fontControl.value,'Malgun Gothic');
+  assert.match(doc.querySelector('#htmlmemo-reading-font-style').textContent,/Malgun Gothic/);
+  assert.equal(r.setReadingFontFamily('나눔명조'),true);
+  assert.equal(r.metadata.view.fontFamily,'NanumMyeongjo');
+  assert.equal(r.fontControl.value,'NanumMyeongjo');
+  assert.match(doc.querySelector('#htmlmemo-reading-font-style').textContent,/NanumMyeongjo/);
+  assert.equal(r.setReadingFontFamily('D2Coding'),true);
+  assert.equal(r.metadata.view.fontFamily,'D2Coding');
+  assert.equal(r.fontControl.value,'D2Coding');
+  assert.doesNotMatch(doc.querySelector('#htmlmemo-reading-font-style').textContent,/:not\(pre\)/);
   assert.equal(r.setReadingFontFamily('invalid-font'),false);
   const saved=serializeHTML(doc,r.metadata);
   assert.doesNotMatch(saved,/htmlmemo-reading-font-style|data-htmlmemo-reading-font/);
-  assert.equal(parseHTML(saved).metadata.view.fontFamily,'mono');
+  assert.equal(parseHTML(saved).metadata.view.fontFamily,'D2Coding');
   assert.equal(archiveMetadata({version:1,title:'문서',annotations:[],bookmarks:[],view:{fontFamily:'serif'}}).view.fontFamily,'serif');
+  assert.equal(archiveMetadata({version:1,title:'문서',annotations:[],bookmarks:[],view:{fontFamily:'Malgun Gothic'}}).view.fontFamily,'Malgun Gothic');
+  assert.equal(archiveMetadata({version:1,title:'문서',annotations:[],bookmarks:[],view:{fontFamily:'맑은 고딕'}}).view.fontFamily,'Malgun Gothic');
   assert.equal(r.setReadingFontFamily('default'),true);
   assert.equal(Object.hasOwn(r.metadata.view,'fontFamily'),false);
   assert.equal(doc.querySelector('#htmlmemo-reading-font-style'),null);
 
-  // Source topbar document also supports font family selection and strips control on export.
+  // Source topbar document also supports font family selection by category and font name and strips control on export.
   const top=fixture('<header class="reader-head"><button id="reader-smaller">A−</button><button id="reader-larger">A+</button><select id="reader-theme"><option value="system">시스템</option></select></header>');
   Object.assign(top.r,{autoFit:false,viewport:{scrollTop:0,scrollLeft:0},cancelAnnotationDrag(){},measure(){},renderDrawingLayer(){}});
   top.r.setupReadingControls();
@@ -292,9 +312,12 @@ test('font family selector changes font family when possible, disables for fixed
   assert.equal(top.r.setReadingFontFamily('dotum'),true);
   assert.equal(top.r.metadata.view.fontFamily,'dotum');
   assert.match(top.doc.querySelector('#htmlmemo-source-font-style').textContent,/AppleGothic/);
+  assert.equal(top.r.setReadingFontFamily('리디바탕'),true);
+  assert.equal(top.r.metadata.view.fontFamily,'RIDIBatang');
+  assert.match(top.doc.querySelector('#htmlmemo-source-font-style').textContent,/RIDIBatang/);
   const topSaved=serializeHTML(top.doc,top.r.metadata);
   assert.doesNotMatch(topSaved,/htmlmemo-source-font-style|data-htmlmemo-reading-font/);
-  assert.equal(parseHTML(topSaved).metadata.view.fontFamily,'dotum');
+  assert.equal(parseHTML(topSaved).metadata.view.fontFamily,'RIDIBatang');
 
   // Formats where changing font family is not possible disable the control.
   r.pdf={headingState:()=>({nodes:[],current:-1})};r.updateReadingControls();

@@ -5624,7 +5624,7 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
 | --- | --- |
 | ID | hist-20261102-005 |
 | 변경 종류 | 읽기 도구 모음 및 자체 상단 바(`topbarNode`)의 `A−`·`A+` 사이 글자 기본 크기(`A`, `data-action="font-reset"`) 버튼 추가 · [`resetReadingFontSize`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1189-L1219) 및 내보내기 정리([`clearReaderSidebarArtifacts`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document.js#L84)) |
-| 상태 | 로컬 검증 완료 · 1.9.9 GitHub Pages 게시 진행 |
+| 상태 | 로컬 검증 완료 · 1.9.9 GitHub Pages 게시 완료 |
 
 - **목적·원인:**
   1. 문서를 읽으면서 `A−` 또는 `A+`로 글자 크기를 여러 단계 줄이거나 키운 뒤 한 번에 원래 기본 크기(`100%` 배율 또는 원본 기본 글자 크기)로 되돌릴 수 있도록 `A−`와 `A+` 정중앙에 초기화 버튼(`A`)을 추가했습니다.
@@ -5635,4 +5635,24 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
   2. **글자 크기 즉시 초기화 및 읽기 위치·주석 보존·내보내기 정리([`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js), [`public/src/document.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document.js)):**
      - [`resetReadingFontSize`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1189-L1219) 호출 시 일반·PDF·오피스·전자책 문서에서는 `setReadingFontScale(1)`을 통해 글자 배율을 `1`로 되돌리고, 자체 상단 바 문서에서는 추가 단계(`sourceFontExtraSteps = 0`)와 원본 글자 크기를 초기 기본값(`initialSourceFontSize`)으로 복원하며, 직전 읽기 기준점(`captureReadingAnchor` / `restoreReadingAnchor`)과 주석 레이어를 그대로 유지합니다.
      - HTML 내보내기 시 [`clearReaderSidebarArtifacts`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document.js#L84)가 `[data-htmlmemo-font-reset]` 노드를 제거하여 원본 HTML 구조를 오염시키지 않습니다.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 907개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800) 실제 브라우저 검증 통과, `https://seionwon.github.io/LibreMemo/src/version.js`에서 `1.9.9` 온라인 게시 확인.
+
+<a id="hist-20261102-006"></a>
+### 2026-11-02 09:53:00 +09:00 — 읽기 도구 모음 글꼴 선택기에서 계열(`고딕`·`명조` 등)뿐 아니라 개별 글꼴 이름으로도 선택 지원
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261102-006 |
+| 변경 종류 | 읽기 글꼴 목록([`READING_FONTS`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/model.js#L6-L36), [`READING_FONT_FAMILIES`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/model.js#L37-L66), [`normalizeReadingFontFamily`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/model.js#L110-L115)) 확장 · 한글/영문 글꼴 이름 선택 및 저장·복원 지원 |
+| 상태 | 로컬 검증 완료 · 1.9.10 GitHub Pages 게시 진행 |
+
+- **목적·원인:**
+  1. 기존 글꼴 선택기(`select[data-reading-font]`)는 `기본`, `고딕`, `명조`, `돋움`, `고정폭` 같은 글꼴 계열로만 선택할 수 있었으나, 사용자가 원하는 구체적인 글꼴 이름(예: `프리텐다드 (Pretendard)`, `맑은 고딕`, `나눔고딕`, `나눔명조`, `본고딕 (Noto Sans KR)`, `본명조 (Noto Serif KR)`, `마루 부리 (MaruBuri)`, `리디바탕 (RIDIBatang)`, `D2Coding` 등)으로도 직접 선택할 수 있도록 확장했습니다.
+- **동작·보존:**
+  1. **계열 및 개별 글꼴 이름 목록 통합 정의([`public/src/model.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/model.js)):**
+     - [`READING_FONTS`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/model.js#L6-L36)와 [`READING_FONT_FAMILIES`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/model.js#L37-L66)에 기존 5개 계열(`기본`, `고딕`, `명조`, `돋움`, `고정폭`)과 함께 한글·영문 대표 글꼴 24종(`프리텐다드 (Pretendard)`, `애플 SD 산돌고딕 Neo`, `맑은 고딕`, `나눔고딕`, `나눔바른고딕`, `나눔스퀘어`, `본고딕 (Noto Sans KR)`, `KoPub 돋움`, `돋움 (Dotum)`, `굴림 (Gulim)`, `애플명조 (AppleMyungjo)`, `나눔명조`, `본명조 (Noto Serif KR)`, `마루 부리 (MaruBuri)`, `리디바탕 (RIDIBatang)`, `KoPub 바탕`, `바탕 (Batang)`, `궁서 (Gungsuh)`, `D2Coding`, `나눔고딕코딩`, `Consolas`, `Menlo`, `Courier New`, `Arial`, `Helvetica`, `Verdana`, `Georgia`, `Times New Roman`)을 등록했습니다.
+     - [`normalizeReadingFontFamily`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/model.js#L110-L115)를 통해 글꼴 식별자(`Malgun Gothic`, `NanumMyeongjo` 등)뿐 아니라 한국어·영어 표시 이름 및 별칭(`맑은 고딕`, `나눔명조`, `리디바탕`, `마루 부리`, `프리텐다드` 등)으로도 즉시 정규화해 선택할 수 있도록 했습니다.
+  2. **글꼴 적용·고정폭 판별·읽기 위치 보존 및 문서/보관 파일 영속화([`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js), [`public/src/document.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document.js), [`public/src/document-archive.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document-archive.js)):**
+     - [`setReadingFontFamily`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1071-L1084)와 [`readingFontFamilyCss`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1058-L1070)에서 개별 고정폭 글꼴([`MONO_READING_FONTS`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/model.js#L67): `D2Coding`, `NanumGothicCoding`, `Consolas`, `Menlo`, `Courier New`) 선택 시 코드 블록(`pre`, `code`)까지 해당 고정폭 글꼴이 적용되도록 처리하고, 글꼴 변경 전후의 읽기 기준점(`captureReadingAnchor` / `restoreReadingAnchor`)과 주석 위치를 유지합니다.
+     - [`parseHTML`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document.js#L272-L273)과 [`archiveMetadata`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document-archive.js#L31-L32)에서도 `normalizeReadingFontFamily`를 사용해 개별 글꼴 이름 선택 상태가 HTML 저장과 `.librememo` 보관 파일에서 그대로 보존·복원됩니다.
 - **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 907개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800) 실제 브라우저 검증 진행.
