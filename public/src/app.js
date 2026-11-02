@@ -572,6 +572,8 @@ async function openRecord(record, prepared = null, {deferReady = false, sourceId
     sidebarWidth:()=>preferences.sidebarWidth,
     readingLayoutDefault:()=>preferences.readingLayout,
     onReadingLayoutDefault:layout=>changePreferences({readingLayout:layout}),
+    viewerPresets:()=>preferences.viewerPresets,viewerDefaults:()=>preferences.viewerDefaults,
+    onViewerPresets:patch=>changePreferences(patch),
     sidebarMaxWidth:()=>appSidebarMaxWidth(),
     onSidebarWidth:width=>{if(width!==preferences.sidebarWidth)saveAppSidebarWidth(width);},
     onSearchChange:documentReader=>updateSearchNavigation(documentReader),

@@ -7,6 +7,7 @@ import { clamp, uid, icon, sidebarWidthAction, isSecurityWarning } from './utils
 import { History, TEXT_TOOLS, DRAW_TOOLS, FILL_TOOLS, READING_FONTS, READING_FONT_FAMILIES, MONO_READING_FONTS, normalizeReadingFontFamily } from './model.js';
 import { loadHangulFonts } from './hangul-fonts.js';
 import { DEFAULT_READING_LAYOUT, ReadingPager, normalizeReadingLayout, pageNumbers, readingLayoutCss, PAGE_BOTTOM, PAGE_TOP } from './reading-layout.js';
+import { normalizeSettings, presetFit, SETTING_LABELS } from './viewer-presets.js';
 import { closeReadingLayoutPanel, closeEbookNote, openEbookNote, ebookNoteTarget, toggleReadingLayoutPanel } from './reading-layout-panel.js';
 import { LAYER_ID, LOCAL_CSP, parseHTML, savedMainFrame, prepareLoadedHTML, cleanAnnotations, textIndex, selectionAnchor, resolveTextAnchor, wrapOffsets, rangeFromOffsets, sentenceOffsets, serializeHTML, inspectBookDocument, drawingTargetQuote, describeDrawingTarget, currentSection, bookmarkAnchorTarget } from './document.js';
 
@@ -95,6 +96,7 @@ export class Reader {
           this.bind();
           if (this.doc.querySelector('article[data-rhwp]')) await loadHangulFonts(this.doc);
           if (this.disposed) { resolve(this); return; }
+          this.applyDefaultViewerPreset();
           this.applyReadingFont();
           this.applyReadingTheme();
           this.applyReadingLayout();
@@ -940,7 +942,7 @@ export class Reader {
         const smaller=button('font-smaller','글씨 작게','A−',()=>this.setReadingFontScale(this.readingFontScale()/1.1));
         const reset=button('font-reset','글씨 기본 크기','A',()=>this.resetReadingFontSize());
         const larger=button('font-larger','글씨 크게','A+',()=>this.setReadingFontScale(this.readingFontScale()*1.1));
-        const layout=button('reading-layout','보기 설정 · 여백, 쪽 넘김','▤',()=>toggleReadingLayoutPanel(this,layout));layout.setAttribute('aria-haspopup','dialog');
+        const layout=button('reading-layout','보기 설정 · 저장한 설정, 여백, 쪽 넘김','▤',()=>toggleReadingLayoutPanel(this,layout));layout.setAttribute('aria-haspopup','dialog');
         const progress=doc.createElement('span');progress.className='reader-position reader-progress';progress.setAttribute('aria-label','읽은 위치');
         const theme=doc.createElement('select');theme.setAttribute('aria-label','화면 모드');theme.dataset.readingTheme='';
         for(const [value,label] of [['system','시스템'],['light','밝게'],['sepia','세피아'],['dark','어둡게']]){const option=doc.createElement('option');option.value=value;option.textContent=label;theme.append(option);}
@@ -1026,6 +1028,64 @@ export class Reader {
     if(!this.rememberPosition())this.callbacks.onPosition?.();
     this.updateReadingControls();this.callbacks.onView?.();return true;
   }
+  viewerCapabilities() {
+    const own=!!(this.topbarNode?.isConnected||this.findDocumentTopbar?.());
+    return {layout:this.supportsReadingLayout(),fontScale:!own&&(!!this.pdf||this.supportsReadingFontFamily()),fontFamily:!own&&this.supportsReadingFontFamily(),theme:!own};
+  }
+  viewerGroup() {
+    if(this.pdf)return 'pdf';
+    if(this.supportsReadingLayout())return 'ebook';
+    return this.supportsReadingFontFamily()?'document':'image';
+  }
+  viewerSettings(keys=Object.keys(SETTING_LABELS)) {
+    const caps=this.viewerCapabilities(),all={layout:this.readingLayout(),fontScale:this.readingFontScale(),fontFamily:this.readingFontFamily(),theme:this.readingTheme()};
+    return normalizeSettings(Object.fromEntries(keys.filter(key=>caps[key]).map(key=>[key,all[key]])));
+  }
+  /** Applies what this document supports; the rest is reported, never forced. */
+  applyViewerPreset(settings) {
+    const {applied,skipped}=presetFit(settings,this.viewerCapabilities());
+    this.viewerUndo=this.viewerSettings();
+    for(const key of applied){
+      if(key==='layout')this.setReadingLayout(settings.layout);
+      else if(key==='fontScale')this.setReadingFontScale(settings.fontScale);
+      else if(key==='fontFamily')this.setReadingFontFamily(settings.fontFamily);
+      else if(key==='theme')this.setReadingTheme(settings.theme);
+    }
+    return {applied,skipped};
+  }
+  undoViewerPreset() {
+    const previous=this.viewerUndo;if(!previous)return false;
+    this.applyViewerPreset(previous);this.viewerUndo=null;return true;
+  }
+  // First opening only, so a later choice in this document is never overridden.
+  applyDefaultViewerPreset() {
+    const view=this.metadata?.view;if(!view||view.layout||Number(view.scrollTop)>0||this.findDocumentTopbar?.())return;
+    const id=this.callbacks?.viewerDefaults?.()?.[this.viewerGroup()],preset=this.callbacks?.viewerPresets?.()?.find(item=>item.id===id);if(!preset)return;
+    const {settings}=preset,{applied}=presetFit(settings,this.viewerCapabilities());
+    if(applied.includes('layout'))view.layout=settings.layout;
+    if(applied.includes('fontScale'))view.fontScale=settings.fontScale;
+    if(applied.includes('fontFamily')&&settings.fontFamily!=='default')view.fontFamily=settings.fontFamily;
+    if(applied.includes('theme'))view.readingTheme=settings.theme;
+  }
+  goToReadingPercent(percent) {
+    if(!this.supportsReadingLayout())return false;
+    const win=this.doc.defaultView,height=Math.max(0,(this.pager?.contentBottom()??0)+win.scrollY-win.innerHeight);
+    this.linkHistory||=[];this.linkHistory.push({top:this.scrollTop,left:this.scrollLeft});if(this.linkHistory.length>128)this.linkHistory.shift();
+    if(this.pager)this.pager.history=[];win.scrollTo(win.scrollX,height*Math.min(100,Math.max(0,percent))/100);this.updateReadingControls();return true;
+  }
+  readingPercent() {
+    const win=this.doc.defaultView,height=Math.max(1,(this.pager?.contentBottom()??0)+win.scrollY-win.innerHeight);
+    return Math.min(100,Math.round(win.scrollY/height*100));
+  }
+  // A rough figure for planning, at a typical silent-reading pace.
+  readingMinutesLeft() {
+    this.bookCharacters??=this.doc.querySelector('article[data-ebook]')?.textContent.length||0;
+    return Math.ceil(this.bookCharacters*(1-this.readingPercent()/100)/900);
+  }
+  bookInfo() {
+    const data=this.doc.querySelector('article[data-ebook]')?.dataset||{};
+    return [['저자',data.bookAuthor],['출판사',data.bookPublisher],['언어',data.bookLanguage],['출간',data.bookPublished],['소개',data.bookDescription]].filter(([,value])=>value);
+  }
   saveReadingLayoutDefault() { this.callbacks.onReadingLayoutDefault?.(this.readingLayout()); }
   scheduleReadingProgress() {
     if(!this.plainReadingButtons?.progress||!this.supportsReadingLayout()||this.progressFrame)return;
@@ -1033,7 +1093,7 @@ export class Reader {
   }
   updateReadingProgress() {
     const node=this.plainReadingButtons?.progress;if(!node)return;
-    const supported=this.supportsReadingLayout();node.hidden=!supported;this.plainReadingButtons.layout.hidden=!supported;
+    const supported=this.supportsReadingLayout();node.hidden=!supported;
     if(!supported)return;
     const win=this.doc.defaultView,paged=this.readingLayout().flow==='paged',bottom=this.pager?.contentBottom?.()??0,height=win.innerHeight,top=win.scrollY;
     const {page,pages,percent}=pageNumbers({top,contentHeight:bottom+top,pageHeight:paged?height-PAGE_TOP-PAGE_BOTTOM:height});
@@ -1044,6 +1104,7 @@ export class Reader {
     const paged=this.readingLayout().flow==='paged',key=event.key,forward=key==='PageDown'||key===' '&&!event.shiftKey||paged&&(key==='ArrowRight'||key==='ArrowDown'),backward=key==='PageUp'||key===' '&&event.shiftKey||paged&&(key==='ArrowLeft'||key==='ArrowUp');
     if(key==='Home'||key==='End'){const win=this.doc.defaultView;if(paged)this.pager.history=[];win.scrollTo(win.scrollX,key==='Home'?0:Math.max(0,(this.pager?.contentBottom()??0)+win.scrollY-win.innerHeight));return true;}
     if(!forward&&!backward)return false;
+    this.pager?.stopAuto();
     if(paged){if(forward)this.pager.next();else this.pager.previous();return true;}
     const win=this.doc.defaultView;win.scrollBy(win.scrollX*0,(forward?1:-1)*win.innerHeight*.9);return true;
   }

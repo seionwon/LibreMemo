@@ -319,7 +319,9 @@ export async function renderEbook(bytes,format,warnings){
     }
     if(format==='cbz')warnings.push('만화 이미지에는 펜·도형·메모·북마크를 사용할 수 있습니다. 이미지 안 글자의 검색·선택·읽어주기는 OCR 없이 제공되지 않습니다.');
     const tocHTML='<template data-ebook-outline>'+outline.map(x=>'<a href="'+esc(x.href)+'" data-level="'+x.level+'">'+esc(x.title)+'</a>').join('')+'</template>';
-    const head=tocHTML+'<article data-ebook data-ebook-layout="'+(book.rendition?.layout==='pre-paginated'?'fixed':'reflow')+'" dir="'+(book.dir==='rtl'?'rtl':'ltr')+'">';
+    const text=value=>{const first=Array.isArray(value)?value[0]:value,plain=typeof first==='string'?first:first?.name||first?.value||(first&&typeof first==='object'?Object.values(first).find(item=>typeof item==='string'):'')||'';return String(plain).replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,600);};
+    const info=Object.entries({author:text(book.metadata?.author),publisher:text(book.metadata?.publisher),language:text(book.metadata?.language),published:text(book.metadata?.published),description:text(book.metadata?.description)}).filter(([,value])=>value).map(([key,value])=>' data-book-'+key+'="'+esc(value)+'"').join('');
+    const head=tocHTML+'<article data-ebook data-ebook-layout="'+(book.rendition?.layout==='pre-paginated'?'fixed':'reflow')+'"'+info+' dir="'+(book.dir==='rtl'?'rtl':'ltr')+'">';
     return outputBytes>=64*1024*1024?new Blob([head,...bodies,'</article>']):head+bodies.join('')+'</article>';
   }finally{book?.destroy?.();for(const url of resourceBlobs.keys())if(!persistent.has(url))resourceBlobs.delete(url);}
 }

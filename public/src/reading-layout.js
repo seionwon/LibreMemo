@@ -1,7 +1,7 @@
 // Page layout for reflowable ebooks. Paged reading keeps the single vertical
 // flow and moves a line-aligned window over it, so annotations, pen strokes,
 // bookmarks, search and read-aloud use the same geometry in both modes.
-export const DEFAULT_READING_LAYOUT=Object.freeze({enabled:true,flow:'continuous',margin:48,width:720,lineHeight:0,paragraph:0,align:'original',hyphens:false});
+export const DEFAULT_READING_LAYOUT=Object.freeze({enabled:true,flow:'continuous',margin:48,width:720,lineHeight:0,paragraph:0,align:'original',hyphens:false,letterSpacing:0,indent:0,weight:0});
 const number=(value,low,high,fallback)=>Number.isFinite(value)?Math.min(high,Math.max(low,value)):fallback;
 export function normalizeReadingLayout(value,defaults=DEFAULT_READING_LAYOUT){
   const input=value&&typeof value==='object'&&!Array.isArray(value)?value:{};
@@ -14,6 +14,9 @@ export function normalizeReadingLayout(value,defaults=DEFAULT_READING_LAYOUT){
     paragraph:input.paragraph===0?0:number(input.paragraph,.1,2,defaults.paragraph),
     align:['original','left','justify'].includes(input.align)?input.align:defaults.align,
     hyphens:typeof input.hyphens==='boolean'?input.hyphens:defaults.hyphens,
+    letterSpacing:number(input.letterSpacing,0,.2,defaults.letterSpacing),
+    indent:number(input.indent,0,4,defaults.indent),
+    weight:[0,500,600].includes(input.weight)?input.weight:defaults.weight,
   };
 }
 const BOOK='article[data-ebook]:not([data-ebook-layout="fixed"])',TEXT=BOOK+' .ebook-section:not(.ebook-comic-page)';
@@ -25,6 +28,9 @@ export function readingLayoutCss(layout){
   if(layout.lineHeight)css+=TEXT+' :is(p,li,dd,dt,blockquote,div,td){line-height:'+layout.lineHeight+'!important}';
   if(layout.paragraph)css+=TEXT+' p{margin-block:0 '+layout.paragraph+'em!important}';
   if(layout.align!=='original')css+=TEXT+' :is(p,li,dd,blockquote){text-align:'+layout.align+'!important}';
+  if(layout.letterSpacing)css+=TEXT+' :is(p,li,dd,blockquote){letter-spacing:'+layout.letterSpacing+'em!important}';
+  if(layout.indent)css+=TEXT+' p{text-indent:'+layout.indent+'em!important}';
+  if(layout.weight)css+=TEXT+' :is(p,li,dd,blockquote){font-weight:'+layout.weight+'!important}';
   if(layout.hyphens)css+=TEXT+' :is(p,li,dd,blockquote){hyphens:auto!important;-webkit-hyphens:auto!important}';
   return css;
 }
@@ -54,7 +60,7 @@ export class ReadingPager {
     if(!node){node=this.doc.createElement('div');node.id=id;node.setAttribute('data-htmlmemo-ui','');node.setAttribute('aria-hidden','true');this.doc.body.append(node);}
     return node;
   }
-  clear(){cancelAnimationFrame(this.frame);this.frame=0;this.history=[];for(const id of ['htmlmemo-page-top','htmlmemo-page-bottom'])this.doc?.getElementById(id)?.remove();this.doc?.documentElement?.removeAttribute('data-htmlmemo-paged');}
+  clear(){this.stopAuto();cancelAnimationFrame(this.frame);this.frame=0;this.history=[];for(const id of ['htmlmemo-page-top','htmlmemo-page-bottom'])this.doc?.getElementById(id)?.remove();this.doc?.documentElement?.removeAttribute('data-htmlmemo-paged');}
   /** The text line, picture or row crossing a viewport y, if any. */
   crossing(y){
     const box=this.article()?.getBoundingClientRect();if(!box)return null;
@@ -116,6 +122,7 @@ export class ReadingPager {
     return true;
   }
   wheel(event){
+    this.stopAuto();
     if(!this.active||event.ctrlKey)return false;
     event.preventDefault();
     const now=performance.now(),delta=Math.abs(event.deltaY)>=Math.abs(event.deltaX)?event.deltaY:event.deltaX;
@@ -124,13 +131,28 @@ export class ReadingPager {
   }
   free(){return this.reader.tool==='select'&&!this.reader.annotationDrag&&!String(this.doc.getSelection?.()||'').trim();}
   click(event){
+    this.stopAuto();
     if(!this.active||event.defaultPrevented||!this.free())return;
     const target=event.target?.nodeType===1?event.target:event.target?.parentElement;
     if(target?.closest?.('a[href],button,summary,[data-htmlmemo-mark],[data-htmlmemo-id],[data-htmlmemo-ui]'))return;
     const width=this.win.innerWidth;
     if(event.clientX<width*.25)this.previous();else if(event.clientX>width*.75)this.next();
   }
-  touchStart(event){this.touch=this.active&&event.touches.length===1&&this.free()?{x:event.touches[0].clientX,y:event.touches[0].clientY}:null;}
+  // Continuous reading only; any deliberate input hands control back at once.
+  startAuto(speed){
+    this.stopAuto();if(this.active||!this.reader.supportsReadingLayout?.())return false;
+    let last=performance.now(),carry=0;this.autoSpeed=speed;
+    const step=now=>{
+      if(!this.autoSpeed||this.reader.disposed||this.reader.host?.hidden){this.stopAuto();return;}
+      carry+=(now-last)/1000*this.autoSpeed;last=now;
+      const whole=Math.floor(carry);if(whole){carry-=whole;this.win.scrollBy(0,whole);}
+      if(this.contentBottom()<=this.win.innerHeight){this.stopAuto();return;}
+      this.autoFrame=this.win.requestAnimationFrame(step);
+    };
+    this.autoFrame=this.win.requestAnimationFrame(step);return true;
+  }
+  stopAuto(){const was=!!this.autoSpeed;this.autoSpeed=0;if(this.autoFrame)this.win?.cancelAnimationFrame(this.autoFrame);this.autoFrame=0;if(was)this.reader.onAutoScrollEnd?.();}
+  touchStart(event){this.stopAuto();this.touch=this.active&&event.touches.length===1&&this.free()?{x:event.touches[0].clientX,y:event.touches[0].clientY}:null;}
   touchEnd(event){
     const start=this.touch;this.touch=null;const end=event.changedTouches?.[0];
     if(!start||!end||!this.active)return;
