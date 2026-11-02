@@ -571,7 +571,7 @@ async function createDocument(snapshot, handle = null, name = null, local = {}) 
   tab.queue.schedule();
   try { await tab.queue.flush(); } catch(error) { showError(error); }
   if(tab.closing || !tabs.includes(tab)){tab.opening=false;return tab;}
-  tab.opening=false;renderLibrary();activate(tab.id);
+  tab.opening=false;renderLibrary();if(activeId===tab.id){renderTabs();updateChrome();if($('#sidebar').hidden&&!tab.reader?.appSidebarClosed)restoreSidebar();}else activate(tab.id);
   if(tab.queue.error)return tab;
   if(tab.reader.bookIntegrity?.complete === false)toast(tab.reader.bookIntegrity.message, true);
   else if(parsed.metadata.warnings.length)toast(office?'문서를 열었습니다. 표시 범위 안내를 본문에서 확인해주세요.':`페이지를 저장했습니다. ${parsed.metadata.warnings.length}개의 리소스를 보관하지 못했습니다. 문서 정보에서 확인할 수 있어요.`,true);

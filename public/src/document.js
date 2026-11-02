@@ -82,9 +82,11 @@ function clearReaderSidebarArtifacts(root) {
   // the source document itself.  Clear only those namespaced artifacts when
   // opening or exporting a file, leaving the document's real TOC untouched.
   for(const node of root.querySelectorAll?.('#htmlmemo-toc-toggle-style,#htmlmemo-sidebar-style,#htmlmemo-toc-resize-style,#htmlmemo-doc-sidebar-style,#htmlmemo-reading-controls-style,#htmlmemo-reading-font-style,#htmlmemo-source-font-style,#htmlmemo-reading-theme-style,[data-htmlmemo-tts-paint],[data-htmlmemo-reading-controls],[data-htmlmemo-reading-font],[data-htmlmemo-font-reset]')||[])node.remove();
-  for(const button of root.querySelectorAll?.('[data-htmlmemo-source-max]')||[]){
-    button.toggleAttribute('disabled',button.getAttribute('data-htmlmemo-source-max')==='true');
+  for(const button of root.querySelectorAll?.('[data-htmlmemo-source-max],[data-htmlmemo-font-smaller],[data-htmlmemo-font-larger]')||[]){
+    if(button.hasAttribute('data-htmlmemo-source-max'))button.toggleAttribute('disabled',button.getAttribute('data-htmlmemo-source-max')==='true');
     button.removeAttribute('data-htmlmemo-source-max');
+    button.removeAttribute('data-htmlmemo-font-smaller');
+    button.removeAttribute('data-htmlmemo-font-larger');
   }
   for(const group of root.querySelectorAll?.('[data-htmlmemo-reading-controls-group]')||[]){
     group.removeAttribute('data-htmlmemo-reading-controls-group');group.style?.removeProperty('--htmlmemo-controls-shift');

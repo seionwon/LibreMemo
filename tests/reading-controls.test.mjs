@@ -80,7 +80,11 @@ test('article headers, site navigation, search forms and hidden controls never r
 
 test('copied theme controls save a bounded document setting and remove transient palette styles on export',()=>{
   const {r,doc}=fixture();Object.assign(r,{viewport:{scrollTop:0,scrollLeft:0},cancelAnnotationDrag(){},measure(){},renderDrawingLayer(){}});let writes=0;r.callbacks.onPosition=()=>writes++;
-  r.setupReadingControls();const original=textIndex(doc).text;r.setReadingTheme('dark');assert.equal(writes,1);assert.equal(r.metadata.view.readingTheme,'dark');assert.equal(r.readingControls.dataset.theme,'dark');assert.equal(r.plainReadingButtons.theme.value,'dark');
+  r.setupReadingControls();const original=textIndex(doc).text;
+  assert.equal(r.plainReadingButtons.theme.title,'화면 모드: 시스템');
+  r.setReadingTheme('dark');assert.equal(writes,1);assert.equal(r.metadata.view.readingTheme,'dark');assert.equal(r.readingControls.dataset.theme,'dark');assert.equal(r.plainReadingButtons.theme.value,'dark');assert.equal(r.plainReadingButtons.theme.title,'화면 모드: 어둡게');
+  r.setReadingTheme('light');assert.equal(r.plainReadingButtons.theme.title,'화면 모드: 밝게');
+  r.setReadingTheme('dark');
   assert.match(doc.querySelector('#htmlmemo-reading-theme-style').textContent,/--htmlmemo-reader-paper:#14161b/);r.rememberPosition();assert.equal(r.metadata.view.readingTheme,'dark');assert.equal(r.setReadingTheme('not-a-theme'),false);
   const saved=serializeHTML(doc,r.metadata);assert.doesNotMatch(saved,/htmlmemo-reading-theme-style/);assert.equal(parseHTML(saved).metadata.view.readingTheme,'dark');assert.equal(textIndex(doc).text,original);
   const raw='<html><head><script id="htmlmemo-data" type="application/json">'+JSON.stringify({version:1,annotations:[],view:{readingTheme:'url(bad)'}})+'</script></head><body>본문</body></html>';assert.equal(Object.hasOwn(parseHTML(raw).metadata.view,'readingTheme'),false);
@@ -252,8 +256,13 @@ test('source toolbar A+ extends 3 more steps beyond the book maximum and cleans 
   assert.equal(r.sourceFontExtraSteps,2);assert.equal(r.metadata.view.sourceFontSteps,2);assert.match(doc.querySelector('#htmlmemo-source-font-style').textContent,/29\.040px/);assert.equal(larger.disabled,false);
   larger.dispatchEvent(new (doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
   assert.equal(r.sourceFontExtraSteps,3);assert.equal(r.metadata.view.sourceFontSteps,3);assert.match(doc.querySelector('#htmlmemo-source-font-style').textContent,/31\.944px/);assert.equal(larger.disabled,true);
-  const saved=serializeHTML(doc,r.metadata);assert.doesNotMatch(saved,/htmlmemo-source-font-style|data-htmlmemo-source-max|data-htmlmemo-font-reset/);
+  const saved=serializeHTML(doc,r.metadata);assert.doesNotMatch(saved,/htmlmemo-source-font-style|data-htmlmemo-source-max|data-htmlmemo-font-reset|data-htmlmemo-font-smaller|data-htmlmemo-font-larger/);
   assert.equal(parseHTML(saved).metadata.view.sourceFontSteps,3);
+  const styleText=r.readingControlsStyle();
+  assert.match(styleText,/border-radius:4px 0 0 4px!important/);
+  assert.match(styleText,/border-radius:0 4px 4px 0!important/);
+  assert.match(styleText,/--reader-theme-icon:url\(/);
+  assert.match(styleText,/select#reader-theme[\s\S]*width:24px!important[\s\S]*color:transparent!important[\s\S]*font-size:0px!important/);
   smaller.dispatchEvent(new (doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
   assert.equal(r.sourceFontExtraSteps,2);assert.equal(larger.disabled,false);
   smaller.dispatchEvent(new (doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
