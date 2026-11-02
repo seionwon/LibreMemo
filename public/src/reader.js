@@ -6,6 +6,8 @@ import { IsolatedRuntime,needsIsolatedRuntime } from './isolated-runtime.js';
 import { clamp, uid, icon, sidebarWidthAction, isSecurityWarning } from './utils.js';
 import { History, TEXT_TOOLS, DRAW_TOOLS, FILL_TOOLS, READING_FONTS, READING_FONT_FAMILIES, MONO_READING_FONTS, normalizeReadingFontFamily } from './model.js';
 import { loadHangulFonts } from './hangul-fonts.js';
+import { DEFAULT_READING_LAYOUT, ReadingPager, normalizeReadingLayout, pageNumbers, readingLayoutCss, PAGE_BOTTOM, PAGE_TOP } from './reading-layout.js';
+import { closeReadingLayoutPanel, closeEbookNote, openEbookNote, ebookNoteTarget, toggleReadingLayoutPanel } from './reading-layout-panel.js';
 import { LAYER_ID, LOCAL_CSP, parseHTML, savedMainFrame, prepareLoadedHTML, cleanAnnotations, textIndex, selectionAnchor, resolveTextAnchor, wrapOffsets, rangeFromOffsets, sentenceOffsets, serializeHTML, inspectBookDocument, drawingTargetQuote, describeDrawingTarget, currentSection, bookmarkAnchorTarget } from './document.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -95,6 +97,7 @@ export class Reader {
           if (this.disposed) { resolve(this); return; }
           this.applyReadingFont();
           this.applyReadingTheme();
+          this.applyReadingLayout();
           this.zoom = clamp(this.autoFit ? this.fitZoom() : (this.metadata.view.zoom || this.fitZoom()), .2, 8); this.applyZoom();
           if (this.doc.fonts?.status === 'loading') await this.doc.fonts.ready;
           if (this.disposed) { resolve(this); return; }
@@ -450,7 +453,10 @@ export class Reader {
     this.doc.addEventListener('dragover',event=>{if([...event.dataTransfer?.types||[]].includes('Files'))event.preventDefault();});
     this.doc.addEventListener('drop',event=>this.callbacks.onDrop?.(event));
     this.startFontObserver();
-    this.doc.addEventListener('wheel', event => { this.clearTocLongPress(); this.forwardWheel(event); }, {capture:true,passive:false});
+    this.doc.addEventListener('wheel', event => { this.clearTocLongPress(); if(this.pager?.wheel(event))return; this.forwardWheel(event); }, {capture:true,passive:false});
+    this.doc.addEventListener('touchstart', event => this.pager?.touchStart(event), {capture:true,passive:true});
+    this.doc.addEventListener('touchend', event => this.pager?.touchEnd(event), {capture:true,passive:true});
+    this.doc.addEventListener('click', event => this.pager?.click(event));
     this.doc.addEventListener('touchstart', event => { this.dismissMobileSidebar(event, event.touches?.[0]?.target || event.target); this.startTouchScroll(event); }, {capture:true,passive:false});
     this.doc.addEventListener('touchmove', event => this.moveTouchScroll(event), {capture:true,passive:false});
     this.doc.addEventListener('touchend', event => this.endTouchScroll(event), true);
@@ -472,6 +478,7 @@ export class Reader {
     this.viewport.addEventListener('dblclick', event => this.focusDocument(event));
     this.viewport.addEventListener('scroll',()=>this.updateReadingControls(),{passive:true});
     this.doc.addEventListener('click', event => {
+      if(this.showEbookNote(event))return;
       if(this.suppressTocClickUntil&&performance.now()<this.suppressTocClickUntil){this.suppressTocClickUntil=0;event.preventDefault();event.stopPropagation();event.stopImmediatePropagation?.();return;}
       if(this.suppressAnnotationClick&&event.detail!==0&&performance.now()<this.suppressAnnotationClick){this.suppressAnnotationClick=0;event.preventDefault();event.stopImmediatePropagation();return;}
       const target = event.target?.nodeType === 1 ? event.target : event.target?.parentElement;
@@ -561,6 +568,7 @@ export class Reader {
       if (this.nativeScroll && target?.nodeType === 1 && target !== this.doc.documentElement && !this.isInsideTocOrTopbar(target) && !/^(?:pre|code|table|ul|ol|nav|aside)$/i.test(target.localName || '') && target.scrollTop > 0 && (!this.scrollHostEl || target === this.doc.body || target.contains?.(this.scrollHostEl)) && (target === this.doc.body || (target.clientWidth >= 160 && target.clientHeight >= 100))) {
         if (this.scrollHostEl !== target) { this.scrollHostEl = target; this.scrollHostChecked = true; this.renderDrawingLayer(); }
       }
+      this.pager?.scrolled();this.scheduleReadingProgress();
       clearTimeout(this.positionTimer);
       this.positionTimer = setTimeout(() => {
         if (this.disposed) return;
@@ -932,11 +940,13 @@ export class Reader {
         const smaller=button('font-smaller','글씨 작게','A−',()=>this.setReadingFontScale(this.readingFontScale()/1.1));
         const reset=button('font-reset','글씨 기본 크기','A',()=>this.resetReadingFontSize());
         const larger=button('font-larger','글씨 크게','A+',()=>this.setReadingFontScale(this.readingFontScale()*1.1));
+        const layout=button('reading-layout','보기 설정 · 여백, 쪽 넘김','▤',()=>toggleReadingLayoutPanel(this,layout));layout.setAttribute('aria-haspopup','dialog');
+        const progress=doc.createElement('span');progress.className='reader-position reader-progress';progress.setAttribute('aria-label','읽은 위치');
         const theme=doc.createElement('select');theme.setAttribute('aria-label','화면 모드');theme.dataset.readingTheme='';
-        for(const [value,label] of [['system','시스템'],['light','밝게'],['dark','어둡게']]){const option=doc.createElement('option');option.value=value;option.textContent=label;theme.append(option);}
+        for(const [value,label] of [['system','시스템'],['light','밝게'],['sepia','세피아'],['dark','어둡게']]){const option=doc.createElement('option');option.value=value;option.textContent=label;theme.append(option);}
         theme.onchange=()=>this.setReadingTheme(theme.value);
-        this.plainReadingButtons={menu,title,back,previous,next,position,smaller,reset,larger,theme,font};
-        controls.replaceChildren(menu,title,back,previous,next,position,this.speechControl,smaller,reset,larger,theme,font,this.zoomControl);
+        this.plainReadingButtons={menu,title,back,previous,next,position,smaller,reset,larger,theme,font,layout,progress};
+        controls.replaceChildren(menu,title,back,previous,next,position,progress,this.speechControl,smaller,reset,larger,theme,font,layout,this.zoomControl);
       }
       this.readingControls=controls;
     }
@@ -987,6 +997,62 @@ export class Reader {
     const root=this.doc.documentElement.style,pan=view.left-frame.left,scale=frame.width/this.frame.offsetWidth;
     for(const [name,value]of [['--htmlmemo-reader-ui-width',view.width+'px'],['--htmlmemo-reader-ui-left',pan+'px'],['--htmlmemo-reader-sidebar-left',pan/scale+'px']])if(root.getPropertyValue(name)!==value)root.setProperty(name,value);
   }
+  // Reflowable books only: fixed pages and comics already are their own pages.
+  supportsReadingLayout() { return !this.pdf&&!!this.doc?.querySelector?.('article[data-ebook]:not([data-ebook-layout="fixed"]) .ebook-section:not(.ebook-comic-page)'); }
+  readingLayout() { return normalizeReadingLayout(this.metadata?.view?.layout,normalizeReadingLayout(this.callbacks?.readingLayoutDefault?.(),DEFAULT_READING_LAYOUT)); }
+  applyReadingLayout() {
+    if(!this.supportsReadingLayout())return;
+    this.pager||=new ReadingPager(this);this.fitReadingWidth();
+    let style=this.doc.getElementById('htmlmemo-reading-layout-style');
+    if(!style){style=this.doc.createElement('style');style.id='htmlmemo-reading-layout-style';style.setAttribute('data-htmlmemo-ui','');this.doc.head.append(style);}
+    const layout=this.readingLayout(),css=readingLayoutCss(layout);if(style.textContent!==css)style.textContent=css;
+    if(layout.flow==='paged')this.doc.documentElement.setAttribute('data-htmlmemo-paged','');else this.pager.clear();
+  }
+  // A reflowable book takes the pane's real width at 100%; shrinking a fixed
+  // 1100px frame would make the text unreadable on a phone.
+  fitReadingWidth() {
+    if(!this.autoFit||!this.nativeScroll||!this.supportsReadingLayout())return false;
+    const width=Math.max(320,this.viewport.clientWidth||this.naturalWidth);
+    if(width===this.naturalWidth)return false;
+    this.naturalWidth=width;this.frame.style.width=width+'px';return true;
+  }
+  // Reflow runs the same anchor path as a font-size change, so the reader stays
+  // on the same sentence and marks, pen strokes and bookmarks follow the text.
+  setReadingLayout(patch) {
+    if(this.disposed||this.preparing||!this.supportsReadingLayout())return false;
+    const anchor=this.captureReadingAnchor();
+    this.metadata.view.layout=normalizeReadingLayout({...this.readingLayout(),...patch});
+    this.applyReadingLayout();this.measure();this.restoreReadingAnchor(anchor);this.pager.history=[];this.pager.render({snap:true});this.renderDrawingLayer();this.readAloud?.refreshPaint?.();
+    if(!this.rememberPosition())this.callbacks.onPosition?.();
+    this.updateReadingControls();this.callbacks.onView?.();return true;
+  }
+  saveReadingLayoutDefault() { this.callbacks.onReadingLayoutDefault?.(this.readingLayout()); }
+  scheduleReadingProgress() {
+    if(!this.plainReadingButtons?.progress||!this.supportsReadingLayout()||this.progressFrame)return;
+    this.progressFrame=requestAnimationFrame(()=>{this.progressFrame=0;if(!this.disposed)this.updateReadingProgress();});
+  }
+  updateReadingProgress() {
+    const node=this.plainReadingButtons?.progress;if(!node)return;
+    const supported=this.supportsReadingLayout();node.hidden=!supported;this.plainReadingButtons.layout.hidden=!supported;
+    if(!supported)return;
+    const win=this.doc.defaultView,paged=this.readingLayout().flow==='paged',bottom=this.pager?.contentBottom?.()??0,height=win.innerHeight,top=win.scrollY;
+    const {page,pages,percent}=pageNumbers({top,contentHeight:bottom+top,pageHeight:paged?height-PAGE_TOP-PAGE_BOTTOM:height});
+    const text=paged?page+' / '+pages+'쪽 · '+percent+'%':percent+'%';if(node.textContent!==text)node.textContent=text;
+  }
+  handleReadingKey(event) {
+    if(!this.supportsReadingLayout())return false;
+    const paged=this.readingLayout().flow==='paged',key=event.key,forward=key==='PageDown'||key===' '&&!event.shiftKey||paged&&(key==='ArrowRight'||key==='ArrowDown'),backward=key==='PageUp'||key===' '&&event.shiftKey||paged&&(key==='ArrowLeft'||key==='ArrowUp');
+    if(key==='Home'||key==='End'){const win=this.doc.defaultView;if(paged)this.pager.history=[];win.scrollTo(win.scrollX,key==='Home'?0:Math.max(0,(this.pager?.contentBottom()??0)+win.scrollY-win.innerHeight));return true;}
+    if(!forward&&!backward)return false;
+    if(paged){if(forward)this.pager.next();else this.pager.previous();return true;}
+    const win=this.doc.defaultView;win.scrollBy(win.scrollX*0,(forward?1:-1)*win.innerHeight*.9);return true;
+  }
+  showEbookNote(event) {
+    if(!this.supportsReadingLayout()||event.defaultPrevented||this.tool!=='select')return false;
+    const target=ebookNoteTarget(this.doc,event.target);if(!target)return false;
+    event.preventDefault();event.stopPropagation();event.stopImmediatePropagation?.();
+    openEbookNote(this,target);return true;
+  }
   updateReadingControls() {
     if(this.zoomControl){const text=Math.round(this.zoom*100)+'%';if(this.zoomControl.textContent!==text)this.zoomControl.textContent=text;}
     if(this.fontControl){
@@ -1003,7 +1069,7 @@ export class Reader {
     if(this.plainReadingButtons){
       const {menu,back,previous,next,position,smaller,reset,larger,theme}=this.plainReadingButtons,{nodes,current}=this.readingHeadingState();
       const sidebar=this.host.ownerDocument.getElementById('sidebar');menu.setAttribute('aria-expanded',String(sidebar?.hidden===false&&sidebar.annotationReader===this));
-      back.disabled=!this.linkHistory?.length;const location=(nodes.length?current+1:0)+' / '+nodes.length;if(position.textContent!==location)position.textContent=location;
+      this.updateReadingProgress();back.disabled=!this.linkHistory?.length;const location=(nodes.length?current+1:0)+' / '+nodes.length;if(position.textContent!==location)position.textContent=location;
       previous.disabled=current<=0;next.disabled=current>=nodes.length-1;
       const scale=this.readingFontScale();smaller.disabled=scale<=.6;if(reset)reset.disabled=Math.abs(scale-1)<.001;larger.disabled=scale>=3.2;
       if(theme.value!==this.readingTheme()){
@@ -1101,7 +1167,7 @@ export class Reader {
     this.updateReadingControls?.();this.callbacks?.onView?.();
     return true;
   }
-  readingTheme() { return ['system','light','dark'].includes(this.metadata.view?.readingTheme)?this.metadata.view.readingTheme:'system'; }
+  readingTheme() { return ['system','light','dark','sepia'].includes(this.metadata.view?.readingTheme)?this.metadata.view.readingTheme:'system'; }
   ensureReadingThemeQuery() {
     if(!this.readingThemeQuery){
       const win=this.host?.ownerDocument?.defaultView||this.doc?.defaultView;
@@ -1127,7 +1193,7 @@ export class Reader {
     if(!this.doc?.body||this.topbarNode?.isConnected||this.findDocumentTopbar())return;
     this.ensureReadingThemeQuery();
     const dark=this.resolvedReadingTheme()==='dark';
-    const colors=dark?['#14161b','#1b1e25','#e8eaf0','#a5adbc','#383e4a','#252a34','#626d7d','#48536a','#8bb9f0','#30291c']:['#fff','#f6f8fa','#1f2328','#57606a','#e5e7eb','#f2f4f7','#d0d7de','#d8dee4','#255c9e','#faf6eb'];
+    const colors=this.readingTheme()==='sepia'?['#f4ecd8','#ece2c8','#3b3024','#6b5b48','#dccfb4','#e8dcc0','#bfae8c','#cdbfa0','#7a4a1e','#efe3c4']:dark?['#14161b','#1b1e25','#e8eaf0','#a5adbc','#383e4a','#252a34','#626d7d','#48536a','#8bb9f0','#30291c']:['#fff','#f6f8fa','#1f2328','#57606a','#e5e7eb','#f2f4f7','#d0d7de','#d8dee4','#255c9e','#faf6eb'];
     let style=this.doc.getElementById('htmlmemo-reading-theme-style');
     if(!style){style=this.doc.createElement('style');style.id='htmlmemo-reading-theme-style';style.setAttribute('data-htmlmemo-ui','');this.doc.head.append(style);}
     const names=['paper','panel','ink','muted','line','inline-code','quote-line','table-line','link','notice'];
@@ -1135,7 +1201,7 @@ export class Reader {
     if(style.textContent!==css)style.textContent=css;
   }
   setReadingTheme(value) {
-    if(!['system','light','dark'].includes(value)||this.disposed||this.preparing||this.topbarNode?.isConnected||value===this.readingTheme())return false;
+    if(!['system','light','dark','sepia'].includes(value)||this.disposed||this.preparing||this.topbarNode?.isConnected||value===this.readingTheme())return false;
     this.metadata.view.readingTheme=value;this.applyReadingTheme();this.callbacks.onPosition?.();this.updateReadingControls();this.callbacks.onView?.();return true;
   }
   findSourceThemeControl(topbar=this.topbarNode) {
@@ -2700,6 +2766,7 @@ export class Reader {
   }
   measure() {
     if (this.host?.hidden || !this.doc) return;
+    this.pager?.schedule();
     const body = this.doc.body;
     if (this.nativeScroll) {
       // Keep the browsing viewport small. Expanding an iframe to a whole book
@@ -2736,9 +2803,10 @@ export class Reader {
   resizeViewport() {
     if(this.host?.hidden || this.disposed)return;
     const top=this.scrollTop/this.zoom,left=this.scrollLeft/this.zoom;
+    const reflowAnchor=!this.preparing&&this.autoFit&&this.supportsReadingLayout()?this.captureReadingAnchor():null,reflowed=!!reflowAnchor&&this.fitReadingWidth();
     if(this.autoFit)this.zoom=this.fitZoom();
     if(this.nativeScroll || this.autoFit)this.applyZoom();
-    this.scrollTop=top*this.zoom;this.scrollLeft=left*this.zoom;
+    if(reflowed){this.measure();this.restoreReadingAnchor(reflowAnchor);}else{this.scrollTop=top*this.zoom;this.scrollLeft=left*this.zoom;}
     if(!this.preparing&&this.layer?.isConnected)this.renderDrawingLayer();
   }
   fitZoom() { const focused=!!this.host.closest('.reader-focus'); return clamp(this.viewport.clientWidth / this.naturalWidth, .2, focused ? 8 : 2); }
@@ -2907,7 +2975,7 @@ export class Reader {
   rememberPosition() {
     // Hidden tabs can report zero geometry; never replace the last visible reading position with it.
     if(this.host?.hidden || this.disposed)return false;
-    const view = {scrollTop:this.scrollTop, scrollLeft:this.scrollLeft, zoom:this.zoom, autoFit:this.autoFit, ...(Number.isFinite(this.tocResizedWidth)?{tocWidth:this.tocResizedWidth}:{}),...(Number.isFinite(this.metadata.view?.fontScale)?{fontScale:this.readingFontScale()}:{}),...(this.sourceFontExtraSteps?{sourceFontSteps:this.sourceFontExtraSteps}:{}),...(this.readingFontFamily()!=='default'?{fontFamily:this.readingFontFamily()}:{}),...(this.metadata.view?.readingTheme?{readingTheme:this.readingTheme()}:{}),...(this.metadata.view?.sourceStorage?{sourceStorage:this.metadata.view.sourceStorage}:{})};
+    const view = {scrollTop:this.scrollTop, scrollLeft:this.scrollLeft, zoom:this.zoom, autoFit:this.autoFit, ...(this.metadata.view?.layout?{layout:this.metadata.view.layout}:{}), ...(Number.isFinite(this.tocResizedWidth)?{tocWidth:this.tocResizedWidth}:{}),...(Number.isFinite(this.metadata.view?.fontScale)?{fontScale:this.readingFontScale()}:{}),...(this.sourceFontExtraSteps?{sourceFontSteps:this.sourceFontExtraSteps}:{}),...(this.readingFontFamily()!=='default'?{fontFamily:this.readingFontFamily()}:{}),...(this.metadata.view?.readingTheme?{readingTheme:this.readingTheme()}:{}),...(this.metadata.view?.sourceStorage?{sourceStorage:this.metadata.view.sourceStorage}:{})};
     if(this.pdf){const position=this.pdf.position(),old=this.metadata.view?.pdfPosition;view.pdfPosition=old?.page===position.page&&old?.y===position.y?old:position;}
     const previous = this.metadata.view || {};
     if (Object.keys(previous).length === Object.keys(view).length && Object.keys(view).every(key => view[key] === previous[key])) return false;
@@ -4443,6 +4511,7 @@ export class Reader {
     this.clearTocLongPress();this.cancelDrawingGesture();this.touchScroll=null;this.touchErase=null;
     this.searchGeneration=(this.searchGeneration||0)+1;this.searchIndexCache?.dispose();
     this.cancelBookSearchJump?.();this.documentBookSearchObserver?.disconnect();if(this.documentBookSearchResults)this.clearDocumentBookSearchHighlight();
+    closeReadingLayoutPanel(this);closeEbookNote(this);this.pager?.clear();
     this.stopMiddleScroll();this.readAloud?.dispose();this.readAloud=null;this.stopSpeech(); this.disposed=true;this.cancelOpeningWait?.();this.cancelAnnotationJump?.();this.cancelFrameOpen?.();this.runtime?.dispose(); clearTimeout(this.positionTimer);clearTimeout(this.dynamicTimer);clearTimeout(this.sourceFontTimer);clearTimeout(this.documentSidebarUI?.sidebarSearchTimer);this.dynamicObserver?.disconnect();this.fontObserver?.disconnect();if(this.fontFrame)this.doc.defaultView?.cancelAnimationFrame(this.fontFrame); this.resizeObserver?.disconnect(); this.hostObserver?.disconnect(); this.frame.srcdoc=''; if(this.documentURL){URL.revokeObjectURL(this.documentURL);this.documentURL=null;} this.host.remove();
   }
 }

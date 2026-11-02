@@ -31,7 +31,8 @@ export function archiveMetadata(value){
   const fontFamily=normalizeReadingFontFamily(value.view?.fontFamily);
   if(fontFamily&&fontFamily!=='default')result.view.fontFamily=fontFamily;
   if(typeof value.view?.autoFit==='boolean')result.view.autoFit=value.view.autoFit;
-  if(['system','light','dark'].includes(value.view?.readingTheme))result.view.readingTheme=value.view.readingTheme;
+  if(['system','light','dark','sepia'].includes(value.view?.readingTheme))result.view.readingTheme=value.view.readingTheme;
+  if(value.view?.layout)result.view.layout=value.view.layout;
   if(validPDFPosition(value.view?.pdfPosition))result.view.pdfPosition=structuredClone(value.view.pdfPosition);
   if(value.view?.sourceStorage)result.view.sourceStorage=cleanSourceStorage(value.view.sourceStorage);
   if(value.format==='pdf'){result.format='pdf';result.execution.allowScripts=false;if(value.pdf)result.pdf=structuredClone(value.pdf);}

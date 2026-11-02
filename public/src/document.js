@@ -1,3 +1,4 @@
+import {normalizeReadingLayout} from './reading-layout.js';
 import { FORMAT_VERSION, validateAnnotations, validateOutlineEdits, cleanSourceStorage,validPDFPosition, normalizeReadingFontFamily } from './model.js';
 
 export const LAYER_ID = 'htmlmemo-annotation-layer';
@@ -284,7 +285,8 @@ function* prepareHTML(html, defaults, {includeMetadata = false, document: loaded
   if(Number.isInteger(view.sourceFontSteps)&&view.sourceFontSteps!==0&&view.sourceFontSteps>=-5&&view.sourceFontSteps<=3)metadata.view.sourceFontSteps=view.sourceFontSteps;
   const fontFamily=normalizeReadingFontFamily(view.fontFamily);
   if(fontFamily&&fontFamily!=='default')metadata.view.fontFamily=fontFamily;
-  if(['system','light','dark'].includes(view.readingTheme))metadata.view.readingTheme=view.readingTheme;
+  if(['system','light','dark','sepia'].includes(view.readingTheme))metadata.view.readingTheme=view.readingTheme;
+  if(view.layout)metadata.view.layout=normalizeReadingLayout(view.layout);
   if(validPDFPosition(view.pdfPosition))metadata.view.pdfPosition={page:view.pdfPosition.page,y:view.pdfPosition.y};
   if(bookmarks.some(mark=>mark.pdfPosition!=null&&!validPDFPosition(mark.pdfPosition)))throw Error('PDF 북마크 위치가 손상되었습니다.');
   if(bookmarks.some(mark=>mark.pdfQuoteOffset!=null&&(!Number.isFinite(mark.pdfQuoteOffset)||Math.abs(mark.pdfQuoteOffset)>1)))throw Error('PDF 북마크의 본문 위치가 손상되었습니다.');
@@ -315,6 +317,7 @@ export function serializeHTML(doc, metadata) {
   clone.querySelector('#' + DATA_ID)?.remove();
   for (const mark of [...clone.querySelectorAll('[data-htmlmemo-search]')].reverse()) mark.replaceWith(...mark.childNodes);
   clone.querySelectorAll('[data-htmlmemo-preview], [data-htmlmemo-selected], [data-htmlmemo-hit]').forEach(element => element.remove());
+  clone.removeAttribute('data-htmlmemo-paged');clone.querySelector('#htmlmemo-page-top')?.remove();clone.querySelector('#htmlmemo-page-bottom')?.remove();
   clone.removeAttribute('data-htmlmemo-picking');clone.removeAttribute('data-htmlmemo-moving');clone.removeAttribute('data-htmlmemo-text-marking');clone.querySelectorAll('[data-htmlmemo-drag-source]').forEach(node=>node.removeAttribute('data-htmlmemo-drag-source'));clone.querySelector('#'+LAYER_ID)?.style.removeProperty('--htmlmemo-hit-padding');
   // Reader-only sidebar controls and their grid/flex overrides must never
   // alter the source document's own TOC after it is saved and reopened.

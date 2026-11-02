@@ -569,6 +569,8 @@ async function openRecord(record, prepared = null, {deferReady = false, sourceId
     onSidebarView:(mode,panel,documentReader)=>renderSidebar(mode,{panel,embedded:true,documentReader}),
     onSidebarCounts:(panel,documentReader)=>updateSidebarCounts(panel,documentReader),
     sidebarWidth:()=>preferences.sidebarWidth,
+    readingLayoutDefault:()=>preferences.readingLayout,
+    onReadingLayoutDefault:layout=>changePreferences({readingLayout:layout}),
     sidebarMaxWidth:()=>appSidebarMaxWidth(),
     onSidebarWidth:width=>{if(width!==preferences.sidebarWidth)saveAppSidebarWidth(width);},
     onSearchChange:documentReader=>updateSearchNavigation(documentReader),
@@ -1842,6 +1844,7 @@ function handleKey(event) {
   if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'){event.preventDefault();event.shiftKey?reader().redo():reader().undo();return;}
   if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='f'){event.preventDefault();if(reader().documentSidebarUI)reader().showDocumentSidebarView('search');else renderSidebar('search');return;}
   if(event.ctrlKey||event.metaKey||event.altKey)return;
+  if(reader().handleReadingKey?.(event)){event.preventDefault();return;}
   if(event.key.toLowerCase()==='f'){event.preventDefault();void toggleReaderFocus();return;}
   const tools={v:'select',p:'pen',h:'highlight',u:'underline',r:'rect',e:'eraser',n:'note'};const tool=tools[event.key.toLowerCase()];if(tool){event.preventDefault();toolAction(tool);}
 }

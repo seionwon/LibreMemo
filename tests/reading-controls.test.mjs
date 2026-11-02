@@ -40,7 +40,7 @@ test('plain documents copy the HTML reader header with its title, navigation, po
   const {r,doc,outer,calls}=fixture();r.setupReadingControls();
   assert.equal(r.host.firstElementChild,r.readingControls);assert.equal(r.host.classList.contains('reader-controls-row'),true);
   assert.notEqual(r.readingControls.style.getPropertyValue('position'),'relative','the source toolbar must use the fixed CSS position instead of an inline relative offset');
-  assert.deepEqual([...r.readingControls.querySelectorAll('button')].map(node=>node.dataset.action),['toggle-sidebar','reading-back','previous-heading','next-heading','speak','font-smaller','font-reset','font-larger','zoom']);
+  assert.deepEqual([...r.readingControls.querySelectorAll('button')].map(node=>node.dataset.action),['toggle-sidebar','reading-back','previous-heading','next-heading','speak','font-smaller','font-reset','font-larger','reading-layout','zoom']);
   assert.equal(r.plainReadingButtons.smaller.nextElementSibling,r.plainReadingButtons.reset);
   assert.equal(r.plainReadingButtons.reset.nextElementSibling,r.plainReadingButtons.larger);
   assert.equal(r.plainReadingButtons.reset.textContent,'A');assert.equal(r.plainReadingButtons.reset.disabled,true);
@@ -48,7 +48,7 @@ test('plain documents copy the HTML reader header with its title, navigation, po
   assert.equal(r.plainReadingButtons.previous.disabled,true);assert.equal(r.plainReadingButtons.next.disabled,true);assert.equal(r.plainReadingButtons.back.disabled,true);
   assert.equal(r.plainReadingButtons.previous.hidden,false);assert.equal(r.plainReadingButtons.next.hidden,false);
   assert.equal(r.plainReadingButtons.position.textContent,'0 / 0');assert.equal(r.plainReadingButtons.title.textContent,doc.title);
-  assert.deepEqual([...r.plainReadingButtons.theme.querySelectorAll('option')].map(option=>[option.value,option.textContent]),[['system','시스템'],['light','밝게'],['dark','어둡게']]);
+  assert.deepEqual([...r.plainReadingButtons.theme.querySelectorAll('option')].map(option=>[option.value,option.textContent]),[['system','시스템'],['light','밝게'],['sepia','세피아'],['dark','어둡게']]);
   assert.deepEqual([...r.plainReadingButtons.font.querySelectorAll('option')].map(option=>[option.value,option.textContent]),READING_FONTS);
   assert.deepEqual([...r.plainReadingButtons.font.querySelectorAll('option')].slice(0,5).map(option=>[option.value,option.textContent]),[['default','기본'],['sans','고딕'],['serif','명조'],['dotum','돋움'],['mono','고정폭']]);
   assert.ok(r.plainReadingButtons.font.querySelector('option[value="Malgun Gothic"]'));
@@ -70,7 +70,7 @@ test('article headers, site navigation, search forms and hidden controls never r
   for(const header of ['<header class="header"><strong>문서 제목</strong><input type="search"><button>검색</button></header>','<header class="book-header"><h1>글 제목</h1></header>','<form><input type="search"><button>검색</button></form>','<div class="toolbar"><button>공유</button></div>','<header class="topbar" hidden><button>A+</button></header>']){
     const {r,doc}=fixture(header);r.outline=()=>[];r.setupReadingControls();r.setupReadingControls();
     assert.ok(r.plainReadingButtons);assert.equal(r.readingControls.parentElement,r.host);
-    assert.deepEqual([...r.readingControls.querySelectorAll('button')].map(node=>node.dataset.action),['toggle-sidebar','reading-back','previous-heading','next-heading','speak','font-smaller','font-reset','font-larger','zoom']);
+    assert.deepEqual([...r.readingControls.querySelectorAll('button')].map(node=>node.dataset.action),['toggle-sidebar','reading-back','previous-heading','next-heading','speak','font-smaller','font-reset','font-larger','reading-layout','zoom']);
   assert.equal(r.plainReadingButtons.smaller.nextElementSibling,r.plainReadingButtons.reset);
   assert.equal(r.plainReadingButtons.reset.nextElementSibling,r.plainReadingButtons.larger);
   assert.equal(r.plainReadingButtons.reset.textContent,'A');assert.equal(r.plainReadingButtons.reset.disabled,true);
