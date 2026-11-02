@@ -5863,7 +5863,7 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
 | --- | --- |
 | ID | hist-20261102-017 |
 | 변경 종류 | 리더 상단 툴바 뒤로 가기 버튼 `:hover` 상태의 배경 반복·크기·위치 유지([`.htmlmemo-source-toolbar`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css#L126), [`readingControlsStyle`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L980)) |
-| 상태 | 로컬 검증 완료 · 1.9.22 GitHub Pages 게시 진행 |
+| 상태 | 구현·검증·GitHub Pages 게시 완료 (1.9.22) |
 
 - **목적·원인:**
   1. [`public/design.tailwind.css`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css#L134)의 `.reader-controls-row>.htmlmemo-source-toolbar button:hover:not(:disabled){background:var(--reader-paper)}`가 CSS `background` 단축 속성(shorthand)을 사용하여, 활성화된 뒤로 가기 버튼(`[data-action=reading-back]:hover:not(:disabled)`) 위에 마우스를 올리면 `background-repeat: repeat`, `background-position: 0% 0%`, `background-size: auto`로 초기화되면서 버튼 안에 화살표 아이콘이 좌우로 2개 반복되어 보이는 문제가 있었습니다.
@@ -5871,4 +5871,22 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
   1. **`:hover` 상태에서도 단일 중앙 아이콘(`no-repeat`, `center`, `13px 13px`) 유지([`public/design.tailwind.css`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css), [`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js)):**
      - [`public/design.tailwind.css`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css#L126)에서 `.reader-controls-row>.htmlmemo-source-toolbar [data-action=reading-back],.reader-controls-row>.htmlmemo-source-toolbar [data-action=reading-back]:hover:not(:disabled)`가 함께 `background-color:var(--reader-paper);background-image:var(--reader-back-icon);background-repeat:no-repeat;background-position:center;background-size:13px 13px;color:transparent`를 선언하도록 수정하여, 마우스 오버 시에도 `background` 단축 속성에 의해 `background-repeat`·`background-position`·`background-size`가 초기화되지 않도록 수정했습니다.
      - [`readingControlsStyle`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L980)에도 `:hover` 선택자(`[data-htmlmemo-doc-topbar] #reader-back:hover,[data-htmlmemo-doc-topbar] #back:hover,[data-htmlmemo-doc-topbar] [data-action=reading-back]:hover`)를 포함하여 내장 상단바 문서의 `:hover` 규칙과도 충돌하지 않도록 보강했습니다.
-- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 915개 단위 검사 통과 및 `codememo-browser` 검증을 마친 뒤 GitHub Pages 게시 및 온라인 검증을 진행합니다.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 915개 단위 검사 통과, `codememo-browser`(1280×800) 검증 완료, GitHub Actions(`41439727170`) 전체 성공 및 `https://seionwon.github.io/LibreMemo/src/version.js`(`1.9.22`) 게시 확인.
+
+<a id="hist-20261102-018"></a>
+### 2026-11-02 21:18:00 +09:00 — 하단 상태 표시줄(`.statusbar`)이 변화가 있을 때만 위로 올라왔다가 잠시 뒤 아래로 사라지도록 수정
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261102-018 |
+| 변경 종류 | 하단 상태 표시줄(`.statusbar`) 자동 슬라이드 업·숨김 전환([`public/design.tailwind.css`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css#L172-L174), [`syncStatusbarVisibility`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js#L55-L107)) |
+| 상태 | 로컬 검증 완료 · 1.9.23 GitHub Pages 게시 진행 |
+
+- **목적·원인:**
+  1. 하단 상태 표시줄(`<footer class="statusbar">`)이 아무 변화가 없는 평상시에도 화면 맨 아래에 항상 고정 노출되어 세로 읽기 공간을 차지하고 시선을 분산시키는 문제가 있었습니다.
+- **동작·보존:**
+  1. **평상시 하단 아래로 숨김 및 상태 변화 시 슬라이드 업·자동 숨김([`public/design.tailwind.css`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css), [`public/src/app.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js)):**
+     - [`.statusbar`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css#L172-L174)에 `position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; transform: translateY(100%); opacity: 0; pointer-events: none; transition: transform .22s ease, opacity .22s ease`를 적용하고 `.sidebar`가 `bottom: 0`까지 내려오도록 조정하여 평상시에는 하단 아래로 내려가 보이지 않도록 했습니다.
+     - [`syncStatusbarVisibility`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js#L98-L102), [`revealStatusbar`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js#L85-L97), [`scheduleStatusbarHide`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js#L76-L84)를 추가하고 `.statusbar`의 `MutationObserver`와 연동하여, 저장 상태(`#status-left`)·데이터 폴더 상태(`#data-folder-status`)·네트워크 상태(`#network-status`)에 변화가 있을 때 `data-statusbar-visible` 속성으로 위로 부드럽게 올라왔다가(`translateY(0)`), 저장이 완료된 뒤 잠시 후(`2.2초`) 다시 아래로 내려가 사라지도록 구현했습니다.
+     - 주석 편집 없는 단순 읽기 위치 스크롤(`!tab.opening && !tab.queue?.editsPending`) 시에는 상태 표시줄이 불필요하게 올라오지 않으며, 저장 진행 중이거나 오류(`.save-error`, `[data-book-incomplete]`, `#retry-save`)가 있을 때는 사라지지 않고 유지됩니다.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 916개 단위 검사 통과 및 `codememo-browser`(1280×800) 검증을 마친 뒤 GitHub Pages 게시 및 온라인 검증을 진행합니다.

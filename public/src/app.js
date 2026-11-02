@@ -52,6 +52,59 @@ function toast(message, error = false) { const el=$('#toast'),security=isSecurit
 function showError(error) { if (error?.name !== 'AbortError') toast(error?.message || String(error),true); }
 function setButton(selector, name, label = '') { $(selector).innerHTML=icon(name)+(label ? `<span>${label}</span>`:''); }
 function setIconButton(selector, name, label, size = 18) { const button=$(selector);button.innerHTML=icon(name,size);button.title=label;button.setAttribute('aria-label',label); }
+let statusbarTimer=null,lastStatusbarSignature='';
+function statusbarSignature() {
+  const left=$('#status-left'),folderButton=$('#data-folder-status'),net=$('#network-status');
+  const quietFolder=!tabs.some(t=>t.opening||t.queue?.editsPending)&&!folderSetupBusy;
+  const folderText=(folderButton?.textContent||'').trim();
+  return [
+    (left?.textContent||'').trim(),
+    $('.save-state',left)?.className||'',
+    $('[data-book-incomplete]',left)?'incomplete':'',
+    $('#retry-save',left)?'retry':'',
+    quietFolder&&folderText==='폴더 저장 중…'?'폴더 저장 완료':folderText,
+    folderButton?.className||'',
+    (net?.textContent||'').trim(),
+    net?.className||'',
+  ].join('|');
+}
+function statusbarPinned() {
+  const bar=$('.statusbar');if(!bar)return false;
+  if($('.save-error,[data-book-incomplete],#retry-save',bar))return true;
+  if(tabs.some(t=>t.opening||t.queue?.editsPending)||folderSetupBusy)return true;
+  return false;
+}
+function scheduleStatusbarHide(delay=2200) {
+  clearTimeout(statusbarTimer);
+  statusbarTimer=setTimeout(()=>{
+    const bar=$('.statusbar');if(!bar||statusbarPinned())return;
+    try{if(bar.matches(':hover,:focus-within')){scheduleStatusbarHide(1200);return;}}catch{}
+    bar.removeAttribute('data-statusbar-immediate');
+    bar.removeAttribute('data-statusbar-visible');
+  },delay);
+}
+function revealStatusbar({immediate=false,delay=2200}={}) {
+  const bar=$('.statusbar');if(!bar)return;
+  if(immediate){
+    bar.setAttribute('data-statusbar-immediate','');
+    bar.setAttribute('data-statusbar-visible','');
+    requestAnimationFrame(()=>bar.removeAttribute('data-statusbar-immediate'));
+  }else{
+    bar.removeAttribute('data-statusbar-immediate');
+    bar.setAttribute('data-statusbar-visible','');
+  }
+  scheduleStatusbarHide(delay);
+}
+function syncStatusbarVisibility({force=false}={}) {
+  const sig=statusbarSignature(),changed=sig!==lastStatusbarSignature;
+  lastStatusbarSignature=sig;
+  if(force||changed||statusbarPinned())revealStatusbar();
+}
+function setStatusLeft(text) {
+  const status=$('#status-left');if(!status)return;
+  if(status.textContent!==text)status.textContent=text;
+  syncStatusbarVisibility();
+}
 function setupSelectLabels() {
   // Use DOM insertion only where customizable selects are supported. Older HTML
   // parsers treat a button inside select as its end tag and lose the options.
@@ -416,7 +469,7 @@ function activate(id) {
   tabs.forEach(tab=>tab.host.hidden=tab.id!==id);renderTabs();updateChrome();
   if(reader()){if(!sameSidebar)renderToolbar();if(reader().documentSidebarUI?.isConnected&&!reader().tocStrip){reader().applyTocWidth(preferences.sidebarWidth*reader().sidebarUnit(),{persist:false,snapStrip:false});reader().syncAfterTocResize();}if(!sameSidebar)restoreSidebar();if(reader().dynamicDirty)reader().scheduleDynamicRefresh();}else $('#toolbar').hidden=true;
   if(id==='library')renderLibrary();
-  if(id==='execution'){$('#status-left').textContent='앱 설치 · URL 공유 · 모든 데이터는 이 기기에 저장';document.title='앱 설치 · URL 공유 · LibreMemo';}
+  if(id==='execution'){$('#status-left').textContent='앱 설치 · URL 공유 · 모든 데이터는 이 기기에 저장';document.title='앱 설치 · URL 공유 · LibreMemo';syncStatusbarVisibility();}
 }
 async function selectTab(id) {
   const tab=tabs.find(tab=>tab.id===id);if(!tab)return;
@@ -432,7 +485,7 @@ function updateChrome() {
   if(local){$('#save-page').title='내보내기 · 원본 포함 보관 파일, 읽기용 HTML, 주석 포함 PDF';$('#save-page').setAttribute('aria-description','원본·주석·북마크를 함께 보관하거나 다른 사람에게 전달할 형식을 선택합니다.');}
   else $('#save-page').removeAttribute('aria-description');
   $('#save-page').disabled=execution?sharingApp:!tab||!!tab.capturing;
-  if(local)saveStatus(tab); else if(tab)$('#status-left').textContent=tab.external?'웹 탐색은 브라우저 탭 · 복사한 글과 저장한 HTML은 여기서 주석 달기':tab.capturing?'읽기용 사본을 준비하는 중…':tab.readable?'페이지 저장 → 주석 달기 · 추가 설치 없음':'앱 문서를 준비하는 중…';
+  if(local)saveStatus(tab); else if(tab){$('#status-left').textContent=tab.external?'웹 탐색은 브라우저 탭 · 복사한 글과 저장한 HTML은 여기서 주석 달기':tab.capturing?'읽기용 사본을 준비하는 중…':tab.readable?'페이지 저장 → 주석 달기 · 추가 설치 없음':'앱 문서를 준비하는 중…';if(typeof syncStatusbarVisibility==='function')syncStatusbarVisibility();}
   document.title=tab?tab.title+' · LibreMemo':'LibreMemo · 나만의 앱 서재';
 }
 function createHost(id,type) { const host=document.createElement('div');host.id='workspace-'+id;host.className='workspace-host '+type+'-host';host.hidden=true;$('#workspaces').append(host);return host; }
@@ -537,6 +590,7 @@ function saveStatus(tab) {
     bookNotice.title = tab.reader.bookIntegrity.message;
     bookNotice.onclick = safely(importFiles);
   } else bookNotice?.remove();
+  if(typeof syncStatusbarVisibility==='function')syncStatusbarVisibility();
 }
 async function closeTab(id) {
   const tab=tabs.find(t=>t.id===id);if(!tab)return;
@@ -596,6 +650,7 @@ function renderFolderState() {
   button.textContent=folder?(error?'폴더 저장 중단':dataFolder?.pending||tabs.some(t=>t.opening||t.queue?.pending)?'폴더 저장 중…':'폴더 저장 완료'):'폴더 미연결';
   button.title=status;button.setAttribute('aria-label',status+' · 저장 위치 관리');button.classList.toggle('save-error',error||!!folder&&tabs.some(t=>t.queue?.error));
   if($('#settings-folder-status'))$('#settings-folder-status').textContent=status;
+  if(typeof syncStatusbarVisibility==='function')syncStatusbarVisibility();
 }
 async function flushInternalDocuments() { for(const tab of tabs)if(tab.reader){await tab.reader.ready;tab.reader.rememberPosition();await tab.queue.flush();await tab.checkpoints.flush({force:true});} }
 // Ask once per page, after an explicit folder connection has actually saved.
@@ -639,7 +694,7 @@ function rememberFolderWelcome() { try{localStorage.setItem(FOLDER_WELCOME_KEY,'
 function needsFolderWelcome() { return !folder||dataFolder?.state==='error'; }
 function chromeRequiredDialog() {
   document.documentElement.dataset.storageSetup='unsupported';
-  $('#status-left').textContent='Chrome에서 실행해주세요.';
+  setStatusLeft('Chrome에서 실행해주세요.');
   modal(`<section class="folder-welcome" data-chrome-required><div class="dialog-heading"><h2>Google Chrome에서 실행해주세요</h2></div><p id="chrome-required-message" class="folder-welcome-intro"><strong>${esc(CHROME_REQUIRED_MESSAGE)}</strong></p><p class="dialog-description">Chrome에서 아래 앱 주소를 열어주세요. 전용 저장 폴더를 지원하는 최신 Chrome이 필요합니다.</p><label class="paste-label" for="chrome-app-url">LibreMemo 주소</label><input id="chrome-app-url" class="paste-title" type="url" readonly value="${esc(PUBLIC_APP_URL)}"><p id="chrome-copy-status" class="dialog-description small" role="status" aria-live="polite"></p><div class="dialog-actions folder-welcome-actions"><button id="chrome-copy-url" class="primary-button" type="button">앱 주소 복사</button><a class="secondary-button" href="https://www.google.com/chrome/" target="_blank" rel="noopener noreferrer">Chrome 다운로드</a></div></section>`,dialog=>{
     dialog.setAttribute('aria-describedby','chrome-required-message');dialog.oncancel=event=>event.preventDefault();
     const button=$('#chrome-copy-url'),input=$('#chrome-app-url'),status=$('#chrome-copy-status');
@@ -1796,7 +1851,7 @@ async function copyAppURL(){
   }catch{
     $('#share-url').focus();$('#share-url').select?.();
     $('#share-status').textContent='자동 복사를 사용할 수 없습니다. 위 주소를 선택해 직접 복사해 보내주세요.';
-  }finally{sharingApp=false;$('#share-app').disabled=false;updateChrome();if(activeId==='execution')$('#status-left').textContent='앱 설치 · URL 공유 · 모든 데이터는 이 기기에 저장';}
+  }finally{sharingApp=false;$('#share-app').disabled=false;updateChrome();if(activeId==='execution'){$('#status-left').textContent='앱 설치 · URL 공유 · 모든 데이터는 이 기기에 저장';if(typeof syncStatusbarVisibility==='function')syncStatusbarVisibility();}}
 }
 function bindUI() {
   document.addEventListener('fullscreenchange',()=>{if(document.fullscreenElement===$('#app') && readerFocused)nativeReaderFullscreen=true;else if(nativeReaderFullscreen){nativeReaderFullscreen=false;setReaderFocus(false);}});
@@ -1805,6 +1860,16 @@ function bindUI() {
   setIconButton('#settings-button','settings','설정');bindTabs();
   setIconButton('#app-update-close','close','업데이트 취소');
   $('#execution-export-guide').innerHTML=annotationExportGuide();
+  const statusbar=$('.statusbar');
+  if(statusbar){
+    statusbar.addEventListener('pointerenter',()=>clearTimeout(statusbarTimer));
+    statusbar.addEventListener('pointerleave',()=>scheduleStatusbarHide(1200));
+    if(typeof MutationObserver==='function')new MutationObserver(()=>syncStatusbarVisibility()).observe(statusbar,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['class']});
+  }
+  for(const node of [statusbar,$('#data-folder-status')])if(node){
+    const nativeScrollIntoView=typeof node.scrollIntoView==='function'?node.scrollIntoView.bind(node):null;
+    node.scrollIntoView=(...args)=>{revealStatusbar({immediate:true});return nativeScrollIntoView?.(...args);};
+  }
   $('#data-folder-status').onclick=()=>chooseFolder();
   $('#folder-setup-resume').onclick=resumeFolderSetup;
   $('#library-tab').onclick=()=>activate('library');
@@ -1854,7 +1919,7 @@ function bindUI() {
   window.addEventListener('paste',handleImagePaste);
   window.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('Files'))event.preventDefault();});window.addEventListener('drop',handleFileDrop);
 }
-function network() {$('#network-status').textContent=navigator.onLine?'온라인':'오프라인';$('#network-status').classList.toggle('offline',!navigator.onLine);}
+function network() {$('#network-status').textContent=navigator.onLine?'온라인':'오프라인';$('#network-status').classList.toggle('offline',!navigator.onLine);syncStatusbarVisibility();}
 function fitHeader() {
   const header=$('.chrome');
   if(!header || typeof ResizeObserver==='undefined')return;
@@ -1874,7 +1939,7 @@ async function initialize() {
   // finish parsing before any handler or status text is assigned to its shell.
   if(document.readyState==='loading')await new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}));
   if(!supportsDataFolder(window,navigator)){chromeRequiredDialog();return;}
-  document.documentElement.dataset.storageSetup='checking';updateAppInteraction();$('#status-left').textContent='새 버전을 확인하는 중…';
+  document.documentElement.dataset.storageSetup='checking';updateAppInteraction();setStatusLeft('새 버전을 확인하는 중…');
   try{preferences=loadPreferences(localStorage);}catch(error){toast('설정 일부를 읽지 못했습니다. 연결한 데이터 폴더로 복원할 수 있습니다.',true);}
   dataFolder=new DataFolder({storage:localStorage,report:state=>{if(state.handle)folder=state.handle;renderFolderState();},onRestored:async result=>{preferences=loadPreferences(localStorage);applyTheme(preferences.theme);$('#library-sort').value=preferences.librarySort+':'+preferences.librarySortDirection;for(const tab of tabs)if(tab.reader)Object.assign(tab.reader,preferences.annotation);applyToolbarPosition();await refreshLibrary();if(result.recovered)toast('이전의 온전한 폴더 저장본에서 복원했습니다. 최신 변경 일부가 빠졌을 수 있습니다.',true);}});
   applyTheme(preferences.theme);bindUI();setupSelectLabels();fitHeader();$('#library-sort').value=preferences.librarySort+':'+preferences.librarySortDirection;network();
@@ -1887,7 +1952,7 @@ async function initialize() {
   // Folder setup follows only after the user closes that dialog.
   if($('#app-update-dialog').open)await new Promise(resolve=>$('#app-update-dialog').addEventListener('close',resolve,{once:true}));
   if(document.documentElement.dataset.appUpdate==='reloading')return;
-  $('#status-left').textContent='서재 준비 중…';
+  setStatusLeft('서재 준비 중…');
   folder=await getSetting('folder');settingsFileHandle=await getSetting('settings-file');settingsFolderHint=await getSetting('settings-folder-hint')||'';await refreshLibrary();activate('library');
   onStorageChange(()=>{if(activeId==='library'){clearTimeout(libraryReloadTimer);libraryReloadTimer=setTimeout(()=>{if(activeId==='library')refreshLibrary().catch(showError);},30);}});
   if(folder){try{await dataFolder.connect(folder,{resume:true});await refreshLibrary();}catch(error){renderFolderState();if(!['NotAllowedError','SecurityError'].includes(error?.name))showError(error);}}
@@ -1896,4 +1961,4 @@ async function initialize() {
   if(!$('#folder-reconnect').hidden)$('#resume-data-folder',$('#folder-reconnect')).focus();
   if(typeof window.launchQueue?.setConsumer==='function')window.launchQueue.setConsumer(safely(async params=>{if(folderSetupPending&&(document.documentElement.dataset.storageSetup==='paused'||!await new Promise(resolve=>folderSetupWaiters.push(resolve))))return;const parentId=libraryFolderId;for(const handle of params.files||[])await openLocalFile(handle,parentId);}));
 }
-initialize().catch(error=>{startupPending=false;updateAppInteraction();$('#status-left').textContent='서재를 준비하지 못했습니다.';showError(error);});
+initialize().catch(error=>{startupPending=false;updateAppInteraction();setStatusLeft('서재를 준비하지 못했습니다.');showError(error);});

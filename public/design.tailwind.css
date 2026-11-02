@@ -169,6 +169,9 @@ body[data-codememo-design]{margin:0;font-family:var(--app-font);background:var(-
 .settings-app-actions .secondary-button{gap:6px;padding:8px 10px;font-size:11px}
 .settings-backup summary{cursor:pointer;font-size:12px;line-height:1.8}#data-folder-status{font:inherit;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0}.statusbar>div:last-child{min-width:0;flex-shrink:0}@media(max-width:600px){.statusbar #data-folder-status{max-width:82px;font-size:9px}}
 #app.reader-focus>.statusbar:has(#data-folder-status.save-error){display:flex}@media(max-width:720px){.statusbar>div:last-child{display:flex}.statusbar #network-status,.statusbar .status-divider,.statusbar>div:last-child>span:last-child{display:none}}
+.statusbar{position:fixed;left:0;right:0;bottom:0;z-index:35;transform:translateY(100%);opacity:0;pointer-events:none;transition:transform .22s ease,opacity .22s ease}
+.statusbar[data-statusbar-visible],.statusbar:hover,.statusbar:focus-within,.statusbar:has(.save-error,[data-book-incomplete],#retry-save){transform:translateY(0);opacity:1;pointer-events:auto}
+.statusbar[data-statusbar-immediate]{transition:none!important}
 #settings-folder-status,#folder-connection-status{overflow-wrap:anywhere}
 .export-guide{margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;overflow-wrap:anywhere}
 .export-guide summary{cursor:pointer;font-size:12px;font-weight:600;line-height:1.7}
@@ -197,7 +200,7 @@ body[data-codememo-design]{margin:0;font-family:var(--app-font);background:var(-
 .about-features dt{font-weight:600;color:var(--text);margin-top:8px;overflow-wrap:anywhere}
 .about-features dt:first-child{margin-top:0}
 .about-features dd{margin:2px 0 0;color:var(--muted);overflow-wrap:anywhere}
-.sidebar{top:var(--chrome-height,25px)}
+.sidebar{top:var(--chrome-height,25px);bottom:0}
 #sidebar.sidebar{left:0;right:auto;width:var(--app-sidebar-width,var(--spacing-app-sidebar));min-width:8px;max-width:calc(100% - 40px);overflow:hidden;border-left:0;border-right:1px solid var(--line);box-shadow:8px 0 30px #1439210b}
 #sidebar.sidebar[data-app-sidebar-strip]>:not(.sidebar-resizer){visibility:hidden;pointer-events:none}
 .sidebar-resizer{position:absolute;top:0;right:0;bottom:0;width:10px;max-width:100%;z-index:2;cursor:col-resize;touch-action:none;user-select:none}

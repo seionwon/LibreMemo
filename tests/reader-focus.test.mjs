@@ -386,3 +386,44 @@ test('phone document body touch dismisses open app and document sidebars while k
  assert.equal(doc.documentElement.hasAttribute('data-htmlmemo-sidebar-open'),false);
  assert.equal(doc.body.classList.contains('toc-open'),false);
 });
+
+test('statusbar slides up only on status changes and auto-hides after settling while staying pinned on active saves or errors',async()=>{
+ const css=await readFile(new URL('../public/design.tailwind.css',import.meta.url),'utf8');
+ assert.match(css,/\.statusbar\{position:fixed;left:0;right:0;bottom:0;z-index:35;transform:translateY\(100%\);opacity:0;pointer-events:none;transition:transform \.22s ease,opacity \.22s ease\}/);
+ assert.match(css,/\.statusbar\[data-statusbar-visible\],\.statusbar:hover,\.statusbar:focus-within,\.statusbar:has\(\.save-error,\[data-book-incomplete\],#retry-save\)\{transform:translateY\(0\);opacity:1;pointer-events:auto\}/);
+ const doc=new DOMParser().parseFromString(html,'text/html');
+ let scheduledFn=null;
+ const context=vm.createContext({
+  document:doc,
+  $:(sel,root=doc)=>root.querySelector(sel),
+  tabs:[],
+  folderSetupBusy:false,
+  requestAnimationFrame:fn=>fn(),
+  setTimeout:(fn)=>{scheduledFn=fn;return 1;},
+  clearTimeout:()=>{scheduledFn=null;},
+ });
+ const helperCode=appSource.slice(appSource.indexOf('let statusbarTimer=null'),appSource.indexOf('function setupSelectLabels()'));
+ new vm.Script(helperCode).runInContext(context);
+ const bar=doc.querySelector('.statusbar');
+ doc.querySelector('#data-folder-status').textContent='폴더 저장 완료';
+ assert.equal(bar.hasAttribute('data-statusbar-visible'),false);
+ context.setStatusLeft('주석이 앱에 자동 저장됨');
+ assert.equal(bar.hasAttribute('data-statusbar-visible'),true);
+ assert.equal(typeof scheduledFn,'function');
+ scheduledFn();
+ assert.equal(bar.hasAttribute('data-statusbar-visible'),false,'slides back down after timer when idle');
+ context.setStatusLeft('주석이 앱에 자동 저장됨');
+ assert.equal(bar.hasAttribute('data-statusbar-visible'),false,'unchanged status does not pop up statusbar');
+ doc.querySelector('#data-folder-status').textContent='폴더 저장 중…';
+ context.syncStatusbarVisibility();
+ assert.equal(bar.hasAttribute('data-statusbar-visible'),false,'background reading position save does not pop up statusbar');
+ context.tabs.push({opening:false,queue:{editsPending:true}});
+ context.setStatusLeft('저장 중…');
+ assert.equal(bar.hasAttribute('data-statusbar-visible'),true);
+ scheduledFn?.();
+ assert.equal(bar.hasAttribute('data-statusbar-visible'),true,'stays visible while edits are pending');
+ context.tabs[0].queue.editsPending=false;
+ context.setStatusLeft('주석이 앱에 자동 저장됨');
+ scheduledFn?.();
+ assert.equal(bar.hasAttribute('data-statusbar-visible'),false,'slides down once save settles');
+});
