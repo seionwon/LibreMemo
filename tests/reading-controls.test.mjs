@@ -39,7 +39,10 @@ test('plain documents copy the HTML reader header with its title, navigation, po
   const {r,doc,outer,calls}=fixture();r.setupReadingControls();
   assert.equal(r.host.firstElementChild,r.readingControls);assert.equal(r.host.classList.contains('reader-controls-row'),true);
   assert.notEqual(r.readingControls.style.getPropertyValue('position'),'relative','the source toolbar must use the fixed CSS position instead of an inline relative offset');
-  assert.deepEqual([...r.readingControls.querySelectorAll('button')].map(node=>node.dataset.action),['toggle-sidebar','reading-back','previous-heading','next-heading','speak','font-smaller','font-larger','zoom']);
+  assert.deepEqual([...r.readingControls.querySelectorAll('button')].map(node=>node.dataset.action),['toggle-sidebar','reading-back','previous-heading','next-heading','speak','font-smaller','font-reset','font-larger','zoom']);
+  assert.equal(r.plainReadingButtons.smaller.nextElementSibling,r.plainReadingButtons.reset);
+  assert.equal(r.plainReadingButtons.reset.nextElementSibling,r.plainReadingButtons.larger);
+  assert.equal(r.plainReadingButtons.reset.textContent,'A');assert.equal(r.plainReadingButtons.reset.disabled,true);
   assert.equal(r.readingControls.classList.contains('reader-head'),true);assert.equal(r.plainReadingButtons.back.textContent,'↶');
   assert.equal(r.plainReadingButtons.previous.disabled,true);assert.equal(r.plainReadingButtons.next.disabled,true);assert.equal(r.plainReadingButtons.back.disabled,true);
   assert.equal(r.plainReadingButtons.previous.hidden,false);assert.equal(r.plainReadingButtons.next.hidden,false);
@@ -61,7 +64,10 @@ test('article headers, site navigation, search forms and hidden controls never r
   for(const header of ['<header class="header"><strong>문서 제목</strong><input type="search"><button>검색</button></header>','<header class="book-header"><h1>글 제목</h1></header>','<form><input type="search"><button>검색</button></form>','<div class="toolbar"><button>공유</button></div>','<header class="topbar" hidden><button>A+</button></header>']){
     const {r,doc}=fixture(header);r.outline=()=>[];r.setupReadingControls();r.setupReadingControls();
     assert.ok(r.plainReadingButtons);assert.equal(r.readingControls.parentElement,r.host);
-    assert.deepEqual([...r.readingControls.querySelectorAll('button')].map(node=>node.dataset.action),['toggle-sidebar','reading-back','previous-heading','next-heading','speak','font-smaller','font-larger','zoom']);
+    assert.deepEqual([...r.readingControls.querySelectorAll('button')].map(node=>node.dataset.action),['toggle-sidebar','reading-back','previous-heading','next-heading','speak','font-smaller','font-reset','font-larger','zoom']);
+  assert.equal(r.plainReadingButtons.smaller.nextElementSibling,r.plainReadingButtons.reset);
+  assert.equal(r.plainReadingButtons.reset.nextElementSibling,r.plainReadingButtons.larger);
+  assert.equal(r.plainReadingButtons.reset.textContent,'A');assert.equal(r.plainReadingButtons.reset.disabled,true);
     assert.equal(r.host.querySelectorAll('[data-htmlmemo-reading-controls]').length,1);assert.equal(doc.querySelector('[data-htmlmemo-reading-controls]'),null);
   }
 });
@@ -119,9 +125,10 @@ test('font changes preserve document text and annotations and save a bounded set
   r.plainReadingButtons.larger.onclick();assert.equal(r.metadata.view.fontScale,3.2);assert.equal(r.plainReadingButtons.larger.disabled,true);
   assert.equal(parseHTML(serializeHTML(doc,r.metadata)).metadata.view.fontScale,3.2);
   r.setReadingFontScale(100);assert.equal(r.metadata.view.fontScale,3.2);assert.equal(r.plainReadingButtons.larger.disabled,true);
-  r.setReadingFontScale(-100);assert.equal(r.metadata.view.fontScale,.6);assert.equal(r.plainReadingButtons.smaller.disabled,true);
+  r.setReadingFontScale(-100);assert.equal(r.metadata.view.fontScale,.6);assert.equal(r.plainReadingButtons.smaller.disabled,true);assert.equal(r.plainReadingButtons.reset.disabled,false);
   const saved=serializeHTML(doc,r.metadata);assert.doesNotMatch(saved,/htmlmemo-reading-font-style|data-htmlmemo-reading-controls/);
   assert.equal(parseHTML(saved).metadata.view.fontScale,.6);assert.equal(textIndex(documentFor(parseHTML(saved).html)).text,before);
+  r.plainReadingButtons.reset.onclick();assert.equal(r.metadata.view.fontScale,1);assert.equal(r.plainReadingButtons.reset.disabled,true);assert.equal(r.plainReadingButtons.smaller.disabled,false);assert.equal(r.plainReadingButtons.larger.disabled,false);
 });
 test('saved font scale applies before controls mount and never overrides a source toolbar',()=>{
   const {r,doc}=fixture();r.metadata.view.fontScale=1.5;r.applyReadingFont();assert.match(doc.querySelector('#htmlmemo-reading-font-style').textContent,/27\.000px/);
@@ -227,25 +234,29 @@ test('source toolbar A+ extends 3 more steps beyond the book maximum and cleans 
   let bookSize=20;doc.documentElement.style.setProperty('--read-size','20px');
   const smaller=doc.getElementById('reader-smaller'),larger=doc.getElementById('reader-larger');
   r.setupReadingControls();
+  const reset=doc.querySelector('[data-htmlmemo-font-reset]');
+  assert.ok(reset);assert.equal(smaller.nextElementSibling,reset);assert.equal(reset.nextElementSibling,larger);assert.equal(reset.disabled,true);
   smaller.addEventListener('click',()=>{bookSize=Math.max(16,bookSize-4);doc.documentElement.style.setProperty('--read-size',bookSize+'px');larger.disabled=false;});
   larger.addEventListener('click',()=>{bookSize=Math.min(24,bookSize+4);doc.documentElement.style.setProperty('--read-size',bookSize+'px');if(bookSize>=24)larger.disabled=true;});
   larger.dispatchEvent(new (doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
-  assert.equal(bookSize,24);assert.equal(r.sourceFontExtraSteps||0,0);assert.equal(larger.disabled,false,'A+ stays enabled for 3 extra steps after hitting the book max');
+  assert.equal(bookSize,24);assert.equal(r.sourceFontExtraSteps||0,0);assert.equal(larger.disabled,false,'A+ stays enabled for 3 extra steps after hitting the book max');assert.equal(reset.disabled,false);
   larger.dispatchEvent(new (doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
   assert.equal(r.sourceFontExtraSteps,1);assert.equal(r.metadata.view.sourceFontSteps,1);assert.match(doc.querySelector('#htmlmemo-source-font-style').textContent,/26\.400px/);assert.equal(larger.disabled,false);
   larger.dispatchEvent(new (doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
   assert.equal(r.sourceFontExtraSteps,2);assert.equal(r.metadata.view.sourceFontSteps,2);assert.match(doc.querySelector('#htmlmemo-source-font-style').textContent,/29\.040px/);assert.equal(larger.disabled,false);
   larger.dispatchEvent(new (doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
   assert.equal(r.sourceFontExtraSteps,3);assert.equal(r.metadata.view.sourceFontSteps,3);assert.match(doc.querySelector('#htmlmemo-source-font-style').textContent,/31\.944px/);assert.equal(larger.disabled,true);
-  const saved=serializeHTML(doc,r.metadata);assert.doesNotMatch(saved,/htmlmemo-source-font-style|data-htmlmemo-source-max/);
+  const saved=serializeHTML(doc,r.metadata);assert.doesNotMatch(saved,/htmlmemo-source-font-style|data-htmlmemo-source-max|data-htmlmemo-font-reset/);
   assert.equal(parseHTML(saved).metadata.view.sourceFontSteps,3);
   smaller.dispatchEvent(new (doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
   assert.equal(r.sourceFontExtraSteps,2);assert.equal(larger.disabled,false);
   smaller.dispatchEvent(new (doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
   smaller.dispatchEvent(new (doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
   assert.equal(r.sourceFontExtraSteps,0);assert.equal(doc.querySelector('#htmlmemo-source-font-style'),null);assert.equal(bookSize,24);
-  smaller.dispatchEvent(new (doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
-  assert.equal(bookSize,20);
+  larger.dispatchEvent(new (doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
+  assert.equal(r.sourceFontExtraSteps,1);
+  reset.dispatchEvent(new (doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
+  assert.equal(r.sourceFontExtraSteps,0);assert.equal(doc.querySelector('#htmlmemo-source-font-style'),null);assert.equal(bookSize,20);assert.equal(reset.disabled,true);
 });
 test('font family selector changes font family when possible, disables for fixed-image formats, and cleans up on export',async()=>{
   const {archiveMetadata}=await import('../public/src/document-archive.js');

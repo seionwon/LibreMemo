@@ -81,7 +81,7 @@ function clearReaderSidebarArtifacts(root) {
   // Several short-lived reader builds added controls and layout overrides to
   // the source document itself.  Clear only those namespaced artifacts when
   // opening or exporting a file, leaving the document's real TOC untouched.
-  for(const node of root.querySelectorAll?.('#htmlmemo-toc-toggle-style,#htmlmemo-sidebar-style,#htmlmemo-toc-resize-style,#htmlmemo-doc-sidebar-style,#htmlmemo-reading-controls-style,#htmlmemo-reading-font-style,#htmlmemo-source-font-style,#htmlmemo-reading-theme-style,[data-htmlmemo-tts-paint],[data-htmlmemo-reading-controls],[data-htmlmemo-reading-font]')||[])node.remove();
+  for(const node of root.querySelectorAll?.('#htmlmemo-toc-toggle-style,#htmlmemo-sidebar-style,#htmlmemo-toc-resize-style,#htmlmemo-doc-sidebar-style,#htmlmemo-reading-controls-style,#htmlmemo-reading-font-style,#htmlmemo-source-font-style,#htmlmemo-reading-theme-style,[data-htmlmemo-tts-paint],[data-htmlmemo-reading-controls],[data-htmlmemo-reading-font],[data-htmlmemo-font-reset]')||[])node.remove();
   for(const button of root.querySelectorAll?.('[data-htmlmemo-source-max]')||[]){
     button.toggleAttribute('disabled',button.getAttribute('data-htmlmemo-source-max')==='true');
     button.removeAttribute('data-htmlmemo-source-max');

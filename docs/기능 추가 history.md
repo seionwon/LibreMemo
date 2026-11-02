@@ -5603,7 +5603,7 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
 | --- | --- |
 | ID | hist-20261102-004 |
 | 변경 종류 | PDF 텍스트 주석(`captureRects`, `renderTextMarks`, `previewText`, `pdfExportPlan`) 상·하단 글자 영역 축소 및 인접 줄 형광펜 겹침 분리 · 전 포맷 형광펜(`reader.js`) 상·하단 여백(`linear-gradient` 13%–91%) 적용 |
-| 상태 | 로컬 검증 완료 · 1.9.8 GitHub Pages 게시 진행 |
+| 상태 | 로컬 검증 완료 · 1.9.8 GitHub Pages 게시 완료 |
 
 - **목적·원인:**
   1. PDF 문서에서 연속된 위·아래 줄에 형광펜(`highlight`)을 칠하면, [`captureRects`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js#L228-L250)가 브라우저 대체 글꼴의 내부 리딩이 포함된 `r.top`(`span` 상단보다도 위로 돌출된 위치)부터 시작해 세로 폭이 실제 글자 높이보다 과도하게 커지고, 그 결과 위 줄 형광펜 하단과 아래 줄 형광펜 상단이 서로 겹쳐 진한 띠가 생기거나 인접 줄의 디센더·어센더를 침범했습니다.
@@ -5615,4 +5615,24 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
   2. **모든 문서 포맷에서 형광펜 세로 폭 축소 및 줄 간 간격 확보([`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js)):**
      - [`render`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L3153-L3154)에서 비-PDF 포맷의 형광펜 스타일을 `background: linear-gradient(transparent 13%, ${fill} 13%, ${fill} 91%, transparent 91%)`로 적용하고 `box-decoration-break: clone`과 결합해, 모든 줄에서 글자 상·하단 내부 리딩(`13%` / `9%`)을 투명하게 비워 줄 간격이 `1.0`인 문서(PPTX, HWP, DjVu 등)에서도 위·아래 줄 형광펜이 절대 겹치지 않도록 했습니다.
      - 드래그 이동 미리보기([`previewTextAnnotation`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L2920))의 형광펜 사각형도 동일하게 `y + rect.height * 0.13`, 높이 `rect.height * 0.78`로 일치시켰습니다.
-- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 907개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800) 실제 브라우저 검증 통과.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 907개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800) 실제 브라우저 검증 통과, `https://seionwon.github.io/LibreMemo/src/version.js`에서 `1.9.8` 온라인 게시 확인.
+
+<a id="hist-20261102-005"></a>
+### 2026-11-02 09:25:00 +09:00 — 읽기 도구 모음의 `A−`와 `A+` 사이에 글자 크기 초기화(`A`, `font-reset`) 버튼 추가
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261102-005 |
+| 변경 종류 | 읽기 도구 모음 및 자체 상단 바(`topbarNode`)의 `A−`·`A+` 사이 글자 기본 크기(`A`, `data-action="font-reset"`) 버튼 추가 · [`resetReadingFontSize`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1189-L1219) 및 내보내기 정리([`clearReaderSidebarArtifacts`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document.js#L84)) |
+| 상태 | 로컬 검증 완료 · 1.9.9 GitHub Pages 게시 진행 |
+
+- **목적·원인:**
+  1. 문서를 읽으면서 `A−` 또는 `A+`로 글자 크기를 여러 단계 줄이거나 키운 뒤 한 번에 원래 기본 크기(`100%` 배율 또는 원본 기본 글자 크기)로 되돌릴 수 있도록 `A−`와 `A+` 정중앙에 초기화 버튼(`A`)을 추가했습니다.
+- **동작·보존:**
+  1. **앱 읽기 도구 모음(`.htmlmemo-source-toolbar`) 및 원본 상단 바(`topbarNode`)의 `A−`·`A+` 가운데 `A` 버튼 배치([`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js)):**
+     - [`setupReadingControls`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L936-L944)에서 `smaller`(`font-smaller`, `A−`)와 `larger`(`font-larger`, `A+`) 사이에 `reset`(`data-action="font-reset"`, `title="글씨 기본 크기"`, `aria-label="글씨 기본 크기"`, 표시 문구 `A`) 버튼을 배치했습니다.
+     - 자체 상단 바(`topbarNode`)를 가진 HTML 문서에서도 [`setupSourceFontControls`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1291-L1308)가 `#reader-smaller`(`A−`)와 `#reader-larger`(`A+`) 사이에 동일한 `A`(`data-action="font-reset"`, `data-htmlmemo-font-reset`) 버튼을 삽입하고, 기본 글자 크기일 때는 `disabled` 상태로 표시하며 크기가 변경되면 활성화합니다.
+  2. **글자 크기 즉시 초기화 및 읽기 위치·주석 보존·내보내기 정리([`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js), [`public/src/document.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document.js)):**
+     - [`resetReadingFontSize`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1189-L1219) 호출 시 일반·PDF·오피스·전자책 문서에서는 `setReadingFontScale(1)`을 통해 글자 배율을 `1`로 되돌리고, 자체 상단 바 문서에서는 추가 단계(`sourceFontExtraSteps = 0`)와 원본 글자 크기를 초기 기본값(`initialSourceFontSize`)으로 복원하며, 직전 읽기 기준점(`captureReadingAnchor` / `restoreReadingAnchor`)과 주석 레이어를 그대로 유지합니다.
+     - HTML 내보내기 시 [`clearReaderSidebarArtifacts`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document.js#L84)가 `[data-htmlmemo-font-reset]` 노드를 제거하여 원본 HTML 구조를 오염시키지 않습니다.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 907개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800) 실제 브라우저 검증 진행.
