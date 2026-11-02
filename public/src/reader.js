@@ -2097,10 +2097,11 @@ export class Reader {
     return !!el.closest?.('[data-htmlmemo-doc-topbar],[data-htmlmemo-doc-topbar-item]');
   }
   isMobileSidebarInteraction(event) {
-    if (event?.pointerType === 'touch' || event?.type?.startsWith?.('touch')) return true;
     const win = this.host?.ownerDocument?.defaultView || this.doc?.defaultView;
     const width = win?.innerWidth || this.viewport?.clientWidth || 0;
-    return width > 0 && width <= 760;
+    if (width > 760) return false;
+    if (width > 0) return true;
+    return !!this.doc?.documentElement?.hasAttribute?.('data-htmlmemo-compact-ui');
   }
   isBodyTouchTarget(node, event = null) {
     if (this.disposed || this.preparing || this.tocDrag) return false;

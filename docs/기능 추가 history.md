@@ -5826,7 +5826,7 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
 | --- | --- |
 | ID | hist-20261102-015 |
 | 변경 종류 | 리더 상단 툴바 뒤로 가기 버튼(`#reader-back`, `#back`, `[data-action="reading-back"]`) 아이콘 SVG 통일([`readingControlsStyle`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L975-L980), [`.htmlmemo-source-toolbar`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css#L121-L127)) |
-| 상태 | 로컬 검증 완료 · 1.9.20 GitHub Pages 게시 진행 |
+| 상태 | 구현·검증·GitHub Pages 게시 완료 (1.9.20) |
 
 - **목적·원인:**
   1. 상단 읽기 툴바(`.htmlmemo-source-toolbar` 및 `[data-htmlmemo-doc-topbar]`)의 글꼴 목록 맨 앞에 지정된 `'Apple SD Gothic Neo'`가 설치된 macOS 데스크톱 환경에서는 유니코드 `↶`(U+21B6) 문자가 모바일의 반원형 곡선 화살표가 아니라 세로 기둥이 길게 솟은 지팡이 모양(`↰` 형태) 글리프로 렌더링되고, 일부 구형 책 HTML은 `<button id="back">↰</button>`을 직접 사용해 모바일과 데스크톱 간 뒤로 가기 아이콘 모양이 서로 다르게 보이는 문제가 있었습니다.
@@ -5835,4 +5835,23 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
      - [`public/design.tailwind.css`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css#L121-L127)와 [`readingControlsStyle`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L975-L980)에 라이트(`stroke='#1f2328'`)·다크(`stroke='#e8eaf0'`) 및 시스템 다크 모드(`@media (prefers-color-scheme: dark)`)용 `--reader-back-icon` SVG 변수(`<path d='M4.5 14.5a8 8 0 0 1 15 0'/><path d='M4.5 9.5v5h5'/>`)를 추가했습니다.
      - 일반 문서 툴바(`.reader-controls-row > .htmlmemo-source-toolbar [data-action=reading-back]`)와 책 내장 상단바(`[data-htmlmemo-doc-topbar] #reader-back, [data-htmlmemo-doc-topbar] #back, [data-htmlmemo-doc-topbar] [data-action=reading-back]`) 모두 `background-image: var(--reader-back-icon)`, `background-size: 13px 13px`, `color: transparent`를 적용하여, 운영체제 기본 글꼴이나 버튼 텍스트(`↶`/`↰`)에 관계없이 항상 모바일과 동일한 곡선형 반원 되돌아가기 화살표 아이콘으로 표시되도록 통일했습니다.
      - 버튼의 DOM `textContent`(`↶`), 접근성 레이블(`이전 위치로 돌아가기`), 버튼 크기(`26×22px`) 및 HTML 내보내기 무결성은 그대로 유지됩니다.
-- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 915개 단위 검사 통과 및 `codememo-browser`(포트 4173, 1280×800) 검증 완료. 이어서 GitHub Pages 게시 및 온라인 검증을 진행합니다.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 915개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800) 검증 완료, GitHub Actions(`41419698646`) 전체 성공 및 `https://seionwon.github.io/LibreMemo/src/version.js`(`1.9.20`) 게시 확인.
+
+<a id="hist-20261102-016"></a>
+### 2026-11-02 18:48:00 +09:00 — 갤럭시탭 가로모드 등 사이드바와 본문을 나란히 표시할 수 있는 넓은 화면(`> 760px`)에서 본문 터치 시 사이드바가 닫히지 않도록 수정
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261102-016 |
+| 변경 종류 | 넓은 터치 화면(`> 760px`)에서 본문 탭 시 사이드바 자동 닫힘 방지([`isMobileSidebarInteraction`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L2099-L2105), [`onDismissSidebar`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js#L486), [`dismissWorkspaceMobileSidebar`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js#L1828-L1834)) |
+| 상태 | 로컬 검증 완료 · 1.9.21 GitHub Pages 게시 진행 |
+
+- **목적·원인:**
+  1. [`isMobileSidebarInteraction`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L2099-L2105)과 [`dismissWorkspaceMobileSidebar`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js#L1828-L1834)가 화면 가로폭(`width <= 760`)을 먼저 확인하지 않고 `event.pointerType === 'touch'` 또는 `touchstart`이면 무조건 모바일 사이드바 닫기 대상으로 판단하여, 갤럭시탭 가로모드 등 사이드바와 본문을 나란히 보여줄 수 있는 충분한 가로폭(`> 760px`)의 태블릿 화면에서도 본문을 탭하거나 펜으로 터치하면 열린 사이드바가 닫히거나 `8px` 스트립으로 접히는 문제가 있었습니다.
+- **동작·보존:**
+  1. **사이드바와 본문을 나란히 표시하는 가로폭(`> 760px`)에서는 터치·펜·마우스로 본문을 탭해도 사이드바 유지([`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js), [`public/src/app.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js)):**
+     - [`isMobileSidebarInteraction`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L2099-L2105)에서 화면 폭이 `760px`을 초과하면(`width > 760`) 터치(`touchstart`, `pointerType === 'touch'`)나 펜 입력이라도 항상 `false`를 반환하도록 수정하여, 갤럭시탭 가로모드(`1280px`, `1024px` 등) 및 태블릿 넓은 화면(`800px` 이상)에서 본문을 탭해도 문서 내장 사이드바(`[data-htmlmemo-native-sidebar]`)와 앱 사이드바(`#sidebar`)가 닫히지 않고 나란히 열린 상태를 유지하도록 했습니다.
+     - [`onDismissSidebar`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js#L486)와 [`dismissWorkspaceMobileSidebar`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js#L1828-L1834)에서도 `innerWidth <= 760`일 때만 본문 영역 터치로 앱 사이드바(`#sidebar`)를 닫도록 일치시켰습니다.
+  2. **좁은 폰 화면(`<= 760px`)의 본문 터치 시 사이드바 닫힘 동작 유지:**
+     - 가로폭이 `760px` 이하인 컴팩트 모바일 화면(`data-htmlmemo-compact-ui`)에서는 기존과 동일하게 본문을 터치하면 열린 사이드바가 닫힙니다.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 915개 단위 검사 통과 및 `codememo-browser` 검증을 마친 뒤 GitHub Pages 게시 및 온라인 검증을 진행합니다.

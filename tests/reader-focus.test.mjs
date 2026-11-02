@@ -373,6 +373,13 @@ test('phone document body touch dismisses open app and document sidebars while k
  assert.equal(appDismissed,0);assert.deepEqual(docToggled,[]);
  r.host.ownerDocument.defaultView.innerWidth=1280;r.viewport.clientWidth=1280;
  assert.equal(r.dismissMobileSidebar({type:'pointerdown',pointerType:'mouse',target:doc.querySelector('#body-text')}),false,'wide desktop mouse click keeps side-by-side sidebar open');
+ for(const wideWidth of [1280,1024,800]){
+  r.host.ownerDocument.defaultView.innerWidth=wideWidth;r.viewport.clientWidth=wideWidth;
+  assert.equal(r.dismissMobileSidebar({type:'touchstart',pointerType:'touch',target:doc.querySelector('#body-text')}),false,`wide tablet touch (${wideWidth}px) keeps side-by-side sidebar open`);
+  assert.equal(r.dismissMobileSidebar({type:'pointerdown',pointerType:'touch',target:doc.querySelector('#body-text')}),false,`wide tablet touch pointerdown (${wideWidth}px) keeps side-by-side sidebar open`);
+  assert.equal(r.dismissMobileSidebar({type:'pointerdown',pointerType:'pen',target:doc.querySelector('#body-text')}),false,`wide tablet pen pointerdown (${wideWidth}px) keeps side-by-side sidebar open`);
+ }
+ assert.equal(appDismissed,0);assert.deepEqual(docToggled,[]);
  r.host.ownerDocument.defaultView.innerWidth=390;r.viewport.clientWidth=390;
  assert.equal(r.dismissMobileSidebar({type:'touchstart',pointerType:'touch',target:doc.querySelector('#body-text')}),true);
  assert.equal(appDismissed,1);assert.deepEqual(docToggled,[false]);

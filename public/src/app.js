@@ -483,7 +483,7 @@ async function openRecord(record, prepared = null, {deferReady = false, sourceId
     onPreferenceChange:()=>dataFolder?.schedule({settingsOnly:true}),
     onTextSelection:()=>{if(activeId===tab.id)showSelectionMenu(tab.reader);},
     onSelectionDismiss:()=>{if(popoverName==='selection'||popoverName.startsWith('tool-mode-'))closePopover();},
-    onDismissSidebar:()=>{if(activeId===tab.id&&!$('#sidebar').hidden&&!document.documentElement.hasAttribute('data-app-sidebar-resizing')){closeSidebar();return true;}return false;},
+    onDismissSidebar:()=>{if(activeId===tab.id&&innerWidth<=760&&!$('#sidebar').hidden&&!document.documentElement.hasAttribute('data-app-sidebar-resizing')){closeSidebar();return true;}return false;},
     onLink:url=>safely(openBrowser)(url),onKey:handleKey,requestText:promptText,onError:showError,onNotice:message=>toast(message),
     onPaste:event=>handleImagePaste(event),onDrop:event=>handleFileDrop(event),
     onDocumentFocus:()=>{if(activeId===tab.id)void toggleReaderFocus();},
@@ -1828,7 +1828,7 @@ function bindUI() {
   const dismissWorkspaceMobileSidebar=event=>{
     const target=event.touches?.[0]?.target||event.target;
     if(!target?.closest?.('#workspaces')||target.closest('#sidebar,#toolbar,#tool-popover,[data-htmlmemo-reading-controls],[data-htmlmemo-ui],.mstts-player,.mstts-panel,.mstts-select-menu'))return;
-    if(!(event.pointerType==='touch'||event.type==='touchstart'||innerWidth<=760))return;
+    if(innerWidth>760)return;
     if(!$('#sidebar').hidden&&!document.documentElement.hasAttribute('data-app-sidebar-resizing'))closeSidebar();
     reader()?.dismissMobileSidebar?.(event,reader()?.doc?.body);
   };
