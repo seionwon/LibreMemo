@@ -14,7 +14,7 @@ export function normalizeURL(input) {
   if (/^[^\s/]+\.[^\s/]+/.test(value) && !/\s/.test(value)) return new URL('https://' + value).href;
   return 'https://www.google.com/search?q=' + encodeURIComponent(value);
 }
-export function displayHost(url) { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return '로컬 HTML'; } }
+export function displayHost(url) { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return '로컬 파일'; } }
 const shortDate=new Intl.DateTimeFormat('ko',{month:'short',day:'numeric'});
 const fullDate=new Intl.DateTimeFormat('ko-KR',{year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'numeric',second:'numeric'});
 export function formatDate(time,full=false) { return (full?fullDate:shortDate).format(time); }
