@@ -82,9 +82,11 @@ function clearReaderSidebarArtifacts(root) {
   // the source document itself.  Clear only those namespaced artifacts when
   // opening or exporting a file, leaving the document's real TOC untouched.
   for(const node of root.querySelectorAll?.('#htmlmemo-toc-toggle-style,#htmlmemo-sidebar-style,#htmlmemo-toc-resize-style,#htmlmemo-doc-sidebar-style,#htmlmemo-reading-controls-style,#htmlmemo-reading-font-style,#htmlmemo-source-font-style,#htmlmemo-reading-theme-style,[data-htmlmemo-tts-paint],[data-htmlmemo-reading-controls],[data-htmlmemo-reading-font],[data-htmlmemo-font-reset]')||[])node.remove();
-  for(const button of root.querySelectorAll?.('[data-htmlmemo-source-max],[data-htmlmemo-font-smaller],[data-htmlmemo-font-larger]')||[]){
+  for(const button of root.querySelectorAll?.('[data-htmlmemo-source-max],[data-htmlmemo-source-min],[data-htmlmemo-font-smaller],[data-htmlmemo-font-larger]')||[]){
     if(button.hasAttribute('data-htmlmemo-source-max'))button.toggleAttribute('disabled',button.getAttribute('data-htmlmemo-source-max')==='true');
+    if(button.hasAttribute('data-htmlmemo-source-min'))button.toggleAttribute('disabled',button.getAttribute('data-htmlmemo-source-min')==='true');
     button.removeAttribute('data-htmlmemo-source-max');
+    button.removeAttribute('data-htmlmemo-source-min');
     button.removeAttribute('data-htmlmemo-font-smaller');
     button.removeAttribute('data-htmlmemo-font-larger');
   }
@@ -279,7 +281,7 @@ function* prepareHTML(html, defaults, {includeMetadata = false, document: loaded
   };
   if(view.sourceStorage)metadata.view.sourceStorage=cleanSourceStorage(view.sourceStorage);
   if(Number.isFinite(view.fontScale))metadata.view.fontScale=Math.min(3.2,Math.max(.6,view.fontScale));
-  if(Number.isInteger(view.sourceFontSteps)&&view.sourceFontSteps>=1&&view.sourceFontSteps<=3)metadata.view.sourceFontSteps=view.sourceFontSteps;
+  if(Number.isInteger(view.sourceFontSteps)&&view.sourceFontSteps!==0&&view.sourceFontSteps>=-5&&view.sourceFontSteps<=3)metadata.view.sourceFontSteps=view.sourceFontSteps;
   const fontFamily=normalizeReadingFontFamily(view.fontFamily);
   if(fontFamily&&fontFamily!=='default')metadata.view.fontFamily=fontFamily;
   if(['system','light','dark'].includes(view.readingTheme))metadata.view.readingTheme=view.readingTheme;

@@ -137,6 +137,30 @@ function bootstrap(channel,preferences,mutationRoots) {
       // app target must still run the book's handler when that hash is equal.
       if(location.href===before)dispatchEvent(new HashChangeEvent('hashchange',{oldURL:before,newURL:location.href}));return;
     }
+    if(value.type==='reset-font'&&/^r\d{1,12}$/.test(value.smallerId)&&/^r\d{1,12}$/.test(value.largerId)&&Number.isFinite(value.base)){
+      const smaller=nodes.get(value.smallerId),larger=nodes.get(value.largerId);
+      if(!smaller?.isConnected||!larger?.isConnected)return;
+      const parsePx=(v,root=16)=>{const m=/^\s*(\d*\.?\d+)\s*(px|rem|em|%|pt)?\s*$/i.exec(String(v||''));if(!m)return NaN;const n=Number.parseFloat(m[1]),u=(m[2]||'px').toLowerCase();return u==='rem'||u==='em'?n*root:u==='%'?(n/100)*root:u==='pt'?n*(96/72):n<4&&!m[2]?n*root:n;};
+      const readSize=()=>{
+        const root=Number.parseFloat(getComputedStyle(document.documentElement).fontSize)||16;
+        const target=document.querySelector('#reader-content,main,article,.reader-content,.book-content')||document.body;
+        const raw=[document.documentElement?.getAttribute?.('style'),document.body?.getAttribute?.('style'),target?.getAttribute?.('style')].filter(Boolean).join(';');
+        const m=/--(?:read|font|reader-font)-size\s*:\s*([^;]+)/i.exec(raw)||/\bfont-size\s*:\s*([^;]+)/i.exec(raw);
+        const inline=document.documentElement?.style?.getPropertyValue?.('--read-size')||document.body?.style?.getPropertyValue?.('--read-size')||document.documentElement?.style?.getPropertyValue?.('--font-size')||document.body?.style?.getPropertyValue?.('--font-size')||document.documentElement?.style?.getPropertyValue?.('--reader-font-size')||document.body?.style?.getPropertyValue?.('--reader-font-size')||m?.[1];
+        return parsePx(inline,root)||parsePx(target?.style?.fontSize,root)||parsePx(document.body?.style?.fontSize,root)||Number.parseFloat(getComputedStyle(target).fontSize)||18;
+      };
+      navigationEnabled=false;pendingNavigation=null;navigationSuppressed++;
+      try{
+        for(let i=0;i<24;i++){
+          const now=readSize();if(Math.abs(now-value.base)<.05)break;
+          const btn=now>value.base?smaller:larger;if(!btn||btn.disabled)break;
+          btn.click();
+          const next=readSize();
+          if(Math.abs(next-now)<.01||(now>value.base&&next<value.base-.05)||(now<value.base&&next>value.base+.05))break;
+        }
+      }finally{navigationSuppressed--;if(typeof dirty!=='undefined'){if(dirty.get(smaller)!=='content')dirty.set(smaller,'attributes');if(dirty.get(larger)!=='content')dirty.set(larger,'attributes');if(dirty.get(document.documentElement)!=='content')dirty.set(document.documentElement,'attributes');}schedule();}
+      return;
+    }
     if(!['click','input','change','toggle','submit'].includes(value.type)||!/^r\d{1,12}$/.test(value.id))return;
     const node=nodes.get(value.id);if(!node?.isConnected)return;
     if(value.type==='toggle'&&node.localName==='details'){if(Number.isSafeInteger(value.revision)&&value.revision>=0)appliedInput=Math.max(appliedInput,value.revision);if(node.open!==!!value.open)node.open=!!value.open;return;}
@@ -149,7 +173,7 @@ function bootstrap(channel,preferences,mutationRoots) {
     // No eval, arbitrary property access, network/file request or parent callback.
     if(value.type==='click'){
       const silent=value.navigate===false,before=location.href;navigationEnabled=!silent;pendingNavigation=null;if(silent)navigationSuppressed++;
-      try{node.click();}finally{if(silent){navigationSuppressed--;if(location.href!==before&&!silentHashes.includes(location.href))rememberSilentHash(location.href);}schedule();}
+      try{node.click();}finally{if(silent){navigationSuppressed--;if(location.href!==before&&!silentHashes.includes(location.href))rememberSilentHash(location.href);}if(typeof dirty!=='undefined'&&dirty.get(node)!=='content')dirty.set(node,'attributes');schedule();}
     }
   };
   // srcdoc inherits the app's base URL. Hash links belong to this source
@@ -282,7 +306,7 @@ export class IsolatedRuntime {
     const id=target.getAttribute(ID),app=name=>name.startsWith('data-htmlmemo-')&&name!==ID,previous=this.attributes.get(id),next=new Map([...source.attributes].map(a=>[a.name,a.value]));
     const staleToggle=target.localName==='details'&&Number.isSafeInteger(revision)&&revision<(this.controlRevisions.get(id)||0);
     for(const name of new Set([...(previous?.keys()||[...target.attributes].map(a=>a.name)),...next.keys()])){
-      if(name==='disabled'&&target.hasAttribute('data-htmlmemo-source-max')){target.setAttribute('data-htmlmemo-source-max',String(next.has('disabled')));continue;}
+      if(name==='disabled'&&(target.hasAttribute('data-htmlmemo-source-max')||target.hasAttribute('data-htmlmemo-source-min'))){target.setAttribute(target.hasAttribute('data-htmlmemo-source-max')?'data-htmlmemo-source-max':'data-htmlmemo-source-min',String(next.has('disabled')));continue;}
       if(app(name)||previous&&previous.get(name)===next.get(name))continue;
       if(name==='open'&&target.localName==='details'&&(target.hasAttribute('data-htmlmemo-book-search-open')||staleToggle)){
         if(target.hasAttribute('open'))next.set('open',target.getAttribute('open')||'');else next.delete('open');
@@ -296,6 +320,12 @@ export class IsolatedRuntime {
     if(validId(id))this.attributes.set(id,next);
   }
   send(value) {if(!this.disposed)this.port?.postMessage({channel:this.channel,...value});}
+  resetFontSize(smaller,larger,base) {
+    const smallerId=smaller?.getAttribute?.(ID),largerId=larger?.getAttribute?.(ID);
+    if(!validId(smallerId)||!validId(largerId)||!Number.isFinite(base))return false;
+    this.send({type:'reset-font',smallerId,largerId,base});
+    return true;
+  }
   setDetailsOpen(node,open) {
     const id=node?.getAttribute?.(ID);if(!validId(id))return;
     const revision=++this.inputRevision;this.controlRevisions.set(id,revision);

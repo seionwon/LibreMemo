@@ -390,3 +390,67 @@ test('system reading theme resolves dark or light from prefers-color-scheme in b
   const saved=serializeHTML(top.doc,top.r.metadata);
   assert.doesNotMatch(saved,/data-htmlmemo-theme/);
 });
+test('A−, A reset, and A+ step monotonically smaller and larger around the default size across plain, static, rem, and isolated-runtime documents',()=>{
+  // 1. Plain toolbar: A− steps smaller, A+ steps back to exact 1, A resets to 1.
+  const plain=fixture();
+  Object.assign(plain.r,{autoFit:false,viewport:{scrollTop:0,scrollLeft:0},cancelAnnotationDrag(){},measure(){},renderDrawingLayer(){}});
+  plain.r.setupReadingControls();
+  const {smaller:pSmaller,reset:pReset,larger:pLarger}=plain.r.plainReadingButtons;
+  assert.equal(pReset.disabled,true);
+  pSmaller.onclick();assert.equal(plain.r.readingFontScale(),.9091);assert.equal(pReset.disabled,false);
+  pSmaller.onclick();assert.equal(plain.r.readingFontScale(),.8264);
+  pSmaller.onclick();assert.equal(plain.r.readingFontScale(),.7513);
+  pLarger.onclick();assert.equal(plain.r.readingFontScale(),.8264);
+  pLarger.onclick();assert.equal(plain.r.readingFontScale(),.9091);
+  pLarger.onclick();assert.equal(plain.r.readingFontScale(),1);assert.equal(pReset.disabled,true);
+  pSmaller.onclick();pSmaller.onclick();assert.equal(plain.r.readingFontScale(),.8264);
+  pReset.onclick();assert.equal(plain.r.readingFontScale(),1);assert.equal(pReset.disabled,true);
+  pSmaller.onclick();assert.equal(plain.r.readingFontScale(),.9091);
+  pReset.onclick();assert.equal(plain.r.readingFontScale(),1);
+  pLarger.onclick();assert.equal(plain.r.readingFontScale(),1.1);
+
+  // 2. Static source topbar (no book script on A− / A+): both A− and A+ work symmetrically around default 18px.
+  const stat=fixture('<header class="reader-head"><button id="reader-smaller">A−</button><button id="reader-larger">A+</button></header>');
+  Object.assign(stat.r,{autoFit:false,viewport:{scrollTop:0,scrollLeft:0},cancelAnnotationDrag(){},measure(){},renderDrawingLayer(){}});
+  stat.r.setupReadingControls();
+  const click=node=>node.dispatchEvent(new (stat.doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
+  const sSmaller=stat.doc.getElementById('reader-smaller'),sReset=stat.doc.querySelector('[data-htmlmemo-font-reset]'),sLarger=stat.doc.getElementById('reader-larger');
+  assert.equal(sReset.disabled,true);
+  click(sSmaller);assert.equal(stat.r.sourceFontExtraSteps,-1);assert.match(stat.doc.querySelector('#htmlmemo-source-font-style').textContent,/16\.364px/);assert.equal(sReset.disabled,false);
+  click(sSmaller);assert.equal(stat.r.sourceFontExtraSteps,-2);assert.match(stat.doc.querySelector('#htmlmemo-source-font-style').textContent,/14\.876px/);
+  click(sReset);assert.equal(stat.r.sourceFontExtraSteps,0);assert.equal(stat.doc.querySelector('#htmlmemo-source-font-style'),null);assert.equal(sReset.disabled,true);
+  click(sLarger);assert.equal(stat.r.sourceFontExtraSteps,1);assert.match(stat.doc.querySelector('#htmlmemo-source-font-style').textContent,/19\.800px/);assert.equal(sReset.disabled,false);
+  click(sLarger);assert.equal(stat.r.sourceFontExtraSteps,2);assert.match(stat.doc.querySelector('#htmlmemo-source-font-style').textContent,/21\.780px/);
+  click(sReset);assert.equal(stat.r.sourceFontExtraSteps,0);assert.equal(stat.doc.querySelector('#htmlmemo-source-font-style'),null);assert.equal(sReset.disabled,true);
+  click(sSmaller);assert.equal(stat.r.sourceFontExtraSteps,-1);assert.match(stat.doc.querySelector('#htmlmemo-source-font-style').textContent,/16\.364px/);
+  click(sLarger);assert.equal(stat.r.sourceFontExtraSteps,0);assert.equal(stat.doc.querySelector('#htmlmemo-source-font-style'),null);assert.equal(sReset.disabled,true);
+  click(sLarger);assert.equal(stat.r.sourceFontExtraSteps,1);assert.match(stat.doc.querySelector('#htmlmemo-source-font-style').textContent,/19\.800px/);
+
+  // 3. Rem-based book with IsolatedRuntime: reset calls runtime.resetFontSize and stepping from reset never jumps back to stale size.
+  const rem=fixture('<header class="reader-head"><button id="reader-smaller">A−</button><button id="reader-larger">A+</button></header>');
+  const style=rem.doc.createElement('style');style.textContent=':root{--read-size:1rem}';rem.doc.head.append(style);
+  rem.doc.documentElement.style.setProperty('--read-size','1.5rem'); // 24px restored from sourceStorage
+  const resetCalls=[];
+  Object.assign(rem.r,{autoFit:false,viewport:{scrollTop:0,scrollLeft:0},cancelAnnotationDrag(){},measure(){},renderDrawingLayer(){},runtime:{resetFontSize:(sm,lg,base)=>{resetCalls.push(base);return true;}}});
+  rem.r.setupReadingControls();
+  const rSmaller=rem.doc.getElementById('reader-smaller'),rReset=rem.doc.querySelector('[data-htmlmemo-font-reset]'),rLarger=rem.doc.getElementById('reader-larger');
+  assert.equal(rem.r.initialSourceFontSize,16,'default font size comes from stylesheet :root --read-size:1rem (16px), not restored 1.5rem (24px)');
+  assert.equal(rReset.disabled,false,'reset is enabled when book opened at non-default 24px');
+  click(rReset);
+  assert.deepEqual(resetCalls,[16]);
+  assert.equal(rReset.disabled,true);
+  assert.match(rem.doc.querySelector('#htmlmemo-source-font-style').textContent,/16\.000px/);
+  // Pressing A− right after reset must step smaller than 16px (14.545px), never jumping up to 24px!
+  click(rSmaller);
+  assert.equal(rem.r.sourceFontExtraSteps,-1);
+  assert.match(rem.doc.querySelector('#htmlmemo-source-font-style').textContent,/14\.545px/);
+  assert.equal(rReset.disabled,false);
+  // Pressing A reset again returns to 16px, and pressing A+ steps larger than 16px (17.600px)!
+  click(rReset);
+  assert.equal(rem.r.sourceFontExtraSteps,0);
+  assert.match(rem.doc.querySelector('#htmlmemo-source-font-style').textContent,/16\.000px/);
+  assert.equal(rReset.disabled,true);
+  click(rLarger);
+  assert.equal(rem.r.sourceFontExtraSteps,1);
+  assert.match(rem.doc.querySelector('#htmlmemo-source-font-style').textContent,/17\.600px/);
+});

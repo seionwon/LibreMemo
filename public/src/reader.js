@@ -45,8 +45,9 @@ export class Reader {
             if(this.disposed){resolve(this);return;}
             this.naturalWidth=this.metadata.viewport.width;this.frame.style.width=this.naturalWidth+'px';
           }
-          this.sourceFontExtraSteps=clamp(Math.round(Number(this.metadata?.view?.sourceFontSteps)||0),0,3);
+          this.sourceFontExtraSteps=clamp(Math.round(Number(this.metadata?.view?.sourceFontSteps)||0),-5,3);
           this.sourceFontAtMax=this.sourceFontExtraSteps>0;
+          this.sourceFontAtMin=this.sourceFontExtraSteps<0;
           if(this.metadata.execution?.allowScripts&&needsIsolatedRuntime(this.doc)){
             this.runtime=new IsolatedRuntime({host:this.host,doc:this.doc,source:parsed.file||new Blob([parsed.html],{type:'text/html;charset=utf-8'}),storage:this.metadata.view.sourceStorage,onStorage:entries=>{this.metadata.view.sourceStorage=entries;(this.callbacks.onSourceSettings||this.callbacks.onPosition)?.();},onNavigate:hash=>{void this.navigateSourceHash(hash);},onScroll:target=>this.navigateSourceTarget(target),onPatch:()=>this.onRuntimePatch(),onError:error=>this.callbacks.onError?.(error)});
             await this.runtime.start();
@@ -79,8 +80,9 @@ export class Reader {
             const openingScroll = {top:this.doc.defaultView.scrollY,left:this.doc.defaultView.scrollX};
             this.metadata = parsed.savedMetadata ? {...prepared.metadata,...parsed.metadata} : prepared.metadata; this.history = new History(this.metadata.annotations);
             if(this.runtime)this.metadata.view.sourceStorage=this.runtime.storage;
-            this.sourceFontExtraSteps=clamp(Math.round(Number(this.metadata?.view?.sourceFontSteps)||0),0,3);
+            this.sourceFontExtraSteps=clamp(Math.round(Number(this.metadata?.view?.sourceFontSteps)||0),-5,3);
             if(this.sourceFontExtraSteps>0)this.sourceFontAtMax=true;
+            else if(this.sourceFontExtraSteps<0)this.sourceFontAtMin=true;
             this.autoFit = this.metadata.view.autoFit !== false;
             this.initialHTML = prepared.html;
             this.naturalWidth = this.metadata.viewport.width;
@@ -1180,24 +1182,48 @@ export class Reader {
     const reset=topbar.querySelector('[data-htmlmemo-font-reset]')||buttons.find(node=>node.id==='reader-font-reset'||node.dataset?.action==='font-reset'||/^A$/i.test(node.textContent.replace(/\s+/g,''))||/^(?:글자|글씨|폰트)\s*(?:기본|원래|초기화|리셋)/.test(node.getAttribute('aria-label')||node.title||''));
     return {smaller,reset,larger};
   }
+  parseCssFontSizePx(value,rootPx=16) {
+    if(typeof value!=='string')return NaN;
+    const m=/^\s*(\d*\.?\d+)\s*(px|rem|em|%|pt)?\s*$/i.exec(value.trim());
+    if(!m)return NaN;
+    const n=Number.parseFloat(m[1]),unit=(m[2]||'px').toLowerCase();
+    if(!Number.isFinite(n)||n<=0)return NaN;
+    if(unit==='rem'||unit==='em')return n*rootPx;
+    if(unit==='%')return (n/100)*rootPx;
+    if(unit==='pt')return n*(96/72);
+    return n<4&&!m[2]?n*rootPx:n;
+  }
   rawSourceFontSize() {
     if(!this.doc?.body)return 18;
     const style=this.doc.getElementById('htmlmemo-source-font-style'),prev=style?.textContent;
     if(style)style.textContent='';
     try{
+      const rootComputed=Number.parseFloat(this.doc.defaultView?.getComputedStyle?.(this.doc.documentElement)?.fontSize);
+      const rootPx=Number.isFinite(rootComputed)&&rootComputed>=4&&rootComputed<=500?rootComputed:16;
       const target=this.doc.querySelector('#reader-content,main:not([data-htmlmemo-ui]),article:not([data-htmlmemo-ui]),.reader-content,.book-content')||this.doc.body;
       const rawStyle=[this.doc.documentElement?.getAttribute?.('style'),this.doc.body?.getAttribute?.('style'),target?.getAttribute?.('style')].filter(Boolean).join(';');
-      const varMatch=/--(?:read|font|reader-font)-size\s*:\s*(\d*\.?\d+)/i.exec(rawStyle)||/\bfont-size\s*:\s*(\d*\.?\d+)px/i.exec(rawStyle);
-      const inlineVar=this.doc.documentElement?.style?.getPropertyValue?.('--read-size')||this.doc.body?.style?.getPropertyValue?.('--read-size')||this.doc.documentElement?.style?.getPropertyValue?.('--font-size')||this.doc.body?.style?.getPropertyValue?.('--font-size')||varMatch?.[1];
-      const size=Number.parseFloat(inlineVar)||Number.parseFloat(target?.style?.fontSize)||Number.parseFloat(this.doc.body?.style?.fontSize)||Number.parseFloat(this.doc.defaultView?.getComputedStyle?.(target)?.fontSize)||Number.parseFloat(this.doc.defaultView?.getComputedStyle?.(this.doc.body)?.fontSize)||18;
+      const varMatch=/--(?:read|font|reader-font)-size\s*:\s*([^;]+)/i.exec(rawStyle)||/\bfont-size\s*:\s*([^;]+)/i.exec(rawStyle);
+      const inlineVar=this.doc.documentElement?.style?.getPropertyValue?.('--read-size')||this.doc.body?.style?.getPropertyValue?.('--read-size')||this.doc.documentElement?.style?.getPropertyValue?.('--font-size')||this.doc.body?.style?.getPropertyValue?.('--font-size')||this.doc.documentElement?.style?.getPropertyValue?.('--reader-font-size')||this.doc.body?.style?.getPropertyValue?.('--reader-font-size')||varMatch?.[1];
+      const size=this.parseCssFontSizePx(inlineVar,rootPx)||this.parseCssFontSizePx(target?.style?.fontSize,rootPx)||this.parseCssFontSizePx(this.doc.body?.style?.fontSize,rootPx)||this.parseCssFontSizePx(this.doc.documentElement?.style?.fontSize,rootPx)||Number.parseFloat(this.doc.defaultView?.getComputedStyle?.(target)?.fontSize)||Number.parseFloat(this.doc.defaultView?.getComputedStyle?.(this.doc.body)?.fontSize)||18;
       return Number.isFinite(size)&&size>=4&&size<=500?size:18;
     }finally{
       if(style&&prev!=null)style.textContent=prev;
     }
   }
+  defaultSourceFontSize() {
+    if(!this.doc?.body)return 18;
+    const rootComputed=Number.parseFloat(this.doc.defaultView?.getComputedStyle?.(this.doc.documentElement)?.fontSize);
+    const rootPx=Number.isFinite(rootComputed)&&rootComputed>=4&&rootComputed<=500?rootComputed:16;
+    for(const sheet of this.doc.querySelectorAll('style:not([data-htmlmemo-ui])')){
+      const m=/--(?:read|font|reader-font)-size\s*:\s*([^;}\s]+)/i.exec(sheet.textContent||'');
+      const px=this.parseCssFontSizePx(m?.[1],rootPx);
+      if(Number.isFinite(px)&&px>=4&&px<=500)return px;
+    }
+    return this.rawSourceFontSize();
+  }
   applySourceReadingFont() {
     if(!this.doc?.body)return;
-    const steps=clamp(Math.round(Number(this.sourceFontExtraSteps??this.metadata?.view?.sourceFontSteps)||0),0,3);
+    const steps=clamp(Math.round(Number(this.sourceFontExtraSteps??this.metadata?.view?.sourceFontSteps)||0),-5,3);
     this.sourceFontExtraSteps=steps;
     const resetSize=Number.isFinite(this.sourceFontResetSize)&&Math.abs(this.rawSourceFontSize()-this.sourceFontResetSize)>=.05?this.sourceFontResetSize:null;
     if(!resetSize)this.sourceFontResetSize=null;
@@ -1218,7 +1244,7 @@ export class Reader {
   }
   syncSourceFontControls(controls=this.findSourceFontControls()) {
     if(!controls)return;
-    const {smaller,reset,larger}=controls,steps=clamp(Math.round(Number(this.sourceFontExtraSteps??this.metadata?.view?.sourceFontSteps)||0),0,3);
+    const {smaller,reset,larger}=controls,steps=clamp(Math.round(Number(this.sourceFontExtraSteps??this.metadata?.view?.sourceFontSteps)||0),-5,3);
     this.sourceFontExtraSteps=steps;
     if(reset?.hasAttribute?.('data-htmlmemo-font-reset')&&smaller.parentElement&&smaller.nextElementSibling!==reset)smaller.after(reset);
     if(larger.disabled&&!larger.hasAttribute('data-htmlmemo-source-max')){
@@ -1227,15 +1253,26 @@ export class Reader {
     }else if(larger.getAttribute('data-htmlmemo-source-max')==='true'){
       this.sourceFontAtMax=true;
     }
+    if(smaller.disabled&&!smaller.hasAttribute('data-htmlmemo-source-min')){
+      smaller.setAttribute('data-htmlmemo-source-min','true');
+      this.sourceFontAtMin=true;
+    }else if(smaller.getAttribute('data-htmlmemo-source-min')==='true'){
+      this.sourceFontAtMin=true;
+    }
     if(steps>0){
       if(!larger.hasAttribute('data-htmlmemo-source-max'))larger.setAttribute('data-htmlmemo-source-max','false');
       larger.disabled=steps>=3;
       if(smaller.disabled)smaller.disabled=false;
-    }else if(this.sourceFontAtMax){
+    }else if(steps<0){
+      if(!smaller.hasAttribute('data-htmlmemo-source-min'))smaller.setAttribute('data-htmlmemo-source-min','false');
+      smaller.disabled=steps<=-5;
       if(larger.disabled)larger.disabled=false;
+    }else{
+      if(this.sourceFontAtMax&&larger.disabled)larger.disabled=false;
+      if(this.sourceFontAtMin&&smaller.disabled)smaller.disabled=false;
     }
     if(reset){
-      const raw=this.rawSourceFontSize(),base=this.initialSourceFontSize??=raw;
+      const raw=this.rawSourceFontSize(),base=this.initialSourceFontSize??=this.defaultSourceFontSize();
       reset.disabled=steps===0&&(!!this.sourceFontResetSize||Math.abs(raw-base)<.05);
     }
   }
@@ -1243,24 +1280,28 @@ export class Reader {
     if(this.disposed||this.preparing)return false;
     if(!this.topbarNode?.isConnected)return this.setReadingFontScale(1);
     const controls=this.findSourceFontControls();if(!controls)return false;
-    clearTimeout(this.sourceFontTimer);this.sourceFontTimer=0;this.pendingSourceFontBefore=null;
-    const base=this.initialSourceFontSize??=this.rawSourceFontSize(),steps=clamp(Math.round(Number(this.sourceFontExtraSteps??this.metadata?.view?.sourceFontSteps)||0),0,3);
+    clearTimeout(this.sourceFontTimer);this.sourceFontTimer=0;this.pendingSourceFontBefore=null;this.pendingSmallerBefore=null;
+    const base=this.initialSourceFontSize??=this.defaultSourceFontSize(),steps=clamp(Math.round(Number(this.sourceFontExtraSteps??this.metadata?.view?.sourceFontSteps)||0),-5,3);
     if(steps===0&&(this.sourceFontResetSize||Math.abs(this.rawSourceFontSize()-base)<.05))return false;
     this.cancelAnnotationDrag?.();
     const readingAnchor=this.pendingReadingAnchor||this.captureReadingAnchor?.();this.pendingReadingAnchor=null;
-    this.sourceFontExtraSteps=0;this.sourceFontAtMax=false;this.sourceFontResetSize=null;
+    this.sourceFontExtraSteps=0;this.sourceFontAtMax=false;this.sourceFontAtMin=false;this.sourceFontResetSize=null;
     if(this.metadata?.view)delete this.metadata.view.sourceFontSteps;
-    controls.larger.removeAttribute('data-htmlmemo-source-max');controls.larger.disabled=false;controls.smaller.disabled=false;
+    controls.larger.removeAttribute('data-htmlmemo-source-max');controls.smaller.removeAttribute('data-htmlmemo-source-min');
+    controls.larger.disabled=false;controls.smaller.disabled=false;
     if(!this.runtime&&Math.abs(this.rawSourceFontSize()-base)>=.05){
       this.suppressSourceFontIntercept=true;
       try{
-        for(let i=0;i<16;i++){
+        for(let i=0;i<24;i++){
           const now=this.rawSourceFontSize();if(Math.abs(now-base)<.05)break;
           const btn=now>base?controls.smaller:controls.larger;if(!btn||btn.disabled)break;
           btn.dispatchEvent(new (this.doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
-          if(Math.abs(this.rawSourceFontSize()-now)<.01)break;
+          const next=this.rawSourceFontSize();
+          if(Math.abs(next-now)<.01||(now>base&&next<base-.05)||(now<base&&next>base+.05))break;
         }
       }finally{this.suppressSourceFontIntercept=false;}
+    }else if(this.runtime&&Math.abs(this.rawSourceFontSize()-base)>=.05){
+      this.runtime.resetFontSize?.(controls.smaller,controls.larger,base);
     }
     const after=this.rawSourceFontSize();this.lastSourceFontSize=after;
     if(Math.abs(after-base)>=.05)this.sourceFontResetSize=base;
@@ -1272,14 +1313,17 @@ export class Reader {
   }
   stepSourceFont(delta) {
     const controls=this.findSourceFontControls();if(!controls)return false;
-    const prev=clamp(Math.round(Number(this.sourceFontExtraSteps??this.metadata?.view?.sourceFontSteps)||0),0,3);
-    const next=clamp(prev+delta,0,3);
+    const prev=clamp(Math.round(Number(this.sourceFontExtraSteps??this.metadata?.view?.sourceFontSteps)||0),-5,3);
+    const next=clamp(prev+delta,-5,3);
     if(next===prev)return false;
     this.cancelAnnotationDrag?.();
     const readingAnchor=this.pendingReadingAnchor||this.captureReadingAnchor?.();this.pendingReadingAnchor=null;
-    this.sourceFontExtraSteps=next;this.sourceFontResetSize=null;
+    this.sourceFontExtraSteps=next;
     if(next>0){
       this.sourceFontAtMax=true;
+      if(this.metadata?.view)this.metadata.view.sourceFontSteps=next;
+    }else if(next<0){
+      this.sourceFontAtMin=true;
       if(this.metadata?.view)this.metadata.view.sourceFontSteps=next;
     }else if(this.metadata?.view){
       delete this.metadata.view.sourceFontSteps;
@@ -1295,6 +1339,11 @@ export class Reader {
     const controls=this.findSourceFontControls();if(!controls)return;
     const after=this.rawSourceFontSize();
     this.lastSourceFontSize=after;
+    if(after>before+.05){
+      this.sourceFontAtMin=false;
+      controls.smaller.removeAttribute('data-htmlmemo-source-min');
+      if(controls.smaller.disabled)controls.smaller.disabled=false;
+    }
     if(controls.larger.disabled||controls.larger.getAttribute('data-htmlmemo-source-max')==='true'){
       controls.larger.setAttribute('data-htmlmemo-source-max','true');
       this.sourceFontAtMax=true;
@@ -1312,27 +1361,45 @@ export class Reader {
       if(!this.rememberPosition?.())this.callbacks?.onPosition?.();
     }else this.pendingReadingAnchor=null;
   }
+  finishSourceSmallerCheck(before) {
+    const controls=this.findSourceFontControls();if(!controls)return;
+    const after=this.rawSourceFontSize();
+    this.lastSourceFontSize=after;
+    if(after<before-.05){
+      this.sourceFontAtMax=false;
+      controls.larger.removeAttribute('data-htmlmemo-source-max');
+      if(controls.larger.disabled)controls.larger.disabled=false;
+    }
+    if(controls.smaller.disabled||controls.smaller.getAttribute('data-htmlmemo-source-min')==='true'){
+      controls.smaller.setAttribute('data-htmlmemo-source-min','true');
+      this.sourceFontAtMin=true;
+      if(after>=before-.05&&(this.sourceFontExtraSteps||0)===0){this.stepSourceFont(-1);return;}
+      this.syncSourceFontControls(controls);
+    }else if(after>=before-.05&&(this.sourceFontExtraSteps||0)===0){
+      this.sourceFontAtMin=true;
+      this.stepSourceFont(-1);
+      return;
+    }
+    this.syncSourceFontControls(controls);
+    if(this.pendingReadingAnchor&&Math.abs(after-before)>.05){
+      const anchor=this.pendingReadingAnchor;this.pendingReadingAnchor=null;
+      this.measure?.();this.restoreReadingAnchor?.(anchor);this.renderDrawingLayer?.();
+      if(!this.rememberPosition?.())this.callbacks?.onPosition?.();
+    }else this.pendingReadingAnchor=null;
+  }
   onRuntimePatch() {
     this.syncSourceThemeControls();
     const controls=this.findSourceFontControls();if(!controls)return;
-    const after=this.rawSourceFontSize();
     if(this.pendingSourceFontBefore!=null){
       const before=this.pendingSourceFontBefore;
-      if(after>before+.05||controls.larger.disabled||controls.larger.getAttribute('data-htmlmemo-source-max')==='true'){
-        clearTimeout(this.sourceFontTimer);this.sourceFontTimer=0;this.pendingSourceFontBefore=null;
-        this.lastSourceFontSize=after;
-        if(controls.larger.disabled||controls.larger.getAttribute('data-htmlmemo-source-max')==='true'){
-          controls.larger.setAttribute('data-htmlmemo-source-max','true');
-          this.sourceFontAtMax=true;
-          if(after<=before+.05&&(this.sourceFontExtraSteps||0)===0){this.stepSourceFont(1);return;}
-        }
-        if(this.pendingReadingAnchor&&Math.abs(after-before)>.05){
-          const anchor=this.pendingReadingAnchor;this.pendingReadingAnchor=null;
-          this.measure?.();this.restoreReadingAnchor?.(anchor);this.renderDrawingLayer?.();
-          if(!this.rememberPosition?.())this.callbacks?.onPosition?.();
-        }
-      }
+      clearTimeout(this.sourceFontTimer);this.sourceFontTimer=0;this.pendingSourceFontBefore=null;
+      this.finishSourceFontCheck(before);
+    }else if(this.pendingSmallerBefore!=null){
+      const before=this.pendingSmallerBefore;
+      clearTimeout(this.sourceFontTimer);this.sourceFontTimer=0;this.pendingSmallerBefore=null;
+      this.finishSourceSmallerCheck(before);
     }else{
+      const after=this.rawSourceFontSize();
       if(this.pendingReadingAnchor&&this.lastSourceFontSize!=null&&Math.abs(after-this.lastSourceFontSize)>.05){
         const anchor=this.pendingReadingAnchor;this.pendingReadingAnchor=null;
         this.measure?.();this.restoreReadingAnchor?.(anchor);this.renderDrawingLayer?.();
@@ -1340,17 +1407,18 @@ export class Reader {
       }
       this.lastSourceFontSize=after;
     }
-    if((this.sourceFontExtraSteps||0)>0||this.sourceFontResetSize||this.readingFontFamily()!=='default')this.applySourceReadingFont();
+    if((this.sourceFontExtraSteps||0)!==0||this.sourceFontResetSize||this.readingFontFamily()!=='default')this.applySourceReadingFont();
     this.syncSourceFontControls(controls);
   }
   setupSourceFontControls(topbar=this.topbarNode) {
     const controls=this.findSourceFontControls(topbar);if(!controls||!this.doc)return;
     if(this.sourceFontExtraSteps===undefined){
-      this.sourceFontExtraSteps=clamp(Math.round(Number(this.metadata?.view?.sourceFontSteps)||0),0,3);
+      this.sourceFontExtraSteps=clamp(Math.round(Number(this.metadata?.view?.sourceFontSteps)||0),-5,3);
       if(this.sourceFontExtraSteps>0)this.sourceFontAtMax=true;
+      else if(this.sourceFontExtraSteps<0)this.sourceFontAtMin=true;
     }
     const raw=this.rawSourceFontSize();
-    this.initialSourceFontSize??=raw;
+    this.initialSourceFontSize??=this.defaultSourceFontSize();
     this.lastSourceFontSize=raw;
     controls.smaller.setAttribute('data-htmlmemo-font-smaller','');
     controls.larger.setAttribute('data-htmlmemo-font-larger','');
@@ -1365,18 +1433,29 @@ export class Reader {
     const handleSmaller=event=>{
       if(this.suppressSourceFontIntercept||event._htmlmemoSourceFontHandled)return;event._htmlmemoSourceFontHandled=true;
       const current=this.findSourceFontControls();if(!current)return;
-      clearTimeout(this.sourceFontTimer);this.sourceFontTimer=0;this.pendingSourceFontBefore=null;
+      clearTimeout(this.sourceFontTimer);this.sourceFontTimer=0;this.pendingSourceFontBefore=null;this.pendingSmallerBefore=null;
+      if((this.sourceFontExtraSteps||0)<=-5){
+        event.preventDefault();event.stopImmediatePropagation();
+        current.smaller.disabled=true;
+        return;
+      }
       this.pendingReadingAnchor=this.captureReadingAnchor?.();
-      this.pendingSmallerBefore=this.lastSourceFontSize??this.rawSourceFontSize();
-      if(this.sourceFontResetSize){this.sourceFontResetSize=null;this.applySourceReadingFont();}
-      if((this.sourceFontExtraSteps||0)>0){
+      if((this.sourceFontExtraSteps||0)!==0||this.sourceFontAtMin||this.sourceFontResetSize){
         event.preventDefault();event.stopImmediatePropagation();
         this.stepSourceFont(-1);
         return;
       }
       this.sourceFontAtMax=false;
       current.larger.removeAttribute('data-htmlmemo-source-max');
-      if(!this.runtime)this.lastSourceFontSize=this.rawSourceFontSize();
+      this.pendingSmallerBefore=this.rawSourceFontSize();
+      if(this.runtime){
+        this.sourceFontTimer=setTimeout(()=>{
+          this.sourceFontTimer=0;
+          if(this.disposed||this.pendingSmallerBefore==null)return;
+          const before=this.pendingSmallerBefore;this.pendingSmallerBefore=null;
+          this.finishSourceSmallerCheck(before);
+        },250);
+      }
     };
     const handleReset=event=>{
       if(this.suppressSourceFontIntercept||event._htmlmemoSourceFontHandled)return;event._htmlmemoSourceFontHandled=true;
@@ -1386,27 +1465,28 @@ export class Reader {
     const handleLarger=event=>{
       if(this.suppressSourceFontIntercept||event._htmlmemoSourceFontHandled)return;event._htmlmemoSourceFontHandled=true;
       const current=this.findSourceFontControls();if(!current)return;
-      clearTimeout(this.sourceFontTimer);this.sourceFontTimer=0;this.pendingSourceFontBefore=null;
-      if(this.sourceFontResetSize){this.sourceFontResetSize=null;this.applySourceReadingFont();}
+      clearTimeout(this.sourceFontTimer);this.sourceFontTimer=0;this.pendingSourceFontBefore=null;this.pendingSmallerBefore=null;
       if((this.sourceFontExtraSteps||0)>=3){
         event.preventDefault();event.stopImmediatePropagation();
         current.larger.disabled=true;
         return;
       }
       this.pendingReadingAnchor=this.captureReadingAnchor?.();
-      if((this.sourceFontExtraSteps||0)>0||this.sourceFontAtMax){
+      if((this.sourceFontExtraSteps||0)!==0||this.sourceFontAtMax||this.sourceFontResetSize){
         event.preventDefault();event.stopImmediatePropagation();
         this.stepSourceFont(1);
         return;
       }
-      this.pendingSourceFontBefore=this.lastSourceFontSize??this.rawSourceFontSize();
+      this.sourceFontAtMin=false;
+      current.smaller.removeAttribute('data-htmlmemo-source-min');
+      this.pendingSourceFontBefore=this.rawSourceFontSize();
       if(this.runtime){
         this.sourceFontTimer=setTimeout(()=>{
           this.sourceFontTimer=0;
           if(this.disposed||this.pendingSourceFontBefore==null)return;
           const before=this.pendingSourceFontBefore;this.pendingSourceFontBefore=null;
           this.finishSourceFontCheck(before);
-        },65);
+        },250);
       }
     };
     this.sourceFontBoundButtons ||= new WeakSet();
@@ -1430,18 +1510,12 @@ export class Reader {
             this.finishSourceFontCheck(before);
           }else if(this.pendingSmallerBefore!=null){
             const before=this.pendingSmallerBefore;this.pendingSmallerBefore=null;
-            const after=this.rawSourceFontSize();this.lastSourceFontSize=after;
-            this.syncSourceFontControls();
-            if(this.pendingReadingAnchor&&Math.abs(after-before)>.05){
-              const anchor=this.pendingReadingAnchor;this.pendingReadingAnchor=null;
-              this.measure?.();this.restoreReadingAnchor?.(anchor);this.renderDrawingLayer?.();
-              if(!this.rememberPosition?.())this.callbacks?.onPosition?.();
-            }else this.pendingReadingAnchor=null;
+            this.finishSourceSmallerCheck(before);
           }
         }
       },false);
     }
-    if(this.sourceFontExtraSteps>0||this.sourceFontResetSize||this.readingFontFamily()!=='default')this.applySourceReadingFont();
+    if((this.sourceFontExtraSteps||0)!==0||this.sourceFontResetSize||this.readingFontFamily()!=='default')this.applySourceReadingFont();
     this.syncSourceFontControls(controls);
   }
   readingScrollMetrics() {
@@ -1626,7 +1700,9 @@ export class Reader {
   }
   setReadingFontScale(value) {
     if(!Number.isFinite(value)||this.disposed||this.preparing||this.topbarNode?.isConnected)return false;
-    const raw=clamp(value,.6,3.2),scale=raw>=3.1944?3.2:Math.round(raw*10000)/10000;if(scale===this.readingFontScale())return false;
+    const raw=clamp(value,.6,3.2),step=Math.round(Math.log(raw)/Math.log(1.1)),pow=Math.pow(1.1,step);
+    const scale=raw>=3.1944?3.2:(Math.abs(step)<=12&&Math.abs(raw-pow)<.0015?(step===0?1:Math.round(pow*10000)/10000):Math.round(raw*10000)/10000);
+    if(scale===this.readingFontScale())return false;
     this.cancelAnnotationDrag();if(this.pdf)this.autoFit=false;
     const readingAnchor=this.captureReadingAnchor();
     this.metadata.view.fontScale=scale;this.applyReadingFont();
@@ -2823,7 +2899,7 @@ export class Reader {
   rememberPosition() {
     // Hidden tabs can report zero geometry; never replace the last visible reading position with it.
     if(this.host?.hidden || this.disposed)return false;
-    const view = {scrollTop:this.scrollTop, scrollLeft:this.scrollLeft, zoom:this.zoom, autoFit:this.autoFit, ...(Number.isFinite(this.tocResizedWidth)?{tocWidth:this.tocResizedWidth}:{}),...(Number.isFinite(this.metadata.view?.fontScale)?{fontScale:this.readingFontScale()}:{}),...(this.sourceFontExtraSteps>0?{sourceFontSteps:this.sourceFontExtraSteps}:{}),...(this.readingFontFamily()!=='default'?{fontFamily:this.readingFontFamily()}:{}),...(this.metadata.view?.readingTheme?{readingTheme:this.readingTheme()}:{}),...(this.metadata.view?.sourceStorage?{sourceStorage:this.metadata.view.sourceStorage}:{})};
+    const view = {scrollTop:this.scrollTop, scrollLeft:this.scrollLeft, zoom:this.zoom, autoFit:this.autoFit, ...(Number.isFinite(this.tocResizedWidth)?{tocWidth:this.tocResizedWidth}:{}),...(Number.isFinite(this.metadata.view?.fontScale)?{fontScale:this.readingFontScale()}:{}),...(this.sourceFontExtraSteps?{sourceFontSteps:this.sourceFontExtraSteps}:{}),...(this.readingFontFamily()!=='default'?{fontFamily:this.readingFontFamily()}:{}),...(this.metadata.view?.readingTheme?{readingTheme:this.readingTheme()}:{}),...(this.metadata.view?.sourceStorage?{sourceStorage:this.metadata.view.sourceStorage}:{})};
     if(this.pdf){const position=this.pdf.position(),old=this.metadata.view?.pdfPosition;view.pdfPosition=old?.page===position.page&&old?.y===position.y?old:position;}
     const previous = this.metadata.view || {};
     if (Object.keys(previous).length === Object.keys(view).length && Object.keys(view).every(key => view[key] === previous[key])) return false;
