@@ -38,6 +38,41 @@ test('wide letter spacing uses original text offsets rather than inventing space
   const doc=documentFor('<html><body>'+hangulPage(svg,0,[],()=>10,layout)+'</body></html>');
   assert.match(textIndex(doc).text,/한글 문서/);assert.equal(doc.querySelectorAll('foreignObject').length,1);
 });
+test('long rhwp pages join per-character glyphs without changing text or original positions',()=>{
+  const text='한글 문서 ABC';const chars=[...text].map((c,i)=>[c,i*20]).filter(([c])=>c!==' ');
+  const layout={runs:[{text,x:0,y:0,charX:[...text,''].map((_,i)=>i*20),secIdx:0,paraIdx:0}]};
+  const glyph=([c,x])=>'<text x="'+x+'" y="17" font-size="20" font-family="F">'+c+'</text>';
+  const doc=documentFor('<html><body>'+hangulPage('<svg width="400" height="100">'+chars.map(glyph).join('')+'</svg>',0,[],()=>20,layout)+'</body></html>');
+  const merged=[...doc.querySelectorAll('svg text')];
+  assert.equal(merged.length,1);assert.equal(merged[0].textContent,'한글문서ABC');assert.equal(merged[0].hasAttribute('font-family'),false);assert.equal(merged[0].parentElement.getAttribute('font-family'),'F');assert.equal(merged[0].getAttribute('x'),chars.map(([,x])=>x).join(' '));
+  assert.equal(textIndex(doc).text.trimEnd(),text);
+  assert.equal(doc.querySelectorAll('[data-office-text]>span:not([data-rhwp-gap])').length,3);
+  assert.match(doc.querySelector('.office-page').getAttribute('style'),/aspect-ratio:400\/100/);
+});
+test('rhwp clusters and individually fitted glyphs keep their own positioned elements',()=>{
+  const svg=(...items)=>'<svg width="200" height="100">'+items.map(([c,x,extra=''])=>'<text x="'+x+'" y="17" font-size="20"'+extra+'>'+c+'</text>').join('')+'</svg>';
+  for(const items of [[['가',0],['\u1112\u1161',20],['나',40]],[['e\u0301',0],['a',20],['\u0300',40]],[['\u0628',0],['\u0645',20]],[['가',0,' textLength="20"'],['나',20,' textLength="20"']]]){
+    const doc=documentFor('<html><body>'+hangulPage(svg(...items),0,[],()=>20)+'</body></html>');
+    assert.equal(doc.querySelectorAll('svg text').length,items.length);
+    assert.ok([...doc.querySelectorAll('svg text')].every(node=>!node.getAttribute('x').includes(' ')));
+  }
+});
+test('glyphs drifting from the word scale split spans; a glyph is measured once per page',()=>{
+  let calls=0;const measure=()=>{calls++;return 20;};
+  const glyphs=[['가',0],['나',20],['다',40],['라',90]].map(([c,x])=>'<text x="'+x+'" y="17" font-size="20">'+c+'</text>').join('');
+  const doc=documentFor('<html><body>'+hangulPage('<svg width="200" height="100">'+glyphs+'</svg>',0,[],measure)+'</body></html>');
+  assert.ok(calls<=5);assert.equal(textIndex(doc).text.replace(/\s/g,''),'가나다라');
+  assert.equal(doc.querySelectorAll('[data-office-text]>span:not([data-rhwp-gap])').length,2);
+});
+test('a two-glyph word with unequal natural widths is not stretched onto one scale',()=>{
+  const widths={W:17,i:4},glyphs=[['W',0],['i',9.17]].map(([c,x])=>'<text x="'+x+'" y="17" font-size="18.6" textLength="9.17">'+c+'</text>').join('');
+  const doc=documentFor('<html><body>'+hangulPage('<svg width="200" height="100">'+glyphs+'</svg>',0,[],(_,text)=>[...text].reduce((sum,c)=>sum+widths[c],0))+'</body></html>');
+  assert.equal(doc.querySelectorAll('[data-office-text]>span:not([data-rhwp-gap])').length,2);
+});
+test('rhwp import reports page progress',async()=>{
+  const {hwp}=await hangulFixtures(),seen=[];await renderOffice(hwp,'hwp','Progress',(page,pages)=>seen.push([page,pages]));
+  assert.deepEqual(seen,[[1,2],[2,2]]);
+});
 test('HML encoding, root and entity checks run before WASM; mismatched extensions and malformed archives fail',async()=>{
   const utf16=new Uint8Array(Buffer.from('\ufeff'+hmlText.replace('UTF-8','UTF-16'),'utf16le'));validateHML(utf16);assert.match((await renderOffice(utf16,'hml','UTF16')).html,/office-page/);
   for(const source of ['<!DOCTYPE HWPML [<!ENTITY x SYSTEM "https://bad.invalid">]>'+hmlText,'<html>not HML</html>'])assert.throws(()=>validateHML(new TextEncoder().encode(source)),/엔터티|문서 형식/);

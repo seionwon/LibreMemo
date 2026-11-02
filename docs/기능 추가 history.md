@@ -5890,3 +5890,28 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
      - [`syncStatusbarVisibility`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js#L98-L102), [`revealStatusbar`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js#L85-L97), [`scheduleStatusbarHide`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js#L76-L84)를 추가하고 `.statusbar`의 `MutationObserver`와 연동하여, 저장 상태(`#status-left`)·데이터 폴더 상태(`#data-folder-status`)·네트워크 상태(`#network-status`)에 변화가 있을 때 `data-statusbar-visible` 속성으로 위로 부드럽게 올라왔다가(`translateY(0)`), 저장이 완료된 뒤 잠시 후(`2.2초`) 다시 아래로 내려가 사라지도록 구현했습니다.
      - 주석 편집 없는 단순 읽기 위치 스크롤(`!tab.opening && !tab.queue?.editsPending`) 시에는 상태 표시줄이 불필요하게 올라오지 않으며, 저장 진행 중이거나 오류(`.save-error`, `[data-book-incomplete]`, `#retry-save`)가 있을 때는 사라지지 않고 유지됩니다.
 - **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 916개 단위 검사 통과 및 `codememo-browser`(1280×800) 검증을 마친 뒤 GitHub Pages 게시 및 온라인 검증을 진행합니다.
+
+<a id="hist-20261103-001"></a>
+### 2026-11-03 00:44:12 +09:00 — 수백 쪽 한글(HWP·HWPX·HML) 문서 열기 속도 개선
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261103-001 |
+| 변경 종류 | 한글 읽기 화면 구조 경량화(`public/src/office-hangul.js`), 화면 밖 쪽 렌더링 생략(`public/src/office-common.js`), 가져오기 진행률 표시(`public/src/office-render.js`, `public/src/app.js`) |
+| 상태 | 로컬 검증 완료 · 커밋·GitHub Pages 게시 전(1.9.24) |
+
+- **목적·원인:** 380쪽 HWP를 여는 속도가 너무 느리다는 문제를 조사했습니다. rhwp 해석 자체보다 읽기 화면의 크기가 원인이었습니다. rhwp가 글자마다 `<text>`를 내보내고, 앱이 글자마다 약 350바이트의 글꼴 목록과 투명 선택용 `<span>` 2개를 더해 쪽당 HTML 요소가 약 3,000개, 380쪽 문서가 300MB 이상이 되었습니다. 저장된 문서는 열 때마다 이 HTML을 다시 파싱하고 모든 요소를 정화하며 위치 표식을 붙입니다.
+- **사용법:** 별도 조작은 없습니다. **내 서재 → 파일 가져오기** 또는 끌어다 놓기로 한글 문서를 가져오면 새 구조로 저장됩니다. 가져오는 동안 **문서를 읽는 중… N / M쪽** 알림이 표시됩니다(이 문구는 DjVu에도 같이 쓰이며, 이전의 "DjVu를 읽는 중" 고정 문구를 대체했습니다).
+- **동작·보존:**
+  1. 같은 속성의 연속된 글자는 하나의 `<text>`와 글자별 `x` 목록으로 합쳐 원래 좌표를 유지합니다. 옛한글 자모·결합 문자·아랍 문자처럼 글자 묶음이 있는 경우와 rhwp가 폭을 맞춘 `textLength` 글자(주로 라틴)는 합치지 않습니다.
+  2. 글꼴 목록은 줄 단위 그룹에서 한 번만 지정합니다.
+  3. 투명 선택 층은 글자별 시작 위치가 한 단어의 배율 안에서 허용 오차(`0.5px` 또는 글자 크기의 3% 중 큰 값) 안에 들어올 때만 단어 단위로 합칩니다. 벗어나면 새 조각으로 나눕니다. 합친 글자는 커닝·합자를 끕니다. 추출되는 본문 문자열은 그대로입니다.
+  4. 각 쪽에 원본 비율(`aspect-ratio`)을 지정하고 `content-visibility:auto`로 화면 밖 쪽의 레이아웃·페인트를 생략하므로 전체 스크롤 길이가 처음부터 정확합니다.
+  5. 같은 글꼴·글자의 측정값을 캐시하고, 줄 끝 글자를 두 번 해석하던 중복을 없앴습니다.
+  6. 개발 중이라 이전에 가져온 문서를 위한 변환은 넣지 않았습니다. 새 구조는 새로 가져온 문서에만 적용됩니다.
+- **성능 측정:** 임시 벤치마크 페이지에서 신뢰된 Chrome 서비스로 합성 문서를 측정했습니다. 앱과 같은 렌더링·`prepareLoadedHTML` 코드를 쓰며, 실제 Reader 화면 전체나 Worker 경로의 측정은 아닙니다. 실제 380쪽 사용자 파일로 측정한 수치도 아닙니다.
+  - 한글 위주 약 400쪽: 수정 전 열기 약 **9.4초**, HTML **304MB**, 요소 **1,090,616개** → 수정 후 약 **1.4초**, **31MB**, **343,896개**.
+  - 라틴 문자가 많은 약 400쪽(최악 조건): 수정 전 약 **11.65초**, **382MB** → 수정 후 약 **4.1초**, **63MB**.
+  - 가져오기 계산 자체는 약 **5~7초**로 거의 그대로입니다.
+  - 선택 위치와 보이는 글자의 첫 쪽 최대 오차: 라틴 혼합 문서 수정 전 **1.15px** → 수정 후 **0.86px**. 한글 위주 문서의 최종 코드 오차는 측정하지 못했습니다.
+- **검증 및 게시:** `npm run check` 221개, `npm test` **921개**(새 회귀 검사 5개 포함), `npm run build`, `git diff --check`를 통과했습니다. 측정 중 찾은 세 가지 문제를 고쳤습니다: 단어 합치기가 라틴 글자 쌍에서 선택 오차를 6.25px로 키운 문제, 대체 글꼴에서 단어가 글자별로 쪼개지던 문제, `contain-intrinsic-size`가 화면 밖 쪽 높이를 고정하던 문제입니다. Chrome 검증 서비스 한도로 수정 전후 스크린샷 비교는 하지 못했고, 전체 `npm run test:browser`는 이 실행 환경에서 수행하지 않았습니다. 실제 Reader에서의 주석·선택·TTS·인쇄 회귀는 CI로 확인해야 합니다. 이 항목 시점에는 커밋·게시하지 않았습니다.
