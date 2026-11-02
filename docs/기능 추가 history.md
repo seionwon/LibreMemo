@@ -5644,7 +5644,7 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
 | --- | --- |
 | ID | hist-20261102-006 |
 | 변경 종류 | 읽기 글꼴 목록([`READING_FONTS`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/model.js#L6-L36), [`READING_FONT_FAMILIES`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/model.js#L37-L66), [`normalizeReadingFontFamily`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/model.js#L110-L115)) 확장 · 한글/영문 글꼴 이름 선택 및 저장·복원 지원 |
-| 상태 | 로컬 검증 완료 · 1.9.10 GitHub Pages 게시 진행 |
+| 상태 | 로컬 검증 완료 · 1.9.10 GitHub Pages 게시 완료 |
 
 - **목적·원인:**
   1. 기존 글꼴 선택기(`select[data-reading-font]`)는 `기본`, `고딕`, `명조`, `돋움`, `고정폭` 같은 글꼴 계열로만 선택할 수 있었으나, 사용자가 원하는 구체적인 글꼴 이름(예: `프리텐다드 (Pretendard)`, `맑은 고딕`, `나눔고딕`, `나눔명조`, `본고딕 (Noto Sans KR)`, `본명조 (Noto Serif KR)`, `마루 부리 (MaruBuri)`, `리디바탕 (RIDIBatang)`, `D2Coding` 등)으로도 직접 선택할 수 있도록 확장했습니다.
@@ -5655,4 +5655,21 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
   2. **글꼴 적용·고정폭 판별·읽기 위치 보존 및 문서/보관 파일 영속화([`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js), [`public/src/document.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document.js), [`public/src/document-archive.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document-archive.js)):**
      - [`setReadingFontFamily`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1071-L1084)와 [`readingFontFamilyCss`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1058-L1070)에서 개별 고정폭 글꼴([`MONO_READING_FONTS`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/model.js#L67): `D2Coding`, `NanumGothicCoding`, `Consolas`, `Menlo`, `Courier New`) 선택 시 코드 블록(`pre`, `code`)까지 해당 고정폭 글꼴이 적용되도록 처리하고, 글꼴 변경 전후의 읽기 기준점(`captureReadingAnchor` / `restoreReadingAnchor`)과 주석 위치를 유지합니다.
      - [`parseHTML`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document.js#L272-L273)과 [`archiveMetadata`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document-archive.js#L31-L32)에서도 `normalizeReadingFontFamily`를 사용해 개별 글꼴 이름 선택 상태가 HTML 저장과 `.librememo` 보관 파일에서 그대로 보존·복원됩니다.
-- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 907개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800) 실제 브라우저 검증 진행.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 907개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800) 실제 브라우저 검증 통과, `https://seionwon.github.io/LibreMemo/src/version.js`에서 `1.9.10` 온라인 게시 확인.
+
+<a id="hist-20261102-007"></a>
+### 2026-11-02 10:19:00 +09:00 — About 대화상자의 안내 내용을 현재 LibreMemo 전체 기능 및 오픈소스 라이선스에 맞게 개편
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261102-007 |
+| 변경 종류 | About 대화상자 템플릿([`#about-content`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/index.html#L62)) 및 스타일([`.about-features`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css#L190-L193)) 개편 · DjVu 오픈소스 고지 링크 추가 |
+| 상태 | 로컬 검증 완료 · 1.9.11 GitHub Pages 게시 진행 |
+
+- **목적·원인:**
+  1. 기존 `설정 → About` 대화상자(`#about-content`)는 초기 버전 설명(`웹 페이지를 한 파일로 보관하고, 읽고, 주석을 남깁니다.`)만 표시하고 있어, 현재 LibreMemo가 지원하는 다양한 문서·전자책·스캔·한글·Office·미디어 포맷, 맞춤 읽기(글자 크기 `A−·A·A+`, 글꼴 계열·이름 선택, 화면 테마, TTS), 주석·북마크·이력·새 판 옮기기, 폴더 트리·휴지통·보관 파일(`.librememo`)/HTML/PDF 내보내기, 전용 데이터 폴더 및 기기 간 암호화 동기화 기능을 안내하도록 개편했습니다.
+- **동작·보존:**
+  1. **현재 LibreMemo 전체 기능 요약 및 오픈소스 라이선스 링크 보완([`public/index.html`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/index.html), [`public/design.tailwind.css`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css)):**
+     - [`#about-content`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/index.html#L62)에서 지원 포맷(`HTML·MHTML`, `PDF`, `EPUB·MOBI·AZW3·FB2·CBZ`, `DjVu`, `HWP·HWPX·HML`, `Word·Excel·PowerPoint·ODT·ODS·ODP`, `CSV·TSV·JSON`, `마크다운·텍스트`, `이미지·자막`)과 4개 핵심 기능 영역(`맞춤 읽기와 음성 읽기`, `주석·북마크·이력`, `서재 정리와 내보내기`, `로컬 보관과 기기 동기화`)을 `.about-features` 정의 목록(`<dl>`)으로 정리했습니다.
+     - 오픈소스 라이선스 링크 목록에 기존 `LibreMemo · MIT 라이선스`, `PDF 내보내기 도구`, `전자책 읽기 도구`, `문서 읽기 도구의 오픈소스 라이선스`, `한글 문서 읽기 도구`와 함께 `DjVu 문서 읽기 도구`(`./vendor/djvu/THIRD_PARTY_NOTICES`) 링크를 추가했습니다.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 907개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800)에서 실제 `설정 → About` 대화상자 렌더링·스크린샷 확인 및 GitHub Pages 게시 진행.

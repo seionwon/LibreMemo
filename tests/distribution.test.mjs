@@ -296,6 +296,9 @@ test('the settings icon preserves library, web opening, HTML import, app deliver
   const {version}=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'));
   assert.equal(doc.querySelector('#app-version').textContent,version);
   assert.match(doc.querySelector('.about-brand img').getAttribute('src'),/^data:image\/svg\+xml;base64,/);
+  const aboutText=doc.querySelector('#dialog').textContent;
+  for(const keyword of ['PDF','EPUB','DjVu','HWP','Office','마크다운','자막','소리내어 읽기(TTS)','글꼴','.librememo','기기 간 암호화 동기화'])assert.ok(aboutText.includes(keyword),`About dialog should mention ${keyword}`);
+  assert.ok(doc.querySelector('#dialog a[href="./vendor/djvu/THIRD_PARTY_NOTICES"]'));
 });
 
 test('settings is a single labelled icon and help, delivery and About preserve existing documents and preferences',async()=>{
