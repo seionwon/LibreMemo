@@ -1,6 +1,7 @@
 import init,{HwpDocument} from '../vendor/office/rhwp/rhwp.js';
 import {XMLParser} from '../vendor/office/genoffice.js';
 import {esc,font} from './office-common.js';
+import {withHangulFont} from './hangul-fonts.js';
 
 // Only the import worker loads WASM. The saved reading view needs no engine.
 // A real Canvas measurement callback is installed before constructing a document.
@@ -42,7 +43,7 @@ const fixed=(value,digits=2)=>String(Number(value.toFixed(digits)));
 // Joining scripts, combining marks and conjoining jamo keep their own element.
 const positionedChar=text=>text.length===1&&/^[\p{Script=Hangul}\p{Script=Han}\p{Script=Latin}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Common}]$/u.test(text)&&!/[\s\p{M}\p{Cf}\u1100-\u11ff\ua960-\ua97f\ud7b0-\ud7ff]/u.test(text);
 const positionLocked=new Set(['textLength','lengthAdjust','rotate','dx','dy']);
-const mergeableGlyph=g=>positionedChar(g.text)&&g.node.text.length===1&&tagOf(g.node.text[0])==='#text'&&(g.a['text-anchor']||'start')==='start'&&!Object.keys(g.a).some(key=>positionLocked.has(key));
+const mergeableGlyph=g=>!g.halved&&positionedChar(g.text)&&g.node.text.length===1&&tagOf(g.node.text[0])==='#text'&&(g.a['text-anchor']||'start')==='start'&&!Object.keys(g.a).some(key=>positionLocked.has(key));
 const sharedGlyphKey=g=>JSON.stringify(Object.entries(g.a).filter(([key])=>key!=='x'));
 function sourceGlyphs(layout){
   const grid=new Map(),runs=layout?.runs||[],key=r=>[r.secIdx,r.paraIdx,r.parentParaIdx,r.controlIdx,r.cellIdx,r.cellParaIdx].join(':');
@@ -86,6 +87,7 @@ export function hangulPage(svg,page,warnings=[],measure=hangulMeasure,layout=nul
       warnings.push('외부 파일로 연결된 그림·개체는 가져오지 않습니다.');return [];
     }
     if(!attributes.has(key))return [];
+    if(key==='font-family')return [[key,withHangulFont(value)]];
     if(/url\s*\(/i.test(value)){const match=value.match(/^url\(#([\w.:-]{1,200})\)$/);if(!match)return [];value='url(#'+prefix+match[1]+')';}
     return [[key,value]];
   }).map(([key,value])=>' '+key+'="'+esc(value)+'"').join('');
@@ -104,6 +106,9 @@ export function hangulPage(svg,page,warnings=[],measure=hangulMeasure,layout=nul
   const parseGlyph=node=>{
     if(tagOf(node)!=='text')return null;
     const a=attrsOf(node),x=Number(a.x),y=Number(a.y),size=Number(a['font-size']||16),text=textOf(node.text);
+    // Without metrics for a font rhwp gives every Latin glyph half an em, and
+    // fitting to it would stretch a narrow "i" as wide as an "m".
+    if(a.lengthAdjust==='spacingAndGlyphs'&&Math.abs(Number(a.textLength)-size/2)<.01){delete a.textLength;delete a.lengthAdjust;delete node[':@']['@_textLength'];delete node[':@']['@_lengthAdjust'];}
     if(!text||![x,y,size].every(Number.isFinite)||size<=0||size>2000)return null;
     // Complex tspans keep their SVG presentation, with one accessible run.
     const family=font(a['font-family']),weight=/^(?:[1-9]00|bold|normal)$/.test(a['font-weight'])?a['font-weight']:'normal',italic=a['font-style']==='italic'?'italic':'normal';
@@ -119,7 +124,10 @@ export function hangulPage(svg,page,warnings=[],measure=hangulMeasure,layout=nul
     for(let index=0;index<items.length;){
       const key=mergeableGlyph(items[index])?sharedGlyphKey(items[index]):null;let end=index+1;
       if(key)while(end<items.length&&mergeableGlyph(items[end])&&sharedGlyphKey(items[end])===key)end++;
-      if(end-index<2)html+=plain(items[index].node,depth);
+      // rhwp gives these half an em, but CJK fonts draw them at the right of a
+      // full em, over the next glyph. Fonts without the feature are unaffected.
+      if(items[index].halved)html+='<text class="rhwp-halt"'+attrString('text',items[index].a)+'>'+esc(items[index].text)+'</text>';
+      else if(end-index<2)html+=plain(items[index].node,depth);
       else{
         count+=end-index;if(count>1000000)throw Error('한글 문서의 개체가 너무 많거나 중첩이 깊습니다.');
         const run=items.slice(index,end);
@@ -131,6 +139,7 @@ export function hangulPage(svg,page,warnings=[],measure=hangulMeasure,layout=nul
   }
   function group(items,depth){
     const first=items[0],top=first.y-first.size*.85,maxSize=Math.max(...items.map(g=>g.size));let end=first.x,html='',word=null;
+    items.forEach((g,index)=>{const next=items[index+1];g.halved=!!next&&/^[「『《〈【〔]$/.test(g.text)&&next.x-g.x<g.size*.75&&g.node.text.length===1;});
     const sameFace=(a,b)=>a.family===b.family&&a.weight===b.weight&&a.italic===b.italic&&a.size===b.size;
     // Substituted fonts are narrower than rhwp's advances, so the scale comes
     // from the glyph starts. Every glyph is checked at the scale the word gets.

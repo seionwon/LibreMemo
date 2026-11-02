@@ -5,6 +5,7 @@ import { SearchIndexCache } from './search-index.js';
 import { IsolatedRuntime,needsIsolatedRuntime } from './isolated-runtime.js';
 import { clamp, uid, icon, sidebarWidthAction, isSecurityWarning } from './utils.js';
 import { History, TEXT_TOOLS, DRAW_TOOLS, FILL_TOOLS, READING_FONTS, READING_FONT_FAMILIES, MONO_READING_FONTS, normalizeReadingFontFamily } from './model.js';
+import { loadHangulFonts } from './hangul-fonts.js';
 import { LAYER_ID, LOCAL_CSP, parseHTML, savedMainFrame, prepareLoadedHTML, cleanAnnotations, textIndex, selectionAnchor, resolveTextAnchor, wrapOffsets, rangeFromOffsets, sentenceOffsets, serializeHTML, inspectBookDocument, drawingTargetQuote, describeDrawingTarget, currentSection, bookmarkAnchorTarget } from './document.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -90,6 +91,8 @@ export class Reader {
             this.openingScroll = openingScroll;
           }
           this.bind();
+          if (this.doc.querySelector('article[data-rhwp]')) await loadHangulFonts(this.doc);
+          if (this.disposed) { resolve(this); return; }
           this.applyReadingFont();
           this.applyReadingTheme();
           this.zoom = clamp(this.autoFit ? this.fitZoom() : (this.metadata.view.zoom || this.fitZoom()), .2, 8); this.applyZoom();

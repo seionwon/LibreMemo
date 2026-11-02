@@ -5,6 +5,7 @@ import {hangulFixtures,hmlText} from './hangul-fixtures.mjs';
 import {installDOM,documentFor} from './dom.mjs';
 import {renderOffice} from '../public/src/office-render.js';
 import {hangulPage,validateHML} from '../public/src/office-hangul.js';
+import {withHangulFont} from '../public/src/hangul-fonts.js';
 import {parseHTML,textIndex,wrapOffsets,serializeHTML} from '../public/src/document.js';
 import {verifyOffice} from '../public/src/office-formats.js';
 import {APP_FILES} from '../public/src/distribution.js';
@@ -69,6 +70,24 @@ test('a two-glyph word with unequal natural widths is not stretched onto one sca
   const doc=documentFor('<html><body>'+hangulPage('<svg width="200" height="100">'+glyphs+'</svg>',0,[],(_,text)=>[...text].reduce((sum,c)=>sum+widths[c],0))+'</body></html>');
   assert.equal(doc.querySelectorAll('[data-office-text]>span:not([data-rhwp-gap])').length,2);
 });
+test('bundled fonts come after the document font and its aliases, before system fallbacks',()=>{
+  const stack=(...names)=>names.map(name=>"'"+name+"'").join(',')+',serif';
+  assert.equal(withHangulFont(stack('함초롬바탕','Batang','바탕','AppleMyungjo')),"'함초롬바탕','LibreMemo Serif','Batang','바탕','AppleMyungjo',serif");
+  assert.equal(withHangulFont(stack('바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo')),"'바탕','Batang','바탕','LibreMemo Serif','Nanum Myeongjo','AppleMyungjo',serif");
+  assert.equal(withHangulFont(stack('맑은 고딕','Malgun Gothic','맑은 고딕','Apple SD Gothic Neo')),"'맑은 고딕','Malgun Gothic','맑은 고딕','LibreMemo Sans','Apple SD Gothic Neo',serif");
+  assert.equal(withHangulFont("'D2Coding','Noto Sans Mono',monospace"),"'D2Coding','Noto Sans Mono',monospace");
+});
+test('half-em guesses for unknown fonts do not stretch glyphs, while measured fits stay',()=>{
+  const glyph=(c,x,length)=>'<text x="'+x+'" y="17" font-size="20" textLength="'+length+'" lengthAdjust="spacingAndGlyphs">'+c+'</text>';
+  const html=hangulPage('<svg width="200" height="100">'+glyph('i',0,10)+glyph('m',30,17)+'</svg>',0,[],()=>10);
+  assert.equal((html.match(/textLength/g)||[]).length,1);assert.match(html,/textLength="17"/);
+});
+test('only opening brackets given half an em use halved punctuation',()=>{
+  const glyphs=[['가',0],['「',20],['나',30],['다',50],['《',70],['라',90]].map(([c,x])=>'<text x="'+x+'" y="17" font-size="20">'+c+'</text>').join('');
+  const doc=documentFor('<html><body>'+hangulPage('<svg width="200" height="100">'+glyphs+'</svg>',0,[],()=>20)+'</body></html>');
+  assert.deepEqual([...doc.querySelectorAll('.rhwp-halt')].map(node=>node.textContent),['「']);
+  assert.equal([...doc.querySelectorAll('svg text')].map(node=>node.textContent).join(''),'가「나다《라');
+});
 test('rhwp import reports page progress',async()=>{
   const {hwp}=await hangulFixtures(),seen=[];await renderOffice(hwp,'hwp','Progress',(page,pages)=>seen.push([page,pages]));
   assert.deepEqual(seen,[[1,2],[2,2]]);
@@ -82,6 +101,6 @@ test('HML encoding, root and entity checks run before WASM; mismatched extension
   await assert.rejects(renderOffice(new Uint8Array([0x50,0x4b,3,4]),'hwpx','bad.hwpx'));
 });
 test('rhwp worker and immutable local WASM engine are included in offline and portable app assets',async()=>{
-  for(const name of ['src/office-hangul.js','vendor/office/rhwp/rhwp.js','vendor/office/rhwp/rhwp_bg.wasm','vendor/office/rhwp/LICENSE','vendor/office/rhwp/THIRD-PARTY-NOTICES.txt'])assert.ok(APP_FILES.includes(name));
+  for(const name of ['src/office-hangul.js','src/hangul-fonts.js','vendor/fonts/LibreMemoSerif.woff2','vendor/fonts/LibreMemoSans.woff2','vendor/fonts/OFL.txt','vendor/office/rhwp/rhwp.js','vendor/office/rhwp/rhwp_bg.wasm','vendor/office/rhwp/LICENSE','vendor/office/rhwp/THIRD-PARTY-NOTICES.txt'])assert.ok(APP_FILES.includes(name));
   for(const name of ['rhwp.js','rhwp_bg.wasm'])assert.deepEqual(await readFile('public/vendor/office/rhwp/'+name),await readFile('node_modules/@rhwp/core/'+name));
 });
