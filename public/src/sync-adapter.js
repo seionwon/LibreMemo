@@ -21,12 +21,12 @@ async function unpack(body){
 const contentOf=record=>record.file?{file:record.file,...(record.originalFile?{originalFile:record.originalFile}:{})}:{html:record.html,...(record.originalFile?{originalFile:record.originalFile}:{})};
 const validStamp=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const stableJSON=value=>JSON.stringify(value,(_key,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);
-const markState=record=>({annotations:record.metadata.annotations,bookmarks:record.metadata.bookmarks});
+const markState=record=>({annotations:record.metadata.annotations,bookmarks:record.metadata.bookmarks,...(record.metadata.outlineEdits?.length?{outlineEdits:record.metadata.outlineEdits}:{})});
 const sameMarks=(a,b)=>stableJSON(markState(a))===stableJSON(markState(b));
 const markContent=item=>{const {id,...content}=item;return stableJSON(content);};
-const containsMarks=(result,original)=>['annotations','bookmarks'].every(key=>{const known=new Set(result.metadata[key].map(markContent));return original.metadata[key].every(item=>known.has(markContent(item)));});
+const containsMarks=(result,original)=>['annotations','bookmarks','outlineEdits'].every(key=>{const known=new Set((result.metadata[key]||[]).map(markContent));return (original.metadata[key]||[]).every(item=>known.has(markContent(item)));});
 function mergeMarks(local,remote){
-  const merge=(a,b)=>{
+  const merge=(a=[],b=[])=>{
     const result=[],known=new Set(),ids=new Set();
     for(const item of [...a,...b]){
       const key=markContent(item);if(known.has(key))continue;
@@ -35,7 +35,8 @@ function mergeMarks(local,remote){
     }
     return result;
   };
-  return {annotations:merge(local.metadata.annotations,remote.metadata.annotations),bookmarks:merge(local.metadata.bookmarks,remote.metadata.bookmarks)};
+  const outlineEdits=merge(local.metadata.outlineEdits,remote.metadata.outlineEdits);
+  return {annotations:merge(local.metadata.annotations,remote.metadata.annotations),bookmarks:merge(local.metadata.bookmarks,remote.metadata.bookmarks),...(outlineEdits.length?{outlineEdits}:{})};
 }
 function validateChoiceEnvelope(value){
   if(value.choiceToken!==undefined&&!idOK(value.choiceToken))throw Error('주석 선택 확인 정보가 손상되었습니다.');
@@ -286,7 +287,8 @@ export class DeviceSyncAdapter {
         // Keep each device document identity, source and view; replace marks only.
         if(resolution==='skip'){mirrored.push(previous.id);continue;}
         const marks=resolution==='merge'?mergeMarks(previous,value.record):markState(resolution==='local'?previous:value.record);
-        const record={...portableRecord(previous),modified:Date.now(),metadata:{...previous.metadata,...marks},syncSourceId:value.record.id,syncFingerprint:value.fingerprint};
+        const nextMeta={...previous.metadata,...marks};if(!marks.outlineEdits?.length)delete nextMeta.outlineEdits;
+        const record={...portableRecord(previous),modified:Date.now(),metadata:nextMeta,syncSourceId:value.record.id,syncFingerprint:value.fingerprint};
         validateState({record,revisions:[]},record.id);
         if(!sameMarks(previous,record)){
           const history=await this.ops.listRevisions(previous.id),key=revision=>{const {id,documentId,...state}=revision;return stableJSON(state);},known=new Set(history.map(key));

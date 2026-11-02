@@ -48,7 +48,7 @@ export class PdfReader{
     this.root.removeAttribute('data-htmlmemo-anchor');this.relayout();
     const style=this.doc.createElement('style');style.id='htmlmemo-pdf-style';style.textContent=PDF_STYLE;this.doc.head.append(style);
     this.doc.body.style.width=this.width*this.scale+'px';
-    this.entries=await this.readOutline();
+    this.entries=await this.readOutline();this.applyOutlineEdits();
     const position=this.reader.metadata.view.pdfPosition,page=clamp(Number(position?.page)||1,1,this.count);
     await this.ensure(page);if(this.disposed)return;
     this.seek(page,clamp(Number(position?.y)||0,0,1),false);this.setSpeechRoot(page);
@@ -93,11 +93,22 @@ export class PdfReader{
     const visit=async(items,level)=>{for(const item of items||[]){if(entries.length>=20000||level>32)break;let dest=item.dest,page;
       try{if(typeof dest==='string')dest=await this.pdf.getDestination(dest);if(Array.isArray(dest)){page=typeof dest[0]==='number'?dest[0]+1:await this.pdf.getPageIndex(dest[0])+1;}}
       catch{/* Keep children whose own destinations remain valid. */}
-      if(page>=1&&page<=this.count){const node=this.doc.createElement('span');node.id='pdf-outline-'+order++;node.dataset.pdfPage=page;node.dataset.pdfDestination=JSON.stringify(dest||null);entries.push({node,title:String(item.title||page+'쪽').slice(0,1000),level:Math.min(6,level),page});}
+      if(page>=1&&page<=this.count){const node=this.doc.createElement('span');node.id='pdf-outline-'+order;node.dataset.pdfPage=page;node.dataset.pdfDestination=JSON.stringify(dest||null);const title=String(item.title||page+'쪽').slice(0,1000);entries.push({node,title,originalTitle:title,level:Math.min(6,level),page,index:order++});}
       await visit(item.items,level+1);
     }};await visit(outline,1);
-    if(!entries.length)for(let page=1;page<=this.count;page++){const node=this.doc.createElement('span');node.dataset.pdfPage=page;entries.push({node,title:page+'쪽',level:1,page});}
+    if(!entries.length)for(let page=1;page<=this.count;page++){const node=this.doc.createElement('span');node.id='pdf-outline-'+(page-1);node.dataset.pdfPage=page;const title=page+'쪽';entries.push({node,title,originalTitle:title,level:1,page,index:page-1});}
     return entries;
+  }
+  applyOutlineEdits(){
+    if(!Array.isArray(this.entries))return;
+    for(const entry of this.entries){entry.title=entry.originalTitle??entry.title;delete entry.editId;}
+    for(const edit of this.reader.metadata.outlineEdits||[]){
+      const match=this.entries.find((e,i)=>edit.index===i&&(!edit.originalTitle||e.originalTitle===edit.originalTitle))
+        ||this.entries.find(e=>edit.originalTitle&&e.originalTitle===edit.originalTitle&&(!edit.pdfPosition||e.page===edit.pdfPosition.page))
+        ||this.entries.find((e,i)=>edit.index===i&&(!edit.pdfPosition||e.page===edit.pdfPosition.page))
+        ||this.entries.find(e=>edit.pdfPosition&&e.page===edit.pdfPosition.page&&(edit.level==null||e.level===edit.level));
+      if(match){match.title=edit.title;match.editId=edit.id;}
+    }
   }
   async ensure(page){
     if(this.disposed||page<1||page>this.count)return null;
@@ -295,26 +306,45 @@ export class PdfReader{
     const line=index.nodes.find(item=>item.node.parentElement.getBoundingClientRect().bottom>=8)||index.nodes.at(-1),quote=index.text.slice(line.start,Math.min(index.text.length,line.start+120)),rect=line.node.parentElement.getBoundingClientRect(),pageBox=slot.node.getBoundingClientRect();
     return {pdfPosition,textAnchor:{start:line.start,end:line.start+quote.length,quote,prefix:index.text.slice(Math.max(0,line.start-40),line.start),suffix:index.text.slice(line.start+quote.length,line.start+quote.length+40)},textPoint:0,pdfQuoteOffset:pdfPosition.y-(rect.top-pageBox.top)/pageBox.height};
   }
-  async migrate({annotations=[],bookmarks=[],onProgress=()=>{}}){
-    const result={annotations:[],bookmarks:[],oldSections:new Map(),report:{same:0,changed:0,deleted:[],unplaceable:[],unchecked:[]},bookmarkReport:{same:0,changed:0,approximate:0,deleted:[],unplaceable:[],unchecked:[]}},signal=new AbortController().signal;
-    const work=[...annotations.map(item=>({item,field:'annotations',report:result.report})),...bookmarks.map(item=>({item,field:'bookmarks',report:result.bookmarkReport}))];let done=0;
+  async migrate({annotations=[],bookmarks=[],outlineEdits=[],onProgress=()=>{}}){
+    const result={annotations:[],bookmarks:[],outlineEdits:[],oldSections:new Map(),report:{same:0,changed:0,deleted:[],unplaceable:[],unchecked:[]},bookmarkReport:{same:0,changed:0,approximate:0,deleted:[],unplaceable:[],unchecked:[]},outlineReport:{same:0,changed:0,deleted:[],unplaceable:[],unchecked:[]}},signal=new AbortController().signal;
+    const work=[...annotations.map(item=>({item,field:'annotations',report:result.report})),...bookmarks.map(item=>({item,field:'bookmarks',report:result.bookmarkReport}))];let done=0,total=work.length+outlineEdits.length;
     for(const {item,field,report}of work){
       if(this.disposed)throw new DOMException('새 판 확인이 취소되었습니다.','AbortError');
       const anchor=item.textAnchor||{quote:item.anchorTarget?.quote||''},quote=anchor.quote?.trim();
-      if(!quote){report.unplaceable.push(item);onProgress(++done,work.length,'search');continue;}
+      if(!quote){report.unplaceable.push(item);onProgress(++done,total,'search');continue;}
       let progress;await this.searchEngine.run(quote,1,signal,p=>{progress=p;},{limit:2000,deferGeometry:true});
       const candidates=progress?.matches||[];let found=candidates.length===1?candidates[0]:null;
       if(!found&&candidates.length>1&&!progress?.limited){
         const suffix=(a,b)=>{let n=0;while(n<a.length&&n<b.length&&a[a.length-1-n]===b[b.length-1-n])n++;return n;},prefix=(a,b)=>{let n=0;while(n<a.length&&n<b.length&&a[n]===b[n])n++;return n;};
         const ranked=candidates.map(match=>({match,score:suffix(match.before,anchor.prefix||'')+prefix(match.after,anchor.suffix||'')})).sort((a,b)=>b.score-a.score);if(ranked[0].score>0&&ranked[0].score>ranked[1].score)found=ranked[0].match;
       }
-      if(!found){report.unplaceable.push(item);onProgress(++done,work.length,'search');continue;}
-      const [located]=await this.searchEngine.locate([found],signal),rects=located?.rects;if(!rects?.length){report.unplaceable.push(item);onProgress(++done,work.length,'search');continue;}
+      if(!found){report.unplaceable.push(item);onProgress(++done,total,'search');continue;}
+      const [located]=await this.searchEngine.locate([found],signal),rects=located?.rects;if(!rects?.length){report.unplaceable.push(item);onProgress(++done,total,'search');continue;}
       const next=structuredClone(item);delete next.section;delete next.heading;delete next.editionPosition;
       if(field==='bookmarks'){next.pdfPosition={page:found.page,y:clamp(rects[0].y+(item.pdfQuoteOffset||0),0,1)};next.top=this.tops[found.page-1]+this.size(found.page).height*next.pdfPosition.y;next.left=0;}
       else if(TEXT_TOOLS.includes(next.type)){next.pdfRects=rects.map(rect=>({...rect,page:found.page}));next.pdfPage=found.page;next.textAnchor={start:found.start,end:found.end,quote:found.text,prefix:found.before.slice(-40),suffix:found.after.slice(0,40)};}
       else{next.anchor='n'+found.page;next.pdfPage=found.page;next.anchorTarget={tag:'section',id:'pdf-page-'+found.page,rootId:'',section:'',quote:'',path:[]};if(item.textAnchor&&['note','text'].includes(item.type))next.points=[{x:rects[0].x,y:rects[0].y}];delete next.penBasis;}
-      result[field].push(next);report.same++;onProgress(++done,work.length,'search');
+      result[field].push(next);report.same++;onProgress(++done,total,'search');
+    }
+    for(const edit of outlineEdits){
+      if(this.disposed)throw new DOMException('새 판 확인이 취소되었습니다.','AbortError');
+      const entries=this.entries||[];
+      let matched=entries.find((e,i)=>edit.originalTitle&&e.originalTitle===edit.originalTitle&&edit.index===i)
+        ||entries.find(e=>edit.originalTitle&&e.originalTitle===edit.originalTitle&&(edit.level==null||e.level===edit.level))
+        ||entries.find(e=>edit.originalTitle&&e.originalTitle===edit.originalTitle),status=matched?'same':'changed';
+      if(!matched){
+        const quote=(edit.textAnchor?.quote||edit.pdfQuote||(!/^\d+쪽$/.test(edit.originalTitle||'')?edit.originalTitle:'')||'').trim();
+        if(quote){
+          let progress;await this.searchEngine.run(quote,1,signal,p=>{progress=p;},{limit:2000,deferGeometry:true});
+          const found=progress?.matches?.[0];
+          if(found)matched=entries.find(e=>e.page===found.page&&(edit.level==null||e.level===edit.level))||entries.find(e=>e.page===found.page);
+        }
+      }
+      if(!matched&&edit.index!=null&&entries[edit.index]&&/^\d+쪽$/.test(edit.originalTitle||'')){matched=entries[edit.index];status='same';}
+      if(!matched){result.outlineReport.deleted.push(edit);onProgress(++done,total,'search');continue;}
+      const next=structuredClone(edit);next.originalTitle=matched.originalTitle;next.index=entries.indexOf(matched);next.level=matched.level;next.pdfPosition={page:matched.page,y:edit.pdfPosition?.y||0};next.sourceKind='pdf';
+      result.outlineEdits.push(next);result.outlineReport[status]++;onProgress(++done,total,'search');
     }
     return result;
   }

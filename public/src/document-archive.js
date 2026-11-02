@@ -1,6 +1,6 @@
 // LibreMemo document archive v1: an ordinary ZIP, immutable source + current state.
 // Stored entries are Blobs. A gigabyte source is never made into one JS array/string.
-import {validateAnnotations,validPDFPosition,cleanSourceStorage,normalizeReadingFontFamily} from './model.js';
+import {validateAnnotations,validateOutlineEdits,validPDFPosition,cleanSourceStorage,normalizeReadingFontFamily} from './model.js';
 const encoder=new TextEncoder(),decoder=new TextDecoder('utf-8',{fatal:true});
 export const ARCHIVE_FORMAT='librememo-document';
 export const ARCHIVE_VERSION=1;
@@ -20,10 +20,10 @@ function safeName(name){
 function validPath(name){return typeof name==='string'&&name.length<1000&&!name.startsWith('/')&&!/[\\\u0000-\u001f\u007f]/.test(name)&&name.split('/').every(part=>part&&part!=='.'&&part!=='..');}
 export function archiveMetadata(value){
   if(!value||typeof value!=='object'||Array.isArray(value)||value.version!==1)throw Error('지원하지 않는 문서 상태 버전입니다.');
-  const annotations=validateAnnotations(value.annotations),bookmarks=value.bookmarks;
+  const annotations=validateAnnotations(value.annotations),bookmarks=value.bookmarks,outlineEdits=value.outlineEdits!==undefined?validateOutlineEdits(value.outlineEdits):[];
   if(!Array.isArray(bookmarks)||bookmarks.length>10000||bookmarks.some(b=>!b||typeof b.id!=='string'||!b.id||b.id.length>100||typeof b.title!=='string'||b.title.length>10000||!Number.isFinite(b.top)||!Number.isFinite(b.left)||b.pdfPosition!=null&&!validPDFPosition(b.pdfPosition)))throw Error('북마크 정보가 손상되었습니다.');
   // Preserve the existing per-document fields, never any app settings, handles or identities.
-  const result={version:1,title:String(value.title||'문서').slice(0,1000),source:'',capturedAt:Number(value.capturedAt)||Date.now(),viewport:{width:1100,height:800},annotations,bookmarks:structuredClone(bookmarks),view:{},execution:{allowScripts:value.execution?.allowScripts===true}};
+  const result={version:1,title:String(value.title||'문서').slice(0,1000),source:'',capturedAt:Number(value.capturedAt)||Date.now(),viewport:{width:1100,height:800},annotations,bookmarks:structuredClone(bookmarks),...(outlineEdits.length?{outlineEdits}:{}),view:{},execution:{allowScripts:value.execution?.allowScripts===true}};
   try{const u=new URL(value.source);if(['https:','http:'].includes(u.protocol)&&!u.username&&!u.password)result.source=u.href;}catch{/* no remote source */}
   for(const key of ['width','height'])if(Number.isFinite(value.viewport?.[key]))result.viewport[key]=Math.max(1,Math.min(100000,value.viewport[key]));
   for(const key of ['scrollTop','scrollLeft','zoom','fontScale','tocWidth'])if(Number.isFinite(value.view?.[key]))result.view[key]=Math.max(0,Math.min(1e12,value.view[key]));

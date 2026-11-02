@@ -13,7 +13,7 @@ export function preparePDF(source,{title='PDF 문서',metadata,freshAnnotations=
   const result=parseHTML(pdfShell(title),{title},{allowScripts:false});
   if(metadata)result.metadata=structuredClone(metadata);
   result.metadata.format='pdf';result.metadata.execution={allowScripts:false};
-  if(freshAnnotations){result.metadata.annotations=[];result.metadata.bookmarks=[];result.metadata.view={scrollTop:0,scrollLeft:0,autoFit:true};}
+  if(freshAnnotations){result.metadata.annotations=[];result.metadata.bookmarks=[];delete result.metadata.outlineEdits;result.metadata.view={scrollTop:0,scrollLeft:0,autoFit:true};}
   return {...result,pdfSource:source,nativeScroll:true,savedMetadata:true};
 }
 export async function verifyPDF(source){

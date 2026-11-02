@@ -222,7 +222,7 @@ export async function openEditionProbe(snapshot, {timeout = 60000} = {}) {
 }
 
 // ── The move itself. `probe` is the opened new edition: {doc, show(sectionKey)}.
-export async function migrateAnnotations({annotations = [], bookmarks = [], oldDoc = null, probe, onProgress = () => {}}) {
+export async function migrateAnnotations({annotations = [], bookmarks = [], outlineEdits = [], oldDoc = null, probe, onProgress = () => {}}) {
   const oldBook = bookManifest(oldDoc), newBook = bookManifest(probe.doc);
   const oldSections = new Map((oldBook?.volumes || []).flatMap(v => v.sections.map(s => [s.key, {...s, book: v.book}])));
   const newSections = (newBook?.volumes || []).flatMap(v => v.sections.map(s => ({...s, book: v.book})));
@@ -347,8 +347,8 @@ export async function migrateAnnotations({annotations = [], bookmarks = [], oldD
     await run(fallback,'section',true);
   }
   const emptyReport=()=>({same:0,changed:0,deleted:[],unplaceable:[],unchecked:[],failedSections:[...failedSections.values()]});
-  const report=emptyReport(),bookmarkReport={...emptyReport(),approximate:0};
-  const moved = [],movedBookmarks=[];
+  const report=emptyReport(),bookmarkReport={...emptyReport(),approximate:0},outlineReport=emptyReport();
+  const moved = [],movedBookmarks=[],movedOutlineEdits=[];
   for (const item of work) {
     const result=placed.get(item),counts=item.bookmark?bookmarkReport:report;
     if (result) { (item.bookmark?movedBookmarks:moved).push(result.annotation); counts[result.status]++; }
@@ -356,5 +356,111 @@ export async function migrateAnnotations({annotations = [], bookmarks = [], oldD
     else if (item.text || item.target || item.bookmark&&item.annotation.section) counts.deleted.push(item.annotation);
     else counts.unplaceable.push(item.annotation);
   }
-  return {annotations:moved,bookmarks:movedBookmarks,report,bookmarkReport,oldSections};
+  if (outlineEdits.length) {
+    const doc = probe.doc;
+    if (!newBook && !index) await view(null);
+    const tocRoot = doc.querySelector('#reader-nav,[data-htmlmemo-native-sidebar],[data-htmlmemo-toc-sidebar],aside,nav,[role="navigation"],.toc,#toc,.sidebar,#sidebar');
+    const tocNodes = tocRoot ? [...tocRoot.querySelectorAll('a[href],summary,button,[role="button"],[role="treeitem"],[data-section],[data-key],.toc-header,.toc-title,.toc-cat,.group-header,.section-header,li')].filter(n => !n.closest('[data-htmlmemo-ui]') && n.textContent.trim() && (n.localName !== 'li' || !n.querySelector('a,summary,button,ul,ol,details'))) : [];
+    const tocNodeTitle = node => String(node?.textContent || '').replace(/\s+/g, ' ').trim();
+    const tocNodePath = node => {
+      const path = [];
+      for (let d = node?.closest?.('details'); d && (!tocRoot || tocRoot.contains(d)); d = d.parentElement?.closest?.('details')) {
+        const s = d.querySelector(':scope > summary');
+        if (s && s !== node) path.unshift(tocNodeTitle(s));
+      }
+      const self = tocNodeTitle(node);
+      if (self) path.push(self);
+      return path;
+    };
+    const headings = (() => {
+      const slides = [...doc.querySelectorAll('article[data-office-slides] > .office-slide')];
+      if (slides.length) return slides.map((node, idx) => ({node, level: 1, originalTitle: node.getAttribute('data-slide-title') || node.querySelector('h1,h2,h3')?.textContent.trim() || `${idx + 1}쪽`, index: idx}));
+      const ebook = [...(doc.querySelector('template[data-ebook-outline]')?.content.querySelectorAll('a[href]') || [])].map(a => ({node: doc.getElementById(a.getAttribute('href').slice(1)), level: Math.max(1, Math.min(16, Number(a.dataset.level) || 1)), originalTitle: a.textContent.trim()})).filter(e => e.node && e.originalTitle).map((e, idx) => ({...e, index: idx}));
+      if (ebook.length) return ebook;
+      return [...doc.querySelectorAll('h1,h2,h3,h4,h5,h6')].filter(n => n.textContent.trim() && !n.closest('[data-htmlmemo-ui]')).map((node, idx) => ({node, level: Number(node.localName[1]), originalTitle: String(node.textContent || '').replace(/\s+/g, ' ').trim(), index: idx}));
+    })();
+    for (const edit of outlineEdits) {
+      if (newBook) {
+        let sec = edit.bookSection ? newSections.find(s => s.key === mapKey(edit.bookSection)) : null;
+        if (!sec && edit.originalTitle && edit.bookSection) sec = newSections.find(s => s.title === edit.originalTitle) || newSections.map(s => ({s, sim: similarity(s.title, edit.originalTitle)})).filter(x => x.sim >= TEXT_MATCH).sort((a, b) => b.sim - a.sim)[0]?.s;
+        if (sec) {
+          const next = structuredClone(edit);
+          const status = !edit.originalTitle || sec.title === edit.originalTitle ? 'same' : 'changed';
+          next.bookSection = sec.key; next.originalTitle = sec.title; next.href = '#' + encodeURIComponent(sec.key);
+          const matchedNode = tocNodes.find(n => (n.getAttribute('href') || '').trim() === next.href || n.dataset?.section === sec.key || n.dataset?.key === sec.key || tocNodeTitle(n) === sec.title);
+          if (matchedNode) {
+            next.index = tocNodes.indexOf(matchedNode);
+            const a = matchedNode.getAttribute('data-htmlmemo-anchor'); if (/^(body|n\d+|js\d+)$/.test(a || '')) next.anchor = a; else delete next.anchor;
+            const bp = tocNodePath(matchedNode); if (bp.length) next.bookPath = bp;
+          }
+          movedOutlineEdits.push(next); outlineReport[status]++; continue;
+        }
+        if (edit.bookPath?.length || edit.sourceKind === 'toc') {
+          const exactPath = edit.bookPath?.length ? tocNodes.find(n => JSON.stringify(tocNodePath(n)) === JSON.stringify(edit.bookPath)) : null;
+          const exactTitle = !exactPath && edit.originalTitle ? tocNodes.find(n => tocNodeTitle(n) === edit.originalTitle) : null;
+          const fuzzy = !exactPath && !exactTitle && edit.originalTitle ? tocNodes.map(n => ({n, sim: similarity(tocNodeTitle(n), edit.originalTitle)})).filter(x => x.sim >= TEXT_MATCH).sort((a, b) => b.sim - a.sim)[0]?.n : null;
+          const matchedNode = exactPath || exactTitle || fuzzy;
+          if (matchedNode) {
+            const next = structuredClone(edit), status = exactPath || exactTitle ? 'same' : 'changed';
+            next.originalTitle = tocNodeTitle(matchedNode); next.index = tocNodes.indexOf(matchedNode);
+            const a = matchedNode.getAttribute('data-htmlmemo-anchor'); if (/^(body|n\d+|js\d+)$/.test(a || '')) next.anchor = a; else delete next.anchor;
+            const bp = tocNodePath(matchedNode); if (bp.length) next.bookPath = bp;
+            movedOutlineEdits.push(next); outlineReport[status]++; continue;
+          }
+        }
+      }
+      if (edit.sourceKind === 'toc' && tocNodes.length) {
+        let matchedNode = (edit.href && tocNodes.find(n => (n.getAttribute('href') || '').trim() === edit.href && (!edit.originalTitle || tocNodeTitle(n) === edit.originalTitle)))
+          || (edit.originalTitle && tocNodes.filter(n => tocNodeTitle(n) === edit.originalTitle).sort((a, b) => Math.abs(tocNodes.indexOf(a) - (edit.index ?? 0)) - Math.abs(tocNodes.indexOf(b) - (edit.index ?? 0)))[0]), status = matchedNode ? 'same' : 'changed';
+        if (!matchedNode && edit.href) matchedNode = tocNodes.find(n => (n.getAttribute('href') || '').trim() === edit.href && (!edit.originalTitle || similarity(tocNodeTitle(n), edit.originalTitle) >= ELEMENT_MATCH));
+        if (!matchedNode && edit.originalTitle) matchedNode = tocNodes.map(n => ({n, sim: similarity(tocNodeTitle(n), edit.originalTitle)})).filter(x => x.sim >= TEXT_MATCH).sort((a, b) => b.sim - a.sim)[0]?.n;
+        if (matchedNode) {
+          const next = structuredClone(edit);
+          next.originalTitle = tocNodeTitle(matchedNode); next.index = tocNodes.indexOf(matchedNode);
+          const a = matchedNode.getAttribute('data-htmlmemo-anchor'); if (/^(body|n\d+|js\d+)$/.test(a || '')) next.anchor = a; else delete next.anchor;
+          const href = (matchedNode.getAttribute('href') || '').trim(); if (href) next.href = href;
+          const bp = tocNodePath(matchedNode); if (bp.length) next.bookPath = bp;
+          movedOutlineEdits.push(next); outlineReport[status]++; continue;
+        }
+      }
+      if (headings.length) {
+        const sameTitle = edit.originalTitle ? headings.filter(h => h.originalTitle === edit.originalTitle && (edit.level == null || h.level === edit.level)) : [];
+        const anyLevelSame = !sameTitle.length && edit.originalTitle ? headings.filter(h => h.originalTitle === edit.originalTitle) : sameTitle;
+        let matched = anyLevelSame.sort((a, b) => Math.abs(a.index - (edit.index ?? 0)) - Math.abs(b.index - (edit.index ?? 0)))[0] || null, status = matched ? 'same' : 'changed';
+        if (!matched && edit.textAnchor?.quote && index) {
+          const hit = locateQuote(index.text, edit.textAnchor, range[0], range[1]);
+          if (hit) {
+            const nodeHit = index.nodes.find(n => n.start <= hit.start && n.end > hit.start)?.node;
+            matched = headings.find(h => nodeHit && h.node.contains(nodeHit)) || headings.find(h => similarity(h.originalTitle, index.text.slice(hit.start, hit.end).trim()) >= TEXT_MATCH);
+            if (matched && hit.similarity === 1 && matched.originalTitle === edit.originalTitle) status = 'same';
+          }
+        }
+        if (!matched && edit.originalTitle) {
+          matched = headings.map(h => ({h, sim: similarity(h.originalTitle, edit.originalTitle)})).filter(x => x.sim >= TEXT_MATCH && (edit.level == null || x.h.level === edit.level)).sort((a, b) => b.sim - a.sim)[0]?.h
+            || headings.map(h => ({h, sim: similarity(h.originalTitle, edit.originalTitle)})).filter(x => x.sim >= TEXT_MATCH).sort((a, b) => b.sim - a.sim)[0]?.h;
+        }
+        if (!matched && edit.href?.startsWith('#')) {
+          const id = edit.href.slice(1);
+          matched = headings.find(h => h.node?.id === id && (!edit.originalTitle || similarity(h.originalTitle, edit.originalTitle) >= ELEMENT_MATCH));
+        }
+        if (matched) {
+          const next = structuredClone(edit);
+          next.originalTitle = matched.originalTitle; next.index = matched.index; next.level = matched.level; next.sourceKind = 'heading';
+          const a = matched.node?.getAttribute?.('data-htmlmemo-anchor'); if (/^(body|n\d+|js\d+)$/.test(a || '')) next.anchor = a; else delete next.anchor;
+          if (matched.node?.id) next.href = '#' + matched.node.id; else delete next.href;
+          if (index && matched.node) {
+            const nodes = index.nodes.filter(n => matched.node.contains(n.node));
+            if (nodes.length) {
+              const start = nodes[0].start, end = nodes.at(-1).end;
+              next.textAnchor = {start, end, quote: index.text.slice(start, end).slice(0, 200), prefix: index.text.slice(Math.max(0, start - CONTEXT), start), suffix: index.text.slice(end, end + CONTEXT)};
+            }
+          }
+          movedOutlineEdits.push(next); outlineReport[status]++; continue;
+        }
+      }
+      if (edit.originalTitle || edit.textAnchor?.quote || edit.bookSection || edit.href) outlineReport.deleted.push(edit);
+      else outlineReport.unplaceable.push(edit);
+    }
+  }
+  return {annotations:moved,bookmarks:movedBookmarks,outlineEdits:movedOutlineEdits,report,bookmarkReport,outlineReport,oldSections};
 }

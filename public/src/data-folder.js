@@ -2,7 +2,7 @@ import {publicAppURL} from './install.js';
 import { listDocuments, getDocument, listRevisions, restoreFolderDocuments, getSetting, setSetting, onStorageChange, permission, readLibrary } from './storage.js';
 import { localFileIdentity } from './local-files.js';
 import { PREFERENCES_KEY, normalizePreferences } from './preferences.js';
-import { validateAnnotations,validPDFPosition } from './model.js';
+import { validateAnnotations,validateOutlineEdits,validPDFPosition } from './model.js';
 import {LIBRARY_FOLDERS_KEY,validateFolders,mergeLibraryFolders,documentCopyName} from './library-folders.js';
 import {syncFolderTree,cleanupFolderTree} from './folder-tree.js';
 
@@ -83,6 +83,7 @@ export function validateState(value, id) {
   if(!object(record)||record.id!==id||!validId(id)||typeof record.title!=='string'||record.title.length>1000||typeof record.name!=='string'||record.name.length>1000||!Number.isFinite(record.created)||!Number.isFinite(record.modified)||!object(record.metadata)||record.metadata.version!==1||!object(record.metadata.view)||!object(record.metadata.viewport)||!Array.isArray(value.revisions))throw Error('폴더의 문서 정보가 손상되었습니다.');
   const validateMarks = metadata => {
     validateAnnotations(metadata.annotations);
+    if(metadata.outlineEdits!==undefined)validateOutlineEdits(metadata.outlineEdits);
     if(metadata.bookmarks?.some(mark=>mark.pdfPosition!=null&&!validPDFPosition(mark.pdfPosition)))throw Error('PDF 북마크 위치가 손상되었습니다.');
     if(metadata.bookmarks?.some(mark=>mark.pdfQuoteOffset!=null&&(!Number.isFinite(mark.pdfQuoteOffset)||Math.abs(mark.pdfQuoteOffset)>1)))throw Error('PDF 북마크의 본문 위치가 손상되었습니다.');
     if(metadata.view?.pdfPosition!=null&&!validPDFPosition(metadata.view.pdfPosition))throw Error('PDF 읽기 위치가 손상되었습니다.');
@@ -267,7 +268,7 @@ export class DataFolder {
         const extension=(record.name.match(/\.(html?|mhtml|mht|pdf|epub|epub3|mobi|azw|azw3|fb2|fbz|fb2\.zip|cbz|hwp|hwpx|hml|docx|odt|ott|xlsx|xlsm|xls|csv|tsv|ods|ots|pptx|odp|otp|md|markdown|txt|json)$/i)?.[1]||'html').toLowerCase();
         original=content.originalFile instanceof Blob?await storeObject(data,content.originalFile,extension):source;
       }
-      const annotationStamp=(await localFileIdentity(jsonBlob({annotations:record.metadata.annotations,bookmarks:record.metadata.bookmarks,historyVersion}))).digest;
+      const annotationStamp=(await localFileIdentity(jsonBlob({annotations:record.metadata.annotations,bookmarks:record.metadata.bookmarks,...(record.metadata.outlineEdits?.length?{outlineEdits:record.metadata.outlineEdits}:{}),historyVersion}))).digest;
       let history=old?.history;
       // Current notes change much more often than checkpoints. A version is
       // trusted only for the exact history object published by this writer.

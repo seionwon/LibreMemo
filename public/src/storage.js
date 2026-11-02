@@ -212,8 +212,8 @@ export async function writeExternalHTML(record, html, force = false) {
 }
 
 /** Only annotation content belongs in history; scrolling never creates a revision. */
-export const annotationState = metadata => ({annotations:structuredClone(metadata?.annotations || []),bookmarks:structuredClone(metadata?.bookmarks || [])});
-export const sameAnnotationState = (a,b) => JSON.stringify({annotations:a?.annotations||[],bookmarks:a?.bookmarks||[]}) === JSON.stringify({annotations:b?.annotations||[],bookmarks:b?.bookmarks||[]});
+export const annotationState = metadata => ({annotations:structuredClone(metadata?.annotations || []),bookmarks:structuredClone(metadata?.bookmarks || []),...(metadata?.outlineEdits?.length?{outlineEdits:structuredClone(metadata.outlineEdits)}:{})});
+export const sameAnnotationState = (a,b) => JSON.stringify({annotations:a?.annotations||[],bookmarks:a?.bookmarks||[],...(a?.outlineEdits?.length?{outlineEdits:a.outlineEdits}:{})}) === JSON.stringify({annotations:b?.annotations||[],bookmarks:b?.bookmarks||[],...(b?.outlineEdits?.length?{outlineEdits:b.outlineEdits}:{})});
 export const listRevisions = id => transaction('revisions','readonly',store=>store.index('documentId').getAll(id));
 
 export const getRevision = id => transaction('revisions','readonly',store=>store.get(id));
@@ -293,7 +293,7 @@ export async function adjacentRevisionDay(id, date, direction) {
 /** The current document and its annotation revision commit atomically. No source-file permission is needed. */
 export async function putDocumentRevision(record, {baseline = false, restoredFrom = null, checkpoint = true, mustExist = false} = {}) {
   const connection=await db();
-  const state={annotations:record.metadata?.annotations || [],bookmarks:record.metadata?.bookmarks || []};
+  const state={annotations:record.metadata?.annotations || [],bookmarks:record.metadata?.bookmarks || [],...(record.metadata?.outlineEdits?.length?{outlineEdits:record.metadata.outlineEdits}:{})};
   const {html,file,originalFile,...value}=record;value.diskPending=false;value.diskError=null;
   if(!value.byteSize)value.byteSize=file?.size || (typeof html==='string'?new Blob([html]).size:0);
   return new Promise((resolve,reject)=>{

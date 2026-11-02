@@ -475,7 +475,7 @@ async function openRecord(record, prepared = null, {deferReady = false, sourceId
   tabs.push(tab);activate(tab.id);
   tab.reader=new Reader(tab.host,parsed,{
     sourceKey:record.contentKey||record.sourceIdentity?.digest||record.id,
-    onChange:()=>{tab.queue.schedule();tab.checkpoints.schedule();if(activeId===tab.id){renderToolbar();if(['annotations','bookmarks'].includes(sidebarMode))renderSidebar(sidebarMode);else updateSidebarCounts($('#sidebar'),tab.reader);tab.reader?.refreshDocumentSidebar();}},
+    onChange:()=>{tab.queue.schedule();tab.checkpoints.schedule();if(activeId===tab.id){renderToolbar();if(['annotations','bookmarks','outline'].includes(sidebarMode))renderSidebar(sidebarMode);else updateSidebarCounts($('#sidebar'),tab.reader);tab.reader?.refreshDocumentSidebar();}},
     onAnnotationInput:()=>tab.checkpoints.activity(),
     onPosition:()=>{tab.queue.schedule({background:true});renderFolderState();},onSourceSettings:()=>{tab.queue.schedule({background:true});void tab.queue.flush().catch(showError);},onView:()=>{if(activeId===tab.id){updateChrome();updateToolbarState();updateOutlineLocation($('#sidebar'),tab.reader);}},
     onPreferenceChange:()=>dataFolder?.schedule({settingsOnly:true}),
@@ -555,7 +555,7 @@ async function createDocument(snapshot, handle = null, name = null, local = {}) 
   const office=!!snapshot.office;if(office){toast('문서를 읽는 중…');snapshot=await prepareOffice(snapshot,({page,pages})=>toast('DjVu를 읽는 중… '+page+' / '+pages+'쪽'));}
   if(snapshot.image){toast('이미지를 여는 중…');const {prepareImage}=await import('./image-document.js');snapshot=await prepareImage(snapshot);}
   const parsed=snapshot.pdf?preparePDF(snapshot.pdf,{title:snapshot.title,metadata:snapshot.metadata,freshAnnotations:!!local.freshAnnotations}):snapshot.file ? {...parseHTML('<html><head></head><body></body></html>',{title:snapshot.title,viewport:snapshot.viewport,warnings:snapshot.warnings,execution:{allowScripts:!!snapshot.allowScripts}}),file:snapshot.file,nativeScroll:true,freshAnnotations:!!local.freshAnnotations} : parseHTML(snapshot.html,{title:snapshot.title,source:snapshot.url,viewport:snapshot.viewport,warnings:snapshot.warnings},{includeMetadata:true,allowScripts:snapshot.allowScripts,freshAnnotations:!!local.freshAnnotations});
-  if(snapshot.archiveMetadata){parsed.metadata=structuredClone(snapshot.archiveMetadata);if(local.freshAnnotations){parsed.metadata.annotations=[];parsed.metadata.bookmarks=[];parsed.metadata.view={scrollTop:0,scrollLeft:0,autoFit:true};}parsed.savedMetadata=true;}
+  if(snapshot.archiveMetadata){parsed.metadata=structuredClone(snapshot.archiveMetadata);if(local.freshAnnotations){parsed.metadata.annotations=[];parsed.metadata.bookmarks=[];delete parsed.metadata.outlineEdits;parsed.metadata.view={scrollTop:0,scrollLeft:0,autoFit:true};}parsed.savedMetadata=true;}
   const title=parsed.metadata.title; const record={id:uid(),title,name:name||handle?.name||filename(title),source:parsed.metadata.source,created:Date.now(),modified:Date.now(),folderId:local.libraryFolderId??libraryFolderId,fileHandle:handle,originalHandle:local.originalHandle||null,metadata:parsed.metadata};
   if(snapshot.pdf)record.file=snapshot.pdf;else if(snapshot.file)record.file=snapshot.file;else record.html=parsed.html;
   if(local.originalFile)record.originalFile=local.originalFile;
@@ -1429,11 +1429,39 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
     panel.sidebarOutline=outline;panel.currentOutlineItem=null;
     content.innerHTML=embedded?'':outline.length?renderOutlineTree(outline,r):'<p class="panel-empty">이 문서에 제목 목차가 없습니다.</p>';
     $$('[data-outline-group]',panel).forEach(group=>group.ontoggle=()=>r.outlineTreeOpen.set(group.dataset.outlineGroup,!!group.open));
-    $$('[data-heading]',panel).forEach(button=>button.onclick=event=>{
-      event?.preventDefault();event?.stopPropagation();
-      const group=button.parentElement?.localName==='summary'?button.parentElement.parentElement:null;
-      if(group?.matches('details[data-outline-group]')){const open=!(group.open||group.hasAttribute('open'));group.open=open;group.toggleAttribute('open',open);r.outlineTreeOpen.set(group.dataset.outlineGroup,open);}
-      const node=outline[Number(button.dataset.heading)].node,result=r.navigateSourceTarget?r.navigateSourceTarget(node):r.jump(node);updateOutlineLocation(panel,r);return result;
+    $$('[data-heading]',panel).forEach(button=>{
+      let pressTimer=null,startX=0,startY=0;
+      const clearPress=()=>{if(pressTimer){clearTimeout(pressTimer);pressTimer=null;}};
+      button.onclick=event=>{
+        if(event?.target?.closest?.('[data-outline-edit-input]')){event.stopPropagation();return;}
+        if(button.dataset.suppressOutlineClick==='true'){delete button.dataset.suppressOutlineClick;event?.preventDefault();event?.stopPropagation();return;}
+        event?.preventDefault();event?.stopPropagation();
+        const group=button.parentElement?.localName==='summary'?button.parentElement.parentElement:null;
+        if(group?.matches('details[data-outline-group]')){const open=!(group.open||group.hasAttribute('open'));group.open=open;group.toggleAttribute('open',open);r.outlineTreeOpen.set(group.dataset.outlineGroup,open);}
+        const node=outline[Number(button.dataset.heading)].node,result=r.navigateSourceTarget?r.navigateSourceTarget(node):r.jump(node);updateOutlineLocation(panel,r);return result;
+      };
+      button.ondblclick=event=>{
+        clearPress();event?.preventDefault();event?.stopPropagation();
+        void startSidebarOutlineEdit(button,outline[Number(button.dataset.heading)],r,panel);
+      };
+      button.onpointerdown=event=>{
+        clearPress();
+        if((event.button!=null&&event.button!==0)||event.target?.closest?.('[data-outline-edit-input]'))return;
+        startX=Number(event.clientX)||0;startY=Number(event.clientY)||0;
+        pressTimer=setTimeout(()=>{
+          pressTimer=null;
+          button.dataset.suppressOutlineClick='true';
+          setTimeout(()=>{delete button.dataset.suppressOutlineClick;},1200);
+          void startSidebarOutlineEdit(button,outline[Number(button.dataset.heading)],r,panel);
+        },480);
+      };
+      button.onpointermove=event=>{
+        if(!pressTimer)return;
+        const dx=(Number(event.clientX)||0)-startX,dy=(Number(event.clientY)||0)-startY;
+        if(dx*dx+dy*dy>64)clearPress();
+      };
+      button.onpointerup=clearPress;
+      button.onpointercancel=clearPress;
     });
     updateOutlineLocation(panel,r);
   }else if(mode==='bookmarks'){
@@ -1456,6 +1484,45 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
     $$('[data-annotation-group]',panel).forEach(group=>group.ontoggle=()=>{if(group.isConnected)r.annotationTreeOpen.set(group.dataset.annotationGroup,!!(group.open||group.hasAttribute('open')));});
     $$('[data-annotation]',panel).forEach(button=>button.onclick=()=>r.jumpAnnotation(button.dataset.annotation));$$('[data-delete-annotation]',panel).forEach(button=>button.onclick=()=>r.remove(button.dataset.deleteAnnotation));
   }
+}
+async function startSidebarOutlineEdit(button,item,r,panel){
+  if(!button?.isConnected||!item||button.querySelector('[data-outline-edit-input]'))return false;
+  const currentTitle=String(item.title||'').replace(/\s+/g,' ').trim();
+  if(typeof r.callbacks?.requestOutlineTitle==='function'){
+    const next=await r.callbacks.requestOutlineTitle(item,r);
+    if(typeof next==='string'&&next.trim()){
+      r.editOutlineItem(item,next);
+      renderSidebar('outline',{panel,embedded:panel!==$('#sidebar'),documentReader:r});
+    }
+    return true;
+  }
+  const prevHTML=button.innerHTML;
+  const input=document.createElement('input');
+  input.type='text';input.className='outline-edit-input';
+  input.setAttribute('data-outline-edit-input','');
+  input.setAttribute('aria-label','목차 제목 수정');
+  input.value=currentTitle;
+  button.replaceChildren(input);
+  let done=false;
+  const finish=commit=>{
+    if(done)return;done=true;
+    const next=commit?input.value.replace(/\s+/g,' ').trim():currentTitle;
+    if(commit&&next&&next!==currentTitle){
+      r.editOutlineItem(item,next);
+      renderSidebar('outline',{panel,embedded:panel!==$('#sidebar'),documentReader:r});
+    }else if(button.isConnected){
+      button.innerHTML=prevHTML;
+    }
+  };
+  for(const type of ['click','dblclick','pointerdown','mousedown'])input.addEventListener(type,e=>e.stopPropagation());
+  input.addEventListener('keydown',e=>{
+    e.stopPropagation();
+    if(e.key==='Enter'){e.preventDefault();finish(true);}
+    else if(e.key==='Escape'){e.preventDefault();finish(false);}
+  });
+  input.addEventListener('blur',()=>finish(true),{once:true});
+  input.focus();input.select?.();
+  return true;
 }
 function renderWholeSearch(panel,r,content){
   const group=document.createElement('section');group.className='sidebar-book-search';group.setAttribute('aria-label','책 전체 검색');group.innerHTML=`<div class="search-field loaded-search-field"><input id="book-search" aria-label="책 전체 검색어" placeholder="책 전체 검색" autocomplete="off"><button id="book-search-clear" type="button" class="icon-button loaded-search-clear" aria-label="책 전체 검색어 지우기" title="검색어 지우기" hidden>${icon('close',14)}</button></div><div class="search-navigation"><span id="book-search-count" role="status" aria-live="polite">검색어를 입력하세요.</span><button id="book-search-prev" type="button" class="icon-button" aria-label="책 전체 이전 검색 결과" disabled>${icon('back')}</button><button id="book-search-next" type="button" class="icon-button" aria-label="책 전체 다음 검색 결과" disabled>${icon('forward')}</button></div><div id="book-search-results"></div>`;content.prepend(group);
@@ -1542,6 +1609,9 @@ async function annotationHistory(tab, selection = {}, valid = () => true) {
           await tab.queue.flush();
           if(!current()||!dialog.open||!dialog.contains(preview))return;
           tab.reader.metadata.bookmarks=structuredClone(version.bookmarks);
+          if(version.outlineEdits?.length)tab.reader.metadata.outlineEdits=structuredClone(version.outlineEdits);
+          else delete tab.reader.metadata.outlineEdits;
+          tab.reader.applyOutlineEdits?.();
           tab.restoredFrom=version.id;
           tab.reader.commit(structuredClone(version.annotations));
           await tab.queue.flush();await tab.checkpoints.flush();if(dialog.contains(preview))dialog.close();
@@ -1566,8 +1636,8 @@ function pickHTMLFile() {
 async function migrateEdition(tab) {
   if(!tab?.reader)return;
   await tab.reader.ready;await tab.queue.flush();
-  const annotations=structuredClone(tab.reader.metadata.annotations),bookmarks=tab.reader.bookmarksForEdition();
-  if(!annotations.length&&!bookmarks.length){toast('옮길 주석과 북마크가 없습니다.');return;}
+  const annotations=structuredClone(tab.reader.metadata.annotations),bookmarks=tab.reader.bookmarksForEdition(),outlineEdits=tab.reader.outlineEditsForEdition?.()||structuredClone(tab.reader.metadata.outlineEdits||[]);
+  if(!annotations.length&&!bookmarks.length&&!outlineEdits.length){toast('옮길 주석과 북마크가 없습니다.');return;}
   let input;
   try{input=await pickHTMLFile();}catch(error){if(error?.name==='AbortError')return;throw error;}
   if(!input)return;
@@ -1580,15 +1650,16 @@ async function migrateEdition(tab) {
     if(local.snapshot.pdf){
       const host=document.createElement('div');host.className='document-host';host.style.cssText='position:fixed;left:-10000px;top:0;width:1100px;height:800px;visibility:hidden';document.body.append(host);
       const pdfReader=new Reader(host,preparePDF(local.snapshot.pdf,{title:local.snapshot.title,metadata:local.snapshot.metadata}),{});probe={dispose:()=>pdfReader.dispose()};await pdfReader.ready;
-      result=await pdfReader.pdf.migrate({annotations,bookmarks,onProgress});
+      result=await pdfReader.pdf.migrate({annotations,bookmarks,outlineEdits,onProgress});
     }else{
       if(local.snapshot.office)local.snapshot=await prepareOffice(local.snapshot);
       probe=await openEditionProbe(local.snapshot);
-      result=await migrateAnnotations({annotations,bookmarks,oldDoc:tab.reader.doc,probe,onProgress});
+      result=await migrateAnnotations({annotations,bookmarks,outlineEdits,oldDoc:tab.reader.doc,probe,onProgress});
     }
   }catch(error){$('#dialog').close();throw error;}
   finally{probe?.dispose();}
-  const {report,bookmarkReport}=result,lost=[...report.deleted,...report.unplaceable,...report.unchecked],lostBookmarks=[...bookmarkReport.deleted,...bookmarkReport.unplaceable,...bookmarkReport.unchecked];
+  const {report,bookmarkReport,outlineReport={same:0,changed:0,deleted:[],unplaceable:[],unchecked:[]}}=result,movedOutline=result.outlineEdits||[];
+  const lost=[...report.deleted,...report.unplaceable,...report.unchecked],lostBookmarks=[...bookmarkReport.deleted,...bookmarkReport.unplaceable,...bookmarkReport.unchecked],lostOutline=[...(outlineReport.deleted||[]),...(outlineReport.unplaceable||[]),...(outlineReport.unchecked||[])];
   const where=a=>{const key=a.section||a.textAnchor?.section||a.anchorTarget?.section;return key?result.oldSections.get(key)?.title||'':'';};
   const row=a=>`<li><strong>${esc(ANNOTATION_LABELS[a.type]||'주석')}</strong> ${esc((a.text||a.textAnchor?.quote||a.anchorTarget?.quote||'').slice(0,80))}${where(a)?` <span class="migrate-where">— ${esc(where(a))}</span>`:''}</li>`;
   modal(`<form method="dialog"><div class="dialog-heading"><h2>새 판으로 주석/북마크 옮기기</h2><button type="button" class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>
@@ -1598,16 +1669,22 @@ async function migrateEdition(tab) {
     <p class="dialog-description" data-migrate-bookmarks>북마크 ${bookmarks.length}개 가운데 <strong>${result.bookmarks.length}개</strong>를 새 판으로 옮길 수 있습니다.</p>
     <ul class="migrate-summary"><li>본문 위치를 찾은 북마크: ${bookmarkReport.same+bookmarkReport.changed}개</li><li>정확한 위치 대신 해당 장 시작으로 옮기는 북마크: ${bookmarkReport.approximate}개</li><li>위치를 확인하지 못해 옮기지 않는 북마크: ${lostBookmarks.length}개</li>${bookmarkReport.unchecked.length?`<li>장을 열지 못해 확인하지 못한 북마크: ${bookmarkReport.unchecked.length}개</li>`:''}</ul>
     ${lostBookmarks.length?`<details class="migrate-lost"><summary>옮기지 않는 북마크 ${lostBookmarks.length}개 보기</summary><ul>${lostBookmarks.slice(0,200).map(mark=>`<li>${esc(mark.title)}${where(mark)?` <span class="migrate-where">— ${esc(where(mark))}</span>`:''}</li>`).join('')}</ul></details>`:''}
+    ${outlineEdits.length?`<p class="dialog-description" data-migrate-outline>수정한 목차 ${outlineEdits.length}개 가운데 <strong>${movedOutline.length}개</strong>를 새 판으로 옮길 수 있습니다.</p>`:''}
     <p class="dialog-description small">새 판은 새 문서로 열리고, 지금 문서와 그 주석·북마크는 서재에 그대로 남습니다. 새 판에 이미 들어 있는 주석·북마크도 유지합니다.</p>
-    <div class="dialog-actions"><button class="secondary-button" value="cancel">취소</button><button class="primary-button" value="confirm"${result.annotations.length||result.bookmarks.length?'':' disabled'}>새 판 열기</button></div></form>`,dialog=>{
+    <div class="dialog-actions"><button class="secondary-button" value="cancel">취소</button><button class="primary-button" value="confirm"${result.annotations.length||result.bookmarks.length||movedOutline.length?'':' disabled'}>새 판 열기</button></div></form>`,dialog=>{
     const done=safely(async()=>{dialog.removeEventListener('close',done);if(dialog.returnValue!=='confirm')return;
       const next=await createDocument(local.snapshot,local.handle,local.name,local);await next.reader.ready;
       const ids=new Set(next.reader.metadata.annotations.map(a=>a.id));
       const unique=(items,seen)=>items.map(item=>{const next=structuredClone(item);while(seen.has(next.id))next.id=uid();seen.add(next.id);return next;});
       next.reader.metadata.bookmarks.push(...unique(result.bookmarks,new Set(next.reader.metadata.bookmarks.map(mark=>mark.id))));
+      if(movedOutline.length){
+        const existingOutline=next.reader.metadata.outlineEdits||[];
+        next.reader.metadata.outlineEdits=[...existingOutline,...unique(movedOutline,new Set(existingOutline.map(e=>e.id)))];
+        next.reader.applyOutlineEdits?.();
+      }
       next.reader.commit([...next.reader.metadata.annotations,...unique(result.annotations,ids)]);
       await next.queue.flush();
-      toast(`새 판에 주석 ${result.annotations.length}개 · 북마크 ${result.bookmarks.length}개를 옮겼습니다.${lost.length||lostBookmarks.length?` 위치를 확인하지 못한 주석 ${lost.length}개 · 북마크 ${lostBookmarks.length}개는 옮기지 않았습니다.`:''}`);
+      toast(`새 판에 주석 ${result.annotations.length}개 · 북마크 ${result.bookmarks.length}개${movedOutline.length?` · 수정한 목차 ${movedOutline.length}개`:''}를 옮겼습니다.${lost.length||lostBookmarks.length||lostOutline.length?` 위치를 확인하지 못한 주석 ${lost.length}개 · 북마크 ${lostBookmarks.length}개${lostOutline.length?` · 목차 ${lostOutline.length}개`:''}는 옮기지 않았습니다.`:''}`);
     });
     dialog.addEventListener('close',done);
   });
@@ -1670,6 +1747,7 @@ function documentMenu(record) {
 function handleKey(event) {
   if(startupPending||$('#app-update-dialog').open)return;
   if(folderSetupPending)return;
+  if(event.target?.closest?.('[data-outline-edit-input]'))return;
   const isField=/^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName)||event.target?.isContentEditable;
   if(event.key==='Escape'&&reader()?.cancelAnnotationDrag?.()){event.preventDefault();return;}
   if((event.ctrlKey||event.metaKey)&&event.shiftKey&&event.key.toLowerCase()==='v'&&!isField&&!$('#dialog').open){event.preventDefault();pasteTextDialog();return;}

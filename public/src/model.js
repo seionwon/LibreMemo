@@ -165,6 +165,38 @@ export function validateAnnotations(value) {
     return structuredClone(item);
   });
 }
+export function validateOutlineEdits(value = []) {
+  if (value == null) return [];
+  if (!Array.isArray(value) || value.length > 5000) throw new Error('목차 수정 데이터 형식이 올바르지 않습니다.');
+  const ids = new Set();
+  return value.map(item => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('목차 수정 항목이 손상되었습니다.');
+    if (typeof item.id !== 'string' || !/^[\w-]{1,80}$/.test(item.id) || ids.has(item.id)) throw new Error('목차 수정 항목 ID가 올바르지 않습니다.');
+    ids.add(item.id);
+    if (typeof item.title !== 'string' || !item.title.trim() || item.title.length > 1000) throw new Error('목차 제목이 올바르지 않습니다.');
+    if (item.originalTitle != null && (typeof item.originalTitle !== 'string' || item.originalTitle.length > 1000)) throw new Error('원본 목차 제목이 올바르지 않습니다.');
+    if (item.anchor != null && (typeof item.anchor !== 'string' || !/^(body|n\d+|js\d+)$/.test(item.anchor))) throw new Error('목차 항목의 문서 위치가 손상되었습니다.');
+    if (item.href != null && (typeof item.href !== 'string' || item.href.length > 1000)) throw new Error('목차 항목의 연결 대상이 손상되었습니다.');
+    if (item.index != null && (!Number.isSafeInteger(item.index) || item.index < 0 || item.index > 100000)) throw new Error('목차 항목 순서가 올바르지 않습니다.');
+    if (item.level != null && (!Number.isSafeInteger(item.level) || item.level < 1 || item.level > 16)) throw new Error('목차 항목 단계가 올바르지 않습니다.');
+    if (item.top != null && (!Number.isFinite(item.top) || item.top < -1e8 || item.top > 1e8)) throw new Error('목차 항목 위치가 올바르지 않습니다.');
+    if (item.pdfPosition != null && !validPDFPosition(item.pdfPosition)) throw new Error('PDF 목차 위치가 손상되었습니다.');
+    if (item.pdfQuote != null && (typeof item.pdfQuote !== 'string' || item.pdfQuote.length > 2000)) throw new Error('PDF 목차 본문 문맥이 손상되었습니다.');
+    if (item.pdfQuoteOffset != null && (!Number.isFinite(item.pdfQuoteOffset) || Math.abs(item.pdfQuoteOffset) > 1)) throw new Error('PDF 목차 본문 위치가 손상되었습니다.');
+    if (item.textAnchor != null) {
+      const a = item.textAnchor;
+      if (!a || typeof a !== 'object' || typeof a.quote !== 'string' || !a.quote.length || a.quote.length > 2000 ||
+        (a.start != null && (!Number.isSafeInteger(a.start) || a.start < 0 || a.start > 1e8)) ||
+        (a.end != null && (!Number.isSafeInteger(a.end) || a.end < 0 || a.end > 1e8)) ||
+        (a.prefix != null && (typeof a.prefix !== 'string' || a.prefix.length > 200)) ||
+        (a.suffix != null && (typeof a.suffix !== 'string' || a.suffix.length > 200))) throw new Error('목차 본문 문맥이 손상되었습니다.');
+    }
+    if (item.bookSection != null && (typeof item.bookSection !== 'string' || item.bookSection.length > 1000)) throw new Error('책 목차 절 정보가 손상되었습니다.');
+    if (item.bookPath != null && (!Array.isArray(item.bookPath) || item.bookPath.length > 32 || item.bookPath.some(part => typeof part !== 'string' || part.length > 1000))) throw new Error('책 목차 경로가 손상되었습니다.');
+    if (item.sourceKind != null && !['heading', 'toc', 'pdf'].includes(item.sourceKind)) throw new Error('목차 종류가 올바르지 않습니다.');
+    return structuredClone(item);
+  });
+}
 // Only preferences written inside this document's isolated runtime are kept.
 // Pairs avoid prototype/property access and keep untrusted storage bounded.
 export function cleanSourceStorage(value) {

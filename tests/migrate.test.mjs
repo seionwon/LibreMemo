@@ -182,3 +182,44 @@ test('coordinate-only chapter bookmarks do not decompress unrelated book bodies'
   const result=await migrateAnnotations({bookmarks:[{id:'one',title:'시작',top:20,left:0,section:'v0:a'}],probe:next});
   assert.equal(result.bookmarks.length,1);assert.equal(result.bookmarkReport.approximate,1);
 });
+
+test('user-edited outline titles migrate to a new edition across both packed books and ordinary documents',async()=>{
+  const oldBook=book([{book:'guide',sections:[section(0,'a','첫 장'),section(0,'b','둘째 장'),section(0,'gone','사라질 장')]}],{
+    'v0:a':{markdown:'첫 본문',html:'<p>첫 본문</p>'},'v0:b':{markdown:'둘째 본문',html:'<p>둘째 본문</p>'},'v0:gone':{markdown:'삭제',html:'<p>삭제</p>'}});
+  const nextBook=book([{book:'intro',sections:[section(0,'intro','머리말')]},{book:'guide',sections:[section(1,'a','첫 장'),section(1,'b','둘째 장 (개정판)')]}],{
+    'v0:intro':{markdown:'머리말',html:'<p>머리말</p>'},'v1:a':{markdown:'첫 본문',html:'<p>첫 본문</p>'},'v1:b':{markdown:'둘째 본문',html:'<p>둘째 본문</p>'}});
+  const bookEdits=[
+    {id:'oe-1',title:'내가 바꾼 첫 장',originalTitle:'첫 장',sourceKind:'toc',bookSection:'v0:a',href:'#v0%3Aa'},
+    {id:'oe-2',title:'내가 바꾼 둘째 장',originalTitle:'둘째 장',sourceKind:'toc',bookSection:'v0:b',href:'#v0%3Ab'},
+    {id:'oe-gone',title:'지워진 장 제목',originalTitle:'사라질 장',sourceKind:'toc',bookSection:'v0:gone',href:'#v0%3Agone'},
+  ];
+  const bookMoved=await migrateAnnotations({outlineEdits:bookEdits,oldDoc:oldBook.doc,probe:nextBook});
+  assert.equal(bookMoved.outlineEdits.length,2);
+  assert.equal(bookMoved.outlineEdits[0].bookSection,'v1:a');
+  assert.equal(bookMoved.outlineEdits[0].title,'내가 바꾼 첫 장');
+  assert.equal(bookMoved.outlineEdits[1].bookSection,'v1:b');
+  assert.equal(bookMoved.outlineEdits[1].originalTitle,'둘째 장 (개정판)');
+  assert.equal(bookMoved.outlineEdits[1].title,'내가 바꾼 둘째 장');
+  assert.equal(bookMoved.outlineReport.same,1);
+  assert.equal(bookMoved.outlineReport.changed,1);
+  assert.deepEqual(bookMoved.outlineReport.deleted.map(e=>e.id),['oe-gone']);
+
+  // Ordinary HTML document where a new chapter is inserted before existing headings and one heading is slightly reworded.
+  const oldPage=documentFor('<html><body><h1 data-htmlmemo-anchor="n1">1. 설치 안내</h1><p>설치 방법</p><h2 data-htmlmemo-anchor="n2">1.1 필수 환경 설정</h2><p>환경 설정</p></body></html>');
+  const nextPage=documentFor('<html><body><h1 data-htmlmemo-anchor="n1">0. 들어가며</h1><p>새 머리말</p><h1 data-htmlmemo-anchor="n3">1. 설치 안내</h1><p>설치 방법</p><h2 data-htmlmemo-anchor="n5">1.1 필수 개발 환경 설정</h2><p>환경 설정</p></body></html>');
+  const pageEdits=[
+    {id:'h-1',title:'1. 빠른 설치 가이드',originalTitle:'1. 설치 안내',sourceKind:'heading',index:0,level:1,anchor:'n1'},
+    {id:'h-2',title:'1.1 내 컴퓨터 환경 맞추기',originalTitle:'1.1 필수 환경 설정',sourceKind:'heading',index:1,level:2,anchor:'n2'},
+  ];
+  const pageMoved=await migrateAnnotations({outlineEdits:pageEdits,oldDoc:oldPage,probe:{doc:nextPage,show:async()=>{}}});
+  assert.equal(pageMoved.outlineEdits.length,2);
+  assert.equal(pageMoved.outlineEdits[0].index,1);
+  assert.equal(pageMoved.outlineEdits[0].anchor,'n3');
+  assert.equal(pageMoved.outlineEdits[0].title,'1. 빠른 설치 가이드');
+  assert.equal(pageMoved.outlineEdits[1].index,2);
+  assert.equal(pageMoved.outlineEdits[1].anchor,'n5');
+  assert.equal(pageMoved.outlineEdits[1].originalTitle,'1.1 필수 개발 환경 설정');
+  assert.equal(pageMoved.outlineEdits[1].title,'1.1 내 컴퓨터 환경 맞추기');
+  assert.equal(pageMoved.outlineReport.same,1);
+  assert.equal(pageMoved.outlineReport.changed,1);
+});

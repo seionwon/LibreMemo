@@ -744,3 +744,106 @@ test('sidebar distinguishes slide numbers and part/chapter/section prefixes whil
   assert.equal(plainBtn.querySelector('.outline-prefix'),null);
   assert.equal(plainBtn.textContent,'부록 및 참고문헌');
 });
+
+test('sidebar outline items can be edited via double-click or long-press and persist in metadata without modifying source DOM',async()=>{
+  installDOM();const a=sidebar();
+  const raw='<html><head></head><body><h1 id="c1" data-htmlmemo-anchor="n1">제1장 서론</h1><p data-htmlmemo-anchor="n2">서론 본문 문장입니다.</p><h2 id="c2" data-htmlmemo-anchor="n3">1.1 배경</h2><p data-htmlmemo-anchor="n4">배경 본문 문장입니다.</p></body></html>';
+  const parsed=parseHTML(raw),doc=documentFor(parsed.html);
+  Object.setPrototypeOf(a.r,Reader.prototype);
+  delete a.r.outline;
+  a.r.readingHeadingState=undefined;
+  a.r.doc=doc;a.r.metadata=parsed.metadata;
+  a.r.callbacks={onChange(){a.calls.saved++;}};
+  a.open('outline');
+  const panel=a.doc.querySelector('#sidebar');
+  const firstBtn=panel.querySelector('[data-heading="0"]');
+  assert.equal(firstBtn.textContent,'제1장 서론');
+
+  // Double-click opens inline input; Escape cancels without saving.
+  firstBtn.ondblclick({preventDefault(){},stopPropagation(){}});
+  let input=firstBtn.querySelector('[data-outline-edit-input]');
+  assert.ok(input);
+  assert.equal(input.value,'제1장 서론');
+  input.value='취소할 제목';
+  const escEvent=a.doc.createEvent('Event');escEvent.initEvent('keydown',true,true);escEvent.key='Escape';
+  input.dispatchEvent(escEvent);
+  assert.equal(a.r.metadata.outlineEdits,undefined);
+  assert.equal(firstBtn.textContent,'제1장 서론');
+
+  // Double-click and Enter commits the edited outline title.
+  firstBtn.ondblclick({preventDefault(){},stopPropagation(){}});
+  input=firstBtn.querySelector('[data-outline-edit-input]');
+  input.value='제1장 내가 고친 서론';
+  const enterEvent=a.doc.createEvent('Event');enterEvent.initEvent('keydown',true,true);enterEvent.key='Enter';
+  input.dispatchEvent(enterEvent);
+  assert.equal(a.r.metadata.outlineEdits?.length,1);
+  assert.equal(a.r.metadata.outlineEdits[0].title,'제1장 내가 고친 서론');
+  assert.equal(a.r.metadata.outlineEdits[0].originalTitle,'제1장 서론');
+  assert.equal(a.r.outline()[0].title,'제1장 내가 고친 서론');
+  assert.equal(doc.getElementById('c1').textContent,'제1장 서론','source DOM heading remains untouched');
+  assert.equal(panel.querySelector('[data-heading="0"]').textContent,'제1장 내가 고친 서론');
+
+  // Long-press on second heading opens inline input and suppresses the release click.
+  const secondBtn=panel.querySelector('[data-heading="1"]');
+  secondBtn.onpointerdown({button:0,clientX:20,clientY:20});
+  a.flush();
+  const secondInput=secondBtn.querySelector('[data-outline-edit-input]');
+  assert.ok(secondInput,'long-press opens inline editor');
+  const navBefore=a.calls.headings.length;
+  secondBtn.onclick({target:secondBtn,preventDefault(){},stopPropagation(){}});
+  assert.equal(a.calls.headings.length,navBefore,'release click after long-press does not navigate');
+  secondInput.value='1.1 새로 붙인 배경 제목';
+  const enterEvent2=a.doc.createEvent('Event');enterEvent2.initEvent('keydown',true,true);enterEvent2.key='Enter';
+  secondInput.dispatchEvent(enterEvent2);
+  assert.equal(a.r.metadata.outlineEdits?.length,2);
+  assert.equal(a.r.outline()[1].title,'1.1 새로 붙인 배경 제목');
+
+  // Exporting and re-parsing preserves outlineEdits while freshAnnotations clears them.
+  const exported=serializeHTML(doc,a.r.metadata);
+  const reopened=parseHTML(exported);
+  assert.equal(reopened.metadata.outlineEdits?.length,2);
+  assert.equal(reopened.metadata.outlineEdits[0].title,'제1장 내가 고친 서론');
+  const fresh=parseHTML(exported,{},{freshAnnotations:true});
+  assert.equal(fresh.metadata.outlineEdits,undefined);
+
+  // Restoring original title removes the edit entry.
+  a.r.editOutlineItem(0,'제1장 서론');
+  a.r.editOutlineItem(1,'1.1 배경');
+  assert.equal(a.r.metadata.outlineEdits,undefined);
+});
+
+test('embedded native TOC items can be edited without shifting textIndex offsets or altering exported source TOC',async()=>{
+  installDOM();const a=sidebar();
+  const manifest={format:'book-html-v1',volumes:[{book:'v1',label:'1권 입문',sections:[{key:'v0:s1',id:'s1',title:'첫 장',category:'제1부'}]}]};
+  const html=`<html><head></head><body><nav id="reader-nav"><div id="reader-tree"><details open><summary data-htmlmemo-anchor="n1">1권 입문</summary><details open><summary data-htmlmemo-anchor="n2">제1부</summary><a href="#v0%3As1" data-section="v0:s1" data-htmlmemo-anchor="n3">첫 장</a></details></details></div></nav><article id="reader-content" data-section="v0:s1"><h1 data-htmlmemo-anchor="n4">첫 장</h1><p data-htmlmemo-anchor="n5">본문 내용입니다.</p></article><script id="book-manifest" type="application/json">${JSON.stringify(manifest)}</script><script id="book-volume-0" type="application/octet-stream">data</script><script>window.inflateBook=true;</script></body></html>`;
+  const doc=documentFor(html),beforeIndex=textIndex(doc);
+  Object.setPrototypeOf(a.r,Reader.prototype);
+  a.r.doc=doc;a.r.tocResize={sidebar:doc.getElementById('reader-nav')};
+  a.r.metadata={annotations:[{id:'a1',type:'highlight',color:'#edcf67',width:3,opacity:.35,textAnchor:{start:0,end:2,quote:'본문',section:'v0:s1'}}],bookmarks:[{id:'b1',title:'북마크',top:0,left:0,section:'v0:s1'}],view:{}};
+  a.r.callbacks={onChange(){a.calls.saved++;},onSidebarView:(mode,panel,documentReader)=>a.context.renderSidebar(mode,{panel,embedded:true,documentReader})};
+  a.r.setupDocumentSidebar();
+
+  const summary=doc.querySelector('#reader-tree summary');
+  const link=doc.querySelector('#reader-tree a');
+  await a.r.startTocNodeEdit(link);
+  const input=link.querySelector('[data-outline-edit-input]');
+  assert.ok(input);
+  assert.equal(textIndex(doc).text,beforeIndex.text,'textIndex is unchanged while editing');
+  input.value='1장 사용자 수정 제목';
+  const enter=doc.createEvent('Event');enter.initEvent('keydown',true,true);enter.key='Enter';
+  input.dispatchEvent(enter);
+
+  assert.equal(link.textContent,'1장 사용자 수정 제목');
+  assert.equal(textIndex(doc).text,beforeIndex.text,'textIndex remains identical after editing embedded TOC');
+  assert.deepEqual(textIndex(doc).nodes.map(n=>[n.start,n.end]),beforeIndex.nodes.map(n=>[n.start,n.end]));
+
+  a.r.editTocSidebarNode(summary,'제1권 새 이름');
+  assert.equal(summary.textContent,'제1권 새 이름');
+  const paths=a.r.annotationBookPaths();
+  assert.deepEqual(paths.get('v0:s1').map(p=>p.title),['제1권 새 이름','제1부','1장 사용자 수정 제목']);
+
+  const exported=documentFor(serializeHTML(doc,a.r.metadata));
+  assert.equal(exported.querySelector('#reader-tree summary').textContent,'1권 입문','exported source DOM keeps original TOC text');
+  assert.equal(exported.querySelector('#reader-tree a').textContent,'첫 장','exported source DOM keeps original chapter link text');
+  assert.equal(exported.querySelector('[data-htmlmemo-toc-original],[data-htmlmemo-toc-edit],[data-htmlmemo-toc-edited]'),null);
+});

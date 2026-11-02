@@ -1,4 +1,4 @@
-import { FORMAT_VERSION, validateAnnotations, cleanSourceStorage,validPDFPosition, normalizeReadingFontFamily } from './model.js';
+import { FORMAT_VERSION, validateAnnotations, validateOutlineEdits, cleanSourceStorage,validPDFPosition, normalizeReadingFontFamily } from './model.js';
 
 export const LAYER_ID = 'htmlmemo-annotation-layer';
 export const DATA_ID = 'htmlmemo-data';
@@ -96,7 +96,13 @@ function clearReaderSidebarArtifacts(root) {
     if(slot)slot.replaceWith(part);else part.closest('[data-htmlmemo-native-sidebar]')?.append(part);
     part.removeAttribute('data-htmlmemo-book-search-part');
   }
-  for(const node of root.querySelectorAll?.('[data-htmlmemo-book-search-slot],[data-htmlmemo-doc-sidebar-ui],[data-htmlmemo-toc-toggle],[data-htmlmemo-toc-resizer]')||[])node.remove();
+  for(const node of root.querySelectorAll?.('[data-htmlmemo-book-search-slot],[data-htmlmemo-doc-sidebar-ui],[data-htmlmemo-toc-toggle],[data-htmlmemo-toc-resizer],[data-htmlmemo-toc-edit],[data-outline-edit-input]')||[])node.remove();
+  for(const orig of root.querySelectorAll?.('[data-htmlmemo-toc-original]')||[]){
+    const target=orig.previousElementSibling;
+    if(target?.hasAttribute?.('data-htmlmemo-toc-edited'))target.replaceChildren(...orig.childNodes);
+    orig.remove();
+  }
+  for(const edited of root.querySelectorAll?.('[data-htmlmemo-toc-edited]')||[])edited.removeAttribute('data-htmlmemo-toc-edited');
   for(const group of root.querySelectorAll?.('[data-htmlmemo-book-search-open]')||[]){group.toggleAttribute('open',group.getAttribute('data-htmlmemo-book-search-open')==='true');group.removeAttribute('data-htmlmemo-book-search-open');}
   for(const title of root.querySelectorAll?.('[data-htmlmemo-redundant-toc-title]')||[])title.removeAttribute('data-htmlmemo-redundant-toc-title');
   for(const warning of root.querySelectorAll?.('[data-htmlmemo-security-warning]')||[])warning.removeAttribute('data-htmlmemo-security-warning');
@@ -208,6 +214,7 @@ function* prepareHTML(html, defaults, {includeMetadata = false, document: loaded
     try { embedded = JSON.parse(data.textContent); } catch { throw new Error('LibreMemo 주석 데이터가 손상되었습니다. 원본 파일을 확인해주세요.'); }
     if (embedded.version !== FORMAT_VERSION) throw new Error('이 파일의 LibreMemo 버전을 지원하지 않습니다.');
     embedded.annotations = validateAnnotations(embedded.annotations);
+    if (embedded.outlineEdits !== undefined) embedded.outlineEdits = validateOutlineEdits(embedded.outlineEdits);
   }
   let source = embedded.source || defaults.source || '';
   try { const url=new URL(source); source=['http:','https:'].includes(url.protocol)&&!url.username&&!url.password?url.href:''; } catch { source=''; }
@@ -260,10 +267,12 @@ function* prepareHTML(html, defaults, {includeMetadata = false, document: loaded
   const viewport = embedded.viewport || defaults.viewport || {width: 1100, height: 800};
   const view=embedded.view||{};
   const bookmarks=Array.isArray(embedded.bookmarks)?embedded.bookmarks.filter(b=>b&&typeof b.id==='string'&&typeof b.title==='string'&&Number.isFinite(b.top)&&Number.isFinite(b.left)).slice(0,10000):[];
+  const outlineEdits=freshAnnotations?[]:embedded.outlineEdits||[];
   const metadata = {
     version: FORMAT_VERSION, title: String(embedded.title || doc.title || defaults.title || 'HTML 문서').slice(0,1000),
     source, capturedAt: embedded.capturedAt || Date.now(), viewport: {width: Math.min(4096, Math.max(320, Number(viewport.width) || 1100)), height: Number(viewport.height) || 800},
     execution:{allowScripts:!!allowScripts}, annotations: freshAnnotations?[]:embedded.annotations || [], view: {scrollTop:Math.max(0,Number(view.scrollTop)||0),scrollLeft:Math.max(0,Number(view.scrollLeft)||0),zoom:Number.isFinite(view.zoom)?Math.min(8,Math.max(.2,view.zoom)):null,autoFit:view.autoFit==null?!Number.isFinite(view.zoom):view.autoFit!==false,...(Number.isFinite(view.tocWidth)?{tocWidth:Math.min(640,Math.max(8,Math.round(Number(view.tocWidth))))}:{})}, bookmarks:freshAnnotations?[]:bookmarks,
+    ...(outlineEdits.length?{outlineEdits}:{}),
     warnings: [...new Set([...(Array.isArray(embedded.warnings) ? embedded.warnings : defaults.warnings || []), ...(book && !book.complete ? [BOOK_DATA_MISSING] : [])])].filter(w=>typeof w==='string').slice(0,5000),
   };
   if(view.sourceStorage)metadata.view.sourceStorage=cleanSourceStorage(view.sourceStorage);
