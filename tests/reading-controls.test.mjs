@@ -343,3 +343,46 @@ test('font family selector changes font family when possible, disables for fixed
   doc.body.innerHTML='<article data-office-pages data-djvu><section class="office-page"><div data-djvu-page></div><div class="office-plain">텍스트</div></section></article>';
   r.updateReadingControls();assert.equal(r.supportsReadingFontFamily(),true);assert.equal(r.fontControl.disabled,false);
 });
+test('system reading theme resolves dark or light from prefers-color-scheme in both plain and source topbar documents',()=>{
+  const listeners=[];
+  const media={matches:true,addEventListener:(type,fn)=>{if(type==='change')listeners.push(fn);}};
+  const plain=fixture();
+  Object.defineProperty(plain.outer,'defaultView',{value:{matchMedia:()=>media},configurable:true});
+  plain.r.setupReadingControls();
+  assert.equal(plain.r.readingTheme(),'system');
+  assert.equal(plain.r.resolvedReadingTheme(),'dark');
+  assert.equal(plain.r.readingControls.dataset.theme,'dark');
+  assert.match(plain.doc.querySelector('#htmlmemo-reading-theme-style').textContent,/--htmlmemo-reader-paper:#14161b/);
+  media.matches=false;for(const fn of listeners)fn();
+  assert.equal(plain.r.resolvedReadingTheme(),'light');
+  assert.equal(plain.r.readingControls.dataset.theme,'light');
+  assert.match(plain.doc.querySelector('#htmlmemo-reading-theme-style').textContent,/--htmlmemo-reader-paper:#fff/);
+
+  const topListeners=[];
+  const topMedia={matches:true,addEventListener:(type,fn)=>{if(type==='change')topListeners.push(fn);}};
+  const top=fixture('<header class="reader-head"><button id="reader-smaller">A−</button><button id="reader-larger">A+</button><select id="reader-theme"><option value="system">시스템</option><option value="light">밝게</option><option value="dark">어둡게</option></select></header>');
+  Object.defineProperty(top.outer,'defaultView',{value:{matchMedia:()=>topMedia},configurable:true});
+  top.doc.documentElement.setAttribute('data-theme','system');
+  top.r.setupReadingControls();
+  const select=top.doc.getElementById('reader-theme'),bar=top.doc.querySelector('header.reader-head');
+  assert.equal(top.doc.documentElement.getAttribute('data-htmlmemo-theme'),'dark');
+  assert.equal(bar.getAttribute('data-htmlmemo-theme'),'dark');
+  assert.equal(select.title,'화면 모드: 시스템');
+  const setSelectValue=(node,val)=>{
+    for(const option of node.querySelectorAll('option'))if(option.value!==val&&option.selected)option.selected=false;
+    for(const option of node.querySelectorAll('option'))if(option.value===val)option.selected=true;
+  };
+  setSelectValue(select,'light');select.dispatchEvent(new (top.doc.defaultView?.Event||Event)('change',{bubbles:true}));
+  assert.equal(top.doc.documentElement.getAttribute('data-htmlmemo-theme'),'light');
+  assert.equal(bar.getAttribute('data-htmlmemo-theme'),'light');
+  assert.equal(select.title,'화면 모드: 밝게');
+  setSelectValue(select,'system');select.dispatchEvent(new (top.doc.defaultView?.Event||Event)('change',{bubbles:true}));
+  assert.equal(top.doc.documentElement.getAttribute('data-htmlmemo-theme'),'dark');
+  assert.equal(bar.getAttribute('data-htmlmemo-theme'),'dark');
+  assert.equal(select.title,'화면 모드: 시스템');
+  topMedia.matches=false;for(const fn of topListeners)fn();
+  assert.equal(top.doc.documentElement.getAttribute('data-htmlmemo-theme'),'light');
+  assert.equal(bar.getAttribute('data-htmlmemo-theme'),'light');
+  const saved=serializeHTML(top.doc,top.r.metadata);
+  assert.doesNotMatch(saved,/data-htmlmemo-theme/);
+});

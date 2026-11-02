@@ -953,9 +953,11 @@ export class Reader {
       const before=smaller||[...target.children].find(node=>!node.hasAttribute('data-htmlmemo-reading-controls')&&!node.hasAttribute('data-htmlmemo-reading-font'))||this.fontControl||this.readingControls;
       if(this.speechControls.parentElement!==parent||this.speechControls.nextSibling!==before)parent.insertBefore(this.speechControls,before);
       this.setupSourceFontControls(topbar);
+      this.setupSourceThemeControls(topbar);
       this.applySourceReadingFont();
     }else{
       this.doc?.getElementById?.('htmlmemo-source-font-style')?.remove();
+      this.doc?.documentElement?.removeAttribute?.('data-htmlmemo-theme');
       this.applyReadingFont();
       this.applyReadingTheme();
       if(this.readingControls.parentElement!==this.host)this.host.prepend(this.readingControls);
@@ -971,7 +973,7 @@ export class Reader {
   readingControlsStyle() {
     const sunIcon="url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231f2328' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41'/%3E%3C/svg%3E\")";
     const moonIcon="url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e8eaf0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z'/%3E%3C/svg%3E\")";
-    return `[data-htmlmemo-doc-topbar]{--reader-theme-icon:${sunIcon}}:root[data-theme=dark] [data-htmlmemo-doc-topbar],[data-htmlmemo-doc-topbar][data-theme=dark]{--reader-theme-icon:${moonIcon}}[data-htmlmemo-reading-controls-group]{translate:var(--htmlmemo-controls-shift,0px) 0px!important}[data-htmlmemo-reading-controls]{display:inline-flex!important;align-items:center!important;gap:3px!important;flex:0 0 auto!important;vertical-align:middle!important;margin-inline-start:4px!important}[data-htmlmemo-reading-controls] button{box-sizing:border-box!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;font:500 12px/18px system-ui!important;letter-spacing:0!important;white-space:nowrap!important;width:auto!important;min-width:40px!important;height:20px!important;padding:0 5px!important;border:1px solid currentColor!important;border-radius:4px!important;background:transparent!important;color:inherit!important;cursor:pointer!important}[data-htmlmemo-reading-controls] [data-action=speak]{width:24px!important;min-width:24px!important;padding:0!important}[data-htmlmemo-reading-controls] svg{display:block!important;width:14px!important;height:14px!important;pointer-events:none!important}[data-htmlmemo-reading-controls] button:hover{background:#80808020!important}[data-htmlmemo-reading-controls] button:focus-visible{outline:2px solid currentColor!important;outline-offset:1px!important}[data-htmlmemo-reading-controls] [hidden]{display:none!important}[data-htmlmemo-reading-font]{box-sizing:border-box;flex:0 0 auto;display:block;margin:0;min-width:0;width:auto;max-width:96px;height:20px;min-height:20px;max-height:20px;padding:0;border:1px solid var(--line,var(--reader-line,#e5e7eb));border-radius:4px;background:var(--paper,var(--reader-paper,#fff));color:inherit;white-space:nowrap;font:400 12px/18px 'Apple SD Gothic Neo',-apple-system,BlinkMacSystemFont,'Noto Sans KR','Malgun Gothic',sans-serif;letter-spacing:normal;box-shadow:none;appearance:auto;background-image:none;cursor:default}[data-htmlmemo-reading-font]:disabled{opacity:.4;cursor:default;color:inherit;background:var(--paper,var(--reader-paper,#fff));border-color:var(--line,var(--reader-line,#e5e7eb))}[data-htmlmemo-doc-topbar] #reader-smaller,[data-htmlmemo-doc-topbar] [data-htmlmemo-font-smaller]{position:relative;padding-left:5px!important;padding-right:5px!important;border-radius:4px 0 0 4px!important}[data-htmlmemo-doc-topbar] button[data-htmlmemo-font-reset],[data-htmlmemo-font-reset]{position:relative;box-sizing:border-box;flex:0 0 auto;margin:0;margin-inline-start:-5.8px!important;min-width:0;width:auto;padding:0 5px!important;border:1px solid var(--line,var(--reader-line,#e5e7eb));border-radius:0!important;background:var(--paper,var(--reader-paper,#fff));color:inherit;white-space:nowrap;font:400 12px/18px 'Apple SD Gothic Neo',-apple-system,BlinkMacSystemFont,'Noto Sans KR','Malgun Gothic',sans-serif;letter-spacing:normal;box-shadow:none;cursor:pointer}[data-htmlmemo-doc-topbar] button[data-htmlmemo-font-reset]:disabled,[data-htmlmemo-font-reset]:disabled{opacity:.4;cursor:default}[data-htmlmemo-doc-topbar] #reader-larger,[data-htmlmemo-doc-topbar] [data-htmlmemo-font-larger]{position:relative;margin-inline-start:-5.8px!important;padding-left:5px!important;padding-right:5px!important;border-radius:0 4px 4px 0!important}[data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar] [data-htmlmemo-font-reset],[data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar] #reader-larger,[data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar] [data-htmlmemo-font-larger]{margin-inline-start:-4.2px!important}[data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar] #reader-smaller,[data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar] [data-htmlmemo-font-smaller],[data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar] [data-htmlmemo-font-reset],[data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar] #reader-larger,[data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar] [data-htmlmemo-font-larger]{padding-left:5px!important;padding-right:5px!important}[data-htmlmemo-doc-topbar] select#reader-theme,[data-htmlmemo-doc-topbar] select[data-reading-theme]{appearance:none!important;width:24px!important;min-width:24px!important;max-width:24px!important;height:20px!important;min-height:20px!important;max-height:20px!important;padding:0!important;border:1px solid var(--line,var(--reader-line,#e5e7eb))!important;border-radius:4px!important;background-color:var(--paper,var(--reader-paper,#fff))!important;background-image:var(--reader-theme-icon)!important;background-repeat:no-repeat!important;background-position:center!important;background-size:14px 14px!important;color:transparent!important;font-size:0px!important;line-height:18px!important;cursor:pointer!important}[data-htmlmemo-doc-topbar] select#reader-theme option,[data-htmlmemo-doc-topbar] select[data-reading-theme] option{font-size:12px;color:var(--ink,var(--reader-ink,#1f2328));background-color:var(--paper,var(--reader-paper,#fff))}`;
+    return `[data-htmlmemo-doc-topbar]{--reader-theme-icon:${sunIcon}}@media(prefers-color-scheme:dark){:root:not([data-theme=light]):not([data-htmlmemo-theme=light]) [data-htmlmemo-doc-topbar]:not([data-theme=light]):not([data-htmlmemo-theme=light]){--reader-theme-icon:${moonIcon}}}:root[data-theme=dark]:not([data-htmlmemo-theme=light]) [data-htmlmemo-doc-topbar]:not([data-htmlmemo-theme=light]),:root[data-htmlmemo-theme=dark] [data-htmlmemo-doc-topbar],[data-htmlmemo-doc-topbar][data-theme=dark]:not([data-htmlmemo-theme=light]),[data-htmlmemo-doc-topbar][data-htmlmemo-theme=dark]{--reader-theme-icon:${moonIcon}}:root[data-htmlmemo-theme=dark]:root,[data-htmlmemo-doc-topbar][data-htmlmemo-theme=dark]{color-scheme:dark;--paper:#14161b;--panel:#1b1e25;--ink:#e8eaf0;--muted:#a5adbc;--line:#383e4a}:root[data-htmlmemo-theme=light]:root,[data-htmlmemo-doc-topbar][data-htmlmemo-theme=light]{color-scheme:light;--paper:#fff;--panel:#f6f8fa;--ink:#1f2328;--muted:#57606a;--line:#e5e7eb}[data-htmlmemo-reading-controls-group]{translate:var(--htmlmemo-controls-shift,0px) 0px!important}[data-htmlmemo-reading-controls]{display:inline-flex!important;align-items:center!important;gap:3px!important;flex:0 0 auto!important;vertical-align:middle!important;margin-inline-start:4px!important}[data-htmlmemo-reading-controls] button{box-sizing:border-box!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;font:500 12px/18px system-ui!important;letter-spacing:0!important;white-space:nowrap!important;width:auto!important;min-width:40px!important;height:20px!important;padding:0 5px!important;border:1px solid currentColor!important;border-radius:4px!important;background:transparent!important;color:inherit!important;cursor:pointer!important}[data-htmlmemo-reading-controls] [data-action=speak]{width:24px!important;min-width:24px!important;padding:0!important}[data-htmlmemo-reading-controls] svg{display:block!important;width:14px!important;height:14px!important;pointer-events:none!important}[data-htmlmemo-reading-controls] button:hover{background:#80808020!important}[data-htmlmemo-reading-controls] button:focus-visible{outline:2px solid currentColor!important;outline-offset:1px!important}[data-htmlmemo-reading-controls] [hidden]{display:none!important}[data-htmlmemo-reading-font]{box-sizing:border-box;flex:0 0 auto;display:block;margin:0;min-width:0;width:auto;max-width:96px;height:20px;min-height:20px;max-height:20px;padding:0;border:1px solid var(--line,var(--reader-line,#e5e7eb));border-radius:4px;background:var(--paper,var(--reader-paper,#fff));color:inherit;white-space:nowrap;font:400 12px/18px 'Apple SD Gothic Neo',-apple-system,BlinkMacSystemFont,'Noto Sans KR','Malgun Gothic',sans-serif;letter-spacing:normal;box-shadow:none;appearance:auto;background-image:none;cursor:default}[data-htmlmemo-reading-font]:disabled{opacity:.4;cursor:default;color:inherit;background:var(--paper,var(--reader-paper,#fff));border-color:var(--line,var(--reader-line,#e5e7eb))}[data-htmlmemo-doc-topbar] #reader-smaller,[data-htmlmemo-doc-topbar] [data-htmlmemo-font-smaller]{position:relative;padding-left:5px!important;padding-right:5px!important;border-radius:4px 0 0 4px!important}[data-htmlmemo-doc-topbar] button[data-htmlmemo-font-reset],[data-htmlmemo-font-reset]{position:relative;box-sizing:border-box;flex:0 0 auto;margin:0;margin-inline-start:-5.8px!important;min-width:0;width:auto;padding:0 5px!important;border:1px solid var(--line,var(--reader-line,#e5e7eb));border-radius:0!important;background:var(--paper,var(--reader-paper,#fff));color:inherit;white-space:nowrap;font:400 12px/18px 'Apple SD Gothic Neo',-apple-system,BlinkMacSystemFont,'Noto Sans KR','Malgun Gothic',sans-serif;letter-spacing:normal;box-shadow:none;cursor:pointer}[data-htmlmemo-doc-topbar] button[data-htmlmemo-font-reset]:disabled,[data-htmlmemo-font-reset]:disabled{opacity:.4;cursor:default}[data-htmlmemo-doc-topbar] #reader-larger,[data-htmlmemo-doc-topbar] [data-htmlmemo-font-larger]{position:relative;margin-inline-start:-5.8px!important;padding-left:5px!important;padding-right:5px!important;border-radius:0 4px 4px 0!important}[data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar] [data-htmlmemo-font-reset],[data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar] #reader-larger,[data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar] [data-htmlmemo-font-larger]{margin-inline-start:-4.2px!important}[data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar] #reader-smaller,[data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar] [data-htmlmemo-font-smaller],[data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar] [data-htmlmemo-font-reset],[data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar] #reader-larger,[data-htmlmemo-compact-ui] [data-htmlmemo-doc-topbar] [data-htmlmemo-font-larger]{padding-left:5px!important;padding-right:5px!important}[data-htmlmemo-doc-topbar] select#reader-theme,[data-htmlmemo-doc-topbar] select[data-reading-theme]{appearance:none!important;width:24px!important;min-width:24px!important;max-width:24px!important;height:20px!important;min-height:20px!important;max-height:20px!important;padding:0!important;border:1px solid var(--line,var(--reader-line,#e5e7eb))!important;border-radius:4px!important;background-color:var(--paper,var(--reader-paper,#fff))!important;background-image:var(--reader-theme-icon)!important;background-repeat:no-repeat!important;background-position:center!important;background-size:14px 14px!important;color:transparent!important;font-size:0px!important;line-height:18px!important;cursor:pointer!important}[data-htmlmemo-doc-topbar] select#reader-theme option,[data-htmlmemo-doc-topbar] select[data-reading-theme] option{font-size:12px;color:var(--ink,var(--reader-ink,#1f2328));background-color:var(--paper,var(--reader-paper,#fff))}`;
   }
   positionReadingUI(view,frame){
     if(!this.uiScale||!view.width||!frame.width)return;
@@ -988,6 +990,7 @@ export class Reader {
         for(const option of this.fontControl.querySelectorAll('option'))if(option.value===family)option.selected=true;
       }
     }
+    if(this.topbarNode?.isConnected)this.syncSourceThemeControls();
     if(this.plainReadingButtons){
       const {menu,back,previous,next,position,smaller,reset,larger,theme}=this.plainReadingButtons,{nodes,current}=this.readingHeadingState();
       const sidebar=this.host.ownerDocument.getElementById('sidebar');menu.setAttribute('aria-expanded',String(sidebar?.hidden===false&&sidebar.annotationReader===this));
@@ -1090,14 +1093,30 @@ export class Reader {
     return true;
   }
   readingTheme() { return ['system','light','dark'].includes(this.metadata.view?.readingTheme)?this.metadata.view.readingTheme:'system'; }
-  resolvedReadingTheme() { const value=this.readingTheme();return value==='system'?(this.readingThemeQuery?.matches?'dark':'light'):value; }
-  applyReadingTheme() {
-    if(!this.doc?.body||this.topbarNode?.isConnected||this.findDocumentTopbar())return;
+  ensureReadingThemeQuery() {
     if(!this.readingThemeQuery){
-      this.readingThemeQuery=this.host.ownerDocument.defaultView?.matchMedia?.('(prefers-color-scheme: dark)');
-      this.readingThemeChange=()=>{if(this.readingTheme()==='system'){this.applyReadingTheme();this.updateReadingControls();}};
+      const win=this.host?.ownerDocument?.defaultView||this.doc?.defaultView;
+      this.readingThemeQuery=win?.matchMedia?.('(prefers-color-scheme: dark)')||null;
+      this.readingThemeChange=()=>{
+        if(!this.topbarNode?.isConnected&&this.readingTheme()==='system')this.applyReadingTheme();
+        this.syncSourceThemeControls();
+        this.updateReadingControls();
+      };
       this.readingThemeQuery?.addEventListener?.('change',this.readingThemeChange);
     }
+    return this.readingThemeQuery;
+  }
+  systemReadingTheme() {
+    const docQ=this.doc?.defaultView?.matchMedia?.('(prefers-color-scheme: dark)');
+    const q=this.ensureReadingThemeQuery();
+    if(typeof q?.matches==='boolean')return (q.matches||docQ?.matches)?'dark':'light';
+    if(typeof docQ?.matches==='boolean')return docQ.matches?'dark':'light';
+    return this.host?.ownerDocument?.documentElement?.dataset?.theme==='dark'?'dark':'light';
+  }
+  resolvedReadingTheme(value=this.readingTheme()) { return value==='system'?this.systemReadingTheme():(value==='dark'?'dark':'light'); }
+  applyReadingTheme() {
+    if(!this.doc?.body||this.topbarNode?.isConnected||this.findDocumentTopbar())return;
+    this.ensureReadingThemeQuery();
     const dark=this.resolvedReadingTheme()==='dark';
     const colors=dark?['#14161b','#1b1e25','#e8eaf0','#a5adbc','#383e4a','#252a34','#626d7d','#48536a','#8bb9f0','#30291c']:['#fff','#f6f8fa','#1f2328','#57606a','#e5e7eb','#f2f4f7','#d0d7de','#d8dee4','#255c9e','#faf6eb'];
     let style=this.doc.getElementById('htmlmemo-reading-theme-style');
@@ -1109,6 +1128,46 @@ export class Reader {
   setReadingTheme(value) {
     if(!['system','light','dark'].includes(value)||this.disposed||this.preparing||this.topbarNode?.isConnected||value===this.readingTheme())return false;
     this.metadata.view.readingTheme=value;this.applyReadingTheme();this.callbacks.onPosition?.();this.updateReadingControls();this.callbacks.onView?.();return true;
+  }
+  findSourceThemeControl(topbar=this.topbarNode) {
+    if(!topbar?.isConnected)return null;
+    return [...topbar.querySelectorAll('select#reader-theme,select[data-reading-theme]')].find(node=>!node.closest('[data-htmlmemo-ui]'))||null;
+  }
+  setupSourceThemeControls(topbar=this.topbarNode) {
+    const select=this.findSourceThemeControl(topbar);
+    if(!select||!this.doc)return;
+    this.ensureReadingThemeQuery();
+    this.sourceThemeBoundSelects ||= new WeakSet();
+    if(!this.sourceThemeBoundSelects.has(select)){
+      this.sourceThemeBoundSelects.add(select);
+      const onChange=()=>{
+        this.sourceThemeExplicit=true;
+        this.syncSourceThemeControls(topbar);
+      };
+      select.addEventListener('change',onChange);
+      select.addEventListener('input',onChange);
+    }
+    this.syncSourceThemeControls(topbar);
+  }
+  syncSourceThemeControls(topbar=this.topbarNode) {
+    if(!topbar?.isConnected||!this.doc?.documentElement)return;
+    const root=this.doc.documentElement,select=this.findSourceThemeControl(topbar);
+    if(!select){
+      const raw=topbar.getAttribute('data-theme')||root.getAttribute('data-theme');
+      if(raw==='dark'||raw==='light')topbar.setAttribute('data-htmlmemo-theme',raw);
+      else topbar.removeAttribute('data-htmlmemo-theme');
+      return;
+    }
+    const rootTheme=root.getAttribute('data-theme')||topbar.getAttribute('data-theme');
+    const rawValue=select.value;
+    const mode=this.sourceThemeExplicit
+      ?(['system','light','dark'].includes(rawValue)?rawValue:'system')
+      :(['light','dark'].includes(rawValue)?rawValue:(rootTheme==='dark'&&!select.querySelector('option[value="system"][selected]')?'dark':'system'));
+    const resolved=this.resolvedReadingTheme(mode);
+    root.setAttribute('data-htmlmemo-theme',resolved);
+    topbar.setAttribute('data-htmlmemo-theme',resolved);
+    const label={system:'시스템',light:'밝게',dark:'어둡게'}[mode]||'시스템';
+    if(select.title!==`화면 모드: ${label}`)select.title=`화면 모드: ${label}`;
   }
   findSourceFontControls(topbar=this.topbarNode) {
     if(!topbar?.isConnected)return null;
@@ -1252,6 +1311,7 @@ export class Reader {
     }else this.pendingReadingAnchor=null;
   }
   onRuntimePatch() {
+    this.syncSourceThemeControls();
     const controls=this.findSourceFontControls();if(!controls)return;
     const after=this.rawSourceFontSize();
     if(this.pendingSourceFontBefore!=null){
