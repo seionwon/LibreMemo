@@ -5844,7 +5844,7 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
 | --- | --- |
 | ID | hist-20261102-016 |
 | 변경 종류 | 넓은 터치 화면(`> 760px`)에서 본문 탭 시 사이드바 자동 닫힘 방지([`isMobileSidebarInteraction`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L2099-L2105), [`onDismissSidebar`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js#L486), [`dismissWorkspaceMobileSidebar`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js#L1828-L1834)) |
-| 상태 | 로컬 검증 완료 · 1.9.21 GitHub Pages 게시 진행 |
+| 상태 | 구현·검증·GitHub Pages 게시 완료 (1.9.21) |
 
 - **목적·원인:**
   1. [`isMobileSidebarInteraction`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L2099-L2105)과 [`dismissWorkspaceMobileSidebar`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js#L1828-L1834)가 화면 가로폭(`width <= 760`)을 먼저 확인하지 않고 `event.pointerType === 'touch'` 또는 `touchstart`이면 무조건 모바일 사이드바 닫기 대상으로 판단하여, 갤럭시탭 가로모드 등 사이드바와 본문을 나란히 보여줄 수 있는 충분한 가로폭(`> 760px`)의 태블릿 화면에서도 본문을 탭하거나 펜으로 터치하면 열린 사이드바가 닫히거나 `8px` 스트립으로 접히는 문제가 있었습니다.
@@ -5854,4 +5854,21 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
      - [`onDismissSidebar`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js#L486)와 [`dismissWorkspaceMobileSidebar`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/app.js#L1828-L1834)에서도 `innerWidth <= 760`일 때만 본문 영역 터치로 앱 사이드바(`#sidebar`)를 닫도록 일치시켰습니다.
   2. **좁은 폰 화면(`<= 760px`)의 본문 터치 시 사이드바 닫힘 동작 유지:**
      - 가로폭이 `760px` 이하인 컴팩트 모바일 화면(`data-htmlmemo-compact-ui`)에서는 기존과 동일하게 본문을 터치하면 열린 사이드바가 닫힙니다.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 915개 단위 검사 통과, `codememo-browser`(`1280×800` 및 `390×844`) 검증 완료, GitHub Actions(`41424201593`) 전체 성공 및 `https://seionwon.github.io/LibreMemo/src/version.js`(`1.9.21`) 게시 확인.
+
+<a id="hist-20261102-017"></a>
+### 2026-11-02 20:45:00 +09:00 — 뒤로 가기 버튼에 마우스를 올렸을 때(`:hover`) 아이콘이 2개로 반복 표시되는 문제 수정
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261102-017 |
+| 변경 종류 | 리더 상단 툴바 뒤로 가기 버튼 `:hover` 상태의 배경 반복·크기·위치 유지([`.htmlmemo-source-toolbar`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css#L126), [`readingControlsStyle`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L980)) |
+| 상태 | 로컬 검증 완료 · 1.9.22 GitHub Pages 게시 진행 |
+
+- **목적·원인:**
+  1. [`public/design.tailwind.css`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css#L134)의 `.reader-controls-row>.htmlmemo-source-toolbar button:hover:not(:disabled){background:var(--reader-paper)}`가 CSS `background` 단축 속성(shorthand)을 사용하여, 활성화된 뒤로 가기 버튼(`[data-action=reading-back]:hover:not(:disabled)`) 위에 마우스를 올리면 `background-repeat: repeat`, `background-position: 0% 0%`, `background-size: auto`로 초기화되면서 버튼 안에 화살표 아이콘이 좌우로 2개 반복되어 보이는 문제가 있었습니다.
+- **동작·보존:**
+  1. **`:hover` 상태에서도 단일 중앙 아이콘(`no-repeat`, `center`, `13px 13px`) 유지([`public/design.tailwind.css`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css), [`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js)):**
+     - [`public/design.tailwind.css`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css#L126)에서 `.reader-controls-row>.htmlmemo-source-toolbar [data-action=reading-back],.reader-controls-row>.htmlmemo-source-toolbar [data-action=reading-back]:hover:not(:disabled)`가 함께 `background-color:var(--reader-paper);background-image:var(--reader-back-icon);background-repeat:no-repeat;background-position:center;background-size:13px 13px;color:transparent`를 선언하도록 수정하여, 마우스 오버 시에도 `background` 단축 속성에 의해 `background-repeat`·`background-position`·`background-size`가 초기화되지 않도록 수정했습니다.
+     - [`readingControlsStyle`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L980)에도 `:hover` 선택자(`[data-htmlmemo-doc-topbar] #reader-back:hover,[data-htmlmemo-doc-topbar] #back:hover,[data-htmlmemo-doc-topbar] [data-action=reading-back]:hover`)를 포함하여 내장 상단바 문서의 `:hover` 규칙과도 충돌하지 않도록 보강했습니다.
 - **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 915개 단위 검사 통과 및 `codememo-browser` 검증을 마친 뒤 GitHub Pages 게시 및 온라인 검증을 진행합니다.
