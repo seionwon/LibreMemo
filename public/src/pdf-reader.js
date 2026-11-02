@@ -48,8 +48,6 @@ export class PdfReader{
     this.root.removeAttribute('data-htmlmemo-anchor');this.relayout();
     const style=this.doc.createElement('style');style.id='htmlmemo-pdf-style';style.textContent=PDF_STYLE;this.doc.head.append(style);
     this.doc.body.style.width=this.width*this.scale+'px';
-    this.reader.naturalWidth=this.width*this.scale;this.reader.frame.style.width=this.reader.naturalWidth+'px';
-    if(this.reader.viewport?.clientWidth>0&&this.reader.fitZoom&&this.reader.applyZoom){this.reader.autoFit=this.reader.metadata.view.autoFit!==false;this.reader.zoom=clamp(this.reader.autoFit?this.reader.fitZoom():(this.reader.metadata.view.zoom||this.reader.fitZoom()),.2,8);this.reader.applyZoom();}
     this.entries=await this.readOutline();
     const position=this.reader.metadata.view.pdfPosition,page=clamp(Number(position?.page)||1,1,this.count);
     await this.ensure(page);if(this.disposed)return;
@@ -181,9 +179,7 @@ export class PdfReader{
     if(this.reader.annotationDrag||this.reader.gesture||this.reader.textMarkGesture){for(const slot of this.slots.values())if(slot.node.dataset.pdfReady)this.renderPage(slot);return;}
     const logical=this.logicalTop,page=this.pageAt(logical),end=this.pageAt(logical+this.reader.viewport.clientHeight/this.reader.zoom),wanted=new Set();
     if(this.total*this.scale>WINDOW_HEIGHT&&(logical-this.base<WINDOW_HEIGHT*.15||logical-this.base>WINDOW_HEIGHT*.8)){const old=this.base;this.windowAt(logical);if(old!==this.base)this.doc.defaultView.scrollTo(this.reader.rootScrollLeft(),logical-this.base);}
-    for(let p=page;p<=Math.min(this.count,end,page+63);p++)wanted.add(p);
-    for(let d=1;d<=4&&wanted.size<8;d++){if(end+d<=this.count)wanted.add(end+d);if(d<=3&&page-d>=1)wanted.add(page-d);}
-    this.wanted=wanted;
+    for(let p=Math.max(1,page-1);p<=Math.min(this.count,end+1,page+63);p++)wanted.add(p);this.wanted=wanted;
     await this.ensure(page);for(const number of wanted)if(number!==page)void this.ensure(number).catch(error=>{if(!this.disposed)this.reader.callbacks.onError?.(error);});
     if(this.disposed)return;
     for(const slot of this.slots.values()){
