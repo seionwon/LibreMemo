@@ -8,6 +8,7 @@ import {prepareOffice} from './office-import.js';
 import {OFFICE_MIMES} from './office-formats.js';
 import {IMAGE_MIMES,pastedImages,clipboardImageFile,isImagePasteTarget} from './image-formats.js';
 import {canSleep,cancelTabSleep,scheduleTabSleep} from './tab-sleep.js';
+import {AI_TEXT_LIMIT,aiSearchRequest,aiSearchURL} from './ai-search.js';
 import { listDocuments, getDocument, trashDocument, restoreDocument, deleteDocument, deleteTrashedDocuments, getSetting, setSetting, saveDocumentHTML, listRevisionPeriods, listRevisionDay, adjacentRevisionDay, getRevision, putDocumentRevision, checkpointAnnotations, putDocumentView, putDocumentSourceIdentity, writeExternalHTML, updateLibraryFolders, onStorageChange, readLibrary } from './storage.js';
 import {readWebPage,pastedPage,PASTE_LIMIT,isWebSearch,BrowserTabs} from './web.js';
 import { readLocalHTML, droppedHTMLFiles, findLocalDuplicates, identifyLocalFile, htmlExportName } from './local-files.js';
@@ -230,9 +231,9 @@ function deviceSyncDialog() {
 }
 function helpDialog(){openHelp({modal,onBack:()=>{settingsDialog();$('#settings-help').focus();},onClose:()=>$('#settings-button').focus({preventScroll:true})});}
 function settingsDialog() {
-  modal(`<div class="dialog-heading"><h2>LibreMemo 설정</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><div class="settings-app-actions" role="group" aria-label="앱 실행과 정보"><button id="settings-help" class="secondary-button" type="button" aria-haspopup="dialog">${icon('help',15)} 도움말</button><button id="settings-execution" class="secondary-button" type="button">${icon('external',15)} 실행과 앱 전달</button><button id="settings-about" class="secondary-button" type="button" aria-haspopup="dialog">${icon('info',15)} About</button></div><div class="setting-row"><div><strong>기기 간 동기화</strong><p>로그인 없이 문서·주석·휴지통·설정을 주고받습니다.</p></div><button id="settings-sync" class="secondary-button">연결</button></div><p class="local-only-note">${icon('check',15)} 문서·주석·설정은 기기에 저장합니다. 기기 간 동기화를 선택할 때만 암호화해 중계합니다.</p><div class="setting-row"><div><strong>데이터 폴더</strong><p id="settings-folder-status">${esc(folderStatusText())}</p></div><button id="settings-folder" class="secondary-button">${folder?'관리':'폴더 연결'}</button></div>${dataFolderGuide()}<div class="setting-row"><div><strong>화면 테마</strong><p>서재와 도구의 밝기를 선택하세요.</p></div><select id="appearance"><option value="light">밝게</option><option value="dark">어둡게</option><option value="system">시스템</option></select></div><details class="settings-backup"><summary>이전 설정 JSON 파일 사용 (선택 사항)</summary><p class="dialog-description small">데이터 폴더를 연결했다면 설정 파일을 따로 저장하거나 불러올 필요가 없습니다. 예전에 저장한 설정 JSON을 옮길 때만 사용하세요.</p><p id="settings-file-name" class="settings-file-name">${settingsFileHandle?esc(settingsFileHandle.name):'연결한 설정 파일이 없습니다.'}</p><div class="settings-file-actions"><button id="settings-save" class="secondary-button">${icon('save',15)} 설정 파일 저장</button><button id="settings-load" class="secondary-button">${icon('folder',15)} 설정 파일 불러오기</button><button id="settings-reload" class="secondary-button" ${settingsFileHandle?'':'disabled'}>${icon('reload',15)} 다시 불러오기</button></div></details><p class="dialog-description small">브라우저 데이터가 삭제돼도 전용 폴더의 파일은 남습니다. 폴더를 다시 선택하면 복원됩니다. 폴더 자체 삭제·기기 고장까지 막는 것은 아니므로 중요한 데이터는 폴더 전체를 다른 저장장치에도 복사하세요.</p>`,()=>{
+  modal(`<div class="dialog-heading"><h2>LibreMemo 설정</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><div class="settings-app-actions" role="group" aria-label="앱 실행과 정보"><button id="settings-help" class="secondary-button" type="button" aria-haspopup="dialog">${icon('help',15)} 도움말</button><button id="settings-execution" class="secondary-button" type="button">${icon('external',15)} 실행과 앱 전달</button><button id="settings-about" class="secondary-button" type="button" aria-haspopup="dialog">${icon('info',15)} About</button></div><div class="setting-row"><div><strong>기기 간 동기화</strong><p>로그인 없이 문서·주석·휴지통·설정을 주고받습니다.</p></div><button id="settings-sync" class="secondary-button">연결</button></div><p class="local-only-note">${icon('check',15)} 문서·주석·설정은 기기에 저장합니다. 기기 간 동기화를 선택할 때만 암호화해 중계합니다.</p><div class="setting-row"><div><strong>AI 검색</strong><p>선택한 글을 보낼 LLM을 등록하고 사용할 것을 체크합니다.</p></div><button id="settings-ai-search" class="secondary-button">관리</button></div><div class="setting-row"><div><strong>데이터 폴더</strong><p id="settings-folder-status">${esc(folderStatusText())}</p></div><button id="settings-folder" class="secondary-button">${folder?'관리':'폴더 연결'}</button></div>${dataFolderGuide()}<div class="setting-row"><div><strong>화면 테마</strong><p>서재와 도구의 밝기를 선택하세요.</p></div><select id="appearance"><option value="light">밝게</option><option value="dark">어둡게</option><option value="system">시스템</option></select></div><details class="settings-backup"><summary>이전 설정 JSON 파일 사용 (선택 사항)</summary><p class="dialog-description small">데이터 폴더를 연결했다면 설정 파일을 따로 저장하거나 불러올 필요가 없습니다. 예전에 저장한 설정 JSON을 옮길 때만 사용하세요.</p><p id="settings-file-name" class="settings-file-name">${settingsFileHandle?esc(settingsFileHandle.name):'연결한 설정 파일이 없습니다.'}</p><div class="settings-file-actions"><button id="settings-save" class="secondary-button">${icon('save',15)} 설정 파일 저장</button><button id="settings-load" class="secondary-button">${icon('folder',15)} 설정 파일 불러오기</button><button id="settings-reload" class="secondary-button" ${settingsFileHandle?'':'disabled'}>${icon('reload',15)} 다시 불러오기</button></div></details><p class="dialog-description small">브라우저 데이터가 삭제돼도 전용 폴더의 파일은 남습니다. 폴더를 다시 선택하면 복원됩니다. 폴더 자체 삭제·기기 고장까지 막는 것은 아니므로 중요한 데이터는 폴더 전체를 다른 저장장치에도 복사하세요.</p>`,()=>{
     $('#settings-help').onclick=helpDialog;$('#settings-execution').onclick=()=>{$('#dialog').close();activate('execution');$('#execution h1').focus({preventScroll:true});};$('#settings-about').onclick=aboutDialog;
-    $('#settings-sync').onclick=deviceSyncDialog;
+    $('#settings-sync').onclick=deviceSyncDialog;$('#settings-ai-search').onclick=aiSearchDialog;
     $('#settings-folder').onclick=safely(()=>chooseFolder({onConnected:settingsDialog}));
     $('#appearance').value=preferences.theme; $('#appearance').onchange=safely(e=>changePreferences({theme:e.target.value}));
     $('#settings-save').onclick=safely(saveSettingsBackup);$('#settings-load').onclick=safely(importSettingsBackup);$('#settings-reload').onclick=safely(async()=>{await restoreSettings(settingsFileHandle);settingsDialog();});
@@ -1288,17 +1289,65 @@ function renderPalettePopoverContent(r) {
 function showSelectionMenu(r) {
   const anchor=r.selection;if(!anchor)return;
   if(popoverName==='selection')closePopover();
-  showPopover('selection',`${[['speak','읽어주기'],['webSearch','웹 검색']].map(([a,l]) => `<button data-selection="${a}">${l}</button>`).join('')}`,()=>{
+  showPopover('selection',`${[['speak','읽어주기'],['aiSearch','AI 검색'],['webSearch','웹 검색']].map(([a,l]) => `<button data-selection="${a}">${l}</button>`).join('')}`,()=>{
     const pop=$('#tool-popover');pop.setAttribute('role','dialog');pop.setAttribute('aria-label','선택한 텍스트');
     $$('[data-selection]',pop).forEach(button=>{
       button.onpointerdown=e=>e.preventDefault();
       button.onclick=safely(async()=>{
         const action=button.dataset.selection;
         if(action==='speak'){r.selection=anchor;if(!r.speakSelection())return;}
+        else if(action==='aiSearch'){if(!await chooseAiSearch(anchor.quote))return;}
         else if(action==='webSearch')await openBrowser('https://www.google.com/search?q='+encodeURIComponent(anchor.quote.slice(0,2000)));
         closePopover();
       });
     });
+  });
+}
+// One enabled LLM runs at once; several become the menu in the same place.
+async function chooseAiSearch(text) {
+  const engines=preferences.aiSearch.filter(engine=>engine.enabled);
+  if(!engines.length){closePopover();toast('사용할 LLM이 없습니다. 설정 → AI 검색에서 하나 이상 체크해주세요.',true);return false;}
+  if(engines.length===1){await runAiSearch(engines[0],text);return true;}
+  const pop=$('#tool-popover');pop.setAttribute('aria-label','AI 검색에 사용할 LLM');
+  pop.innerHTML=engines.map(engine=>`<button data-ai-engine="${esc(engine.id)}">${esc(engine.name)}</button>`).join('');
+  $$('[data-ai-engine]',pop).forEach(button=>{
+    button.onpointerdown=e=>e.preventDefault();
+    button.onclick=safely(async()=>{await runAiSearch(engines.find(engine=>engine.id===button.dataset.aiEngine),text);closePopover();});
+  });
+  positionPopover();$('[data-ai-engine]',pop)?.focus({preventScroll:true});
+  return false;
+}
+async function runAiSearch(engine,text) {
+  const request=aiSearchRequest(engine,text);let copied=false;
+  // Copy inside the click: the browser refuses clipboard writes without one.
+  if(request.copy)try{await navigator.clipboard.writeText(text);copied=true;}catch{/* Reported below. */}
+  await openBrowser(request.url);
+  if(request.truncated)toast(copied?`앞 ${AI_TEXT_LIMIT.toLocaleString()}자만 보냈습니다. 전체 글은 복사해 두었습니다.`:`앞 ${AI_TEXT_LIMIT.toLocaleString()}자만 보냈습니다.`);
+  else if(request.copy)toast(copied?`선택한 글을 복사했습니다. ${engine.name}에 붙여넣어 주세요.`:`${engine.name}이(가) 글을 직접 받지 못하고 복사도 차단되었습니다. 글을 직접 복사해주세요.`,!copied);
+}
+function aiSearchDialog() {
+  const row=engine=>`<li class="ai-search-row" data-engine="${esc(engine.id)}"><label class="ai-search-use"><input type="checkbox" data-field="enabled" aria-label="${esc(engine.name)} 사용"${engine.enabled?' checked':''}> 사용</label><input data-field="name" aria-label="이름" maxlength="40" value="${esc(engine.name)}"><input data-field="url" aria-label="주소" type="url" value="${esc(engine.url)}"><button class="icon-button" data-remove aria-label="${esc(engine.name)} 삭제">${icon('close',14)}</button></li>`;
+  modal(`<div class="dialog-heading"><h2>AI 검색</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p>선택한 글을 체크한 LLM의 웹페이지로 보냅니다. 브라우저에 로그인한 계정을 그대로 쓰며 API 키는 필요 없습니다. 주소의 <code>{text}</code> 자리에 글이 들어가고, <code>{text}</code>가 없으면 글을 복사한 뒤 페이지를 엽니다.</p><ul id="ai-search-list" class="ai-search-list">${preferences.aiSearch.map(row).join('')}</ul><form id="ai-search-add" class="ai-search-add"><input id="ai-search-name" aria-label="새 LLM 이름" placeholder="이름" maxlength="40" required><input id="ai-search-url" aria-label="새 LLM 주소" placeholder="https://example.com/?q={text}" required><button class="secondary-button" type="submit">등록</button></form><div class="dialog-actions"><button id="ai-search-back" class="secondary-button" type="button">설정으로</button></div>`,()=>{
+    const save=entries=>changePreferences({aiSearch:entries});
+    $('#ai-search-list').addEventListener('change',event=>{
+      const item=event.target.closest('[data-engine]'),field=event.target.dataset.field;if(!item||!field)return;
+      const value=field==='enabled'?event.target.checked:event.target.value.trim();
+      if(field==='url'&&!aiSearchURL(value)){toast('주소는 http 또는 https로 시작해야 합니다. 로그인 정보는 넣을 수 없습니다.',true);aiSearchDialog();return;}
+      if(field==='name'&&!value){toast('이름을 입력해주세요.',true);aiSearchDialog();return;}
+      save(preferences.aiSearch.map(engine=>engine.id===item.dataset.engine?{...engine,[field]:value}:engine));
+    });
+    $('#ai-search-list').addEventListener('click',event=>{
+      const button=event.target.closest('[data-remove]');if(!button)return;
+      save(preferences.aiSearch.filter(engine=>engine.id!==button.closest('[data-engine]').dataset.engine));aiSearchDialog();
+    });
+    $('#ai-search-add').onsubmit=event=>{
+      event.preventDefault();
+      const name=$('#ai-search-name').value.trim(),url=aiSearchURL($('#ai-search-url').value);
+      if(!name||!url){toast('이름과 http 또는 https 주소를 입력해주세요. 로그인 정보는 넣을 수 없습니다.',true);return;}
+      if(preferences.aiSearch.length>=20){toast('LLM은 20개까지 등록할 수 있습니다.',true);return;}
+      save([...preferences.aiSearch,{id:uid(),name,url,enabled:true}]);aiSearchDialog();
+    };
+    $('#ai-search-back').onclick=settingsDialog;
   });
 }
 function toolAction(action,button=null) {
