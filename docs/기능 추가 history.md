@@ -5747,7 +5747,7 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
 | --- | --- |
 | ID | hist-20261102-011 |
 | 변경 종류 | 리더 화면 테마 `system` 판별 및 내장 상단바·일반 툴바 동기화([`ensureReadingThemeQuery`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1026-L1035), [`systemReadingTheme`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1037-L1045), [`resolvedReadingTheme`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1047-L1052), [`syncSourceThemeControls`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L1265-L1281), [`readingControlsStyle`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L971-L977)) |
-| 상태 | 로컬 검증 완료 · 1.9.16 GitHub Pages 게시 진행 |
+| 상태 | 구현·검증·GitHub Pages 게시 완료 (1.9.16) |
 
 - **목적·원인:**
   1. 책 내장 상단바(`[data-htmlmemo-doc-topbar]`)의 화면 모드 선택(`select#reader-theme`)을 `시스템`(`value="system"`)으로 설정했을 때, 문서 루트(`:root`)는 `data-theme="system"`이거나 속성 없이 `@media (prefers-color-scheme: dark)`로 배경색(`--paper: #14161b`)만 어둡게 바뀌는 반면, 테마 버튼 아이콘 변수(`--reader-theme-icon`)는 `:root[data-theme=dark]`일 때만 밝은 달 아이콘(`stroke='#e8eaf0'`)으로 바뀌도록 되어 있어 시스템 다크 모드에서 어두운 배경(`#14161b`) 위에 어두운 해 아이콘(`#1f2328`)이 그려져 아무것도 보이지 않던 문제를 해결했습니다.
@@ -5758,4 +5758,21 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
      - [`readingControlsStyle`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L971-L977)에서 `[data-htmlmemo-doc-topbar][data-htmlmemo-theme=dark]`, `:root[data-htmlmemo-theme=dark] [data-htmlmemo-doc-topbar]`, 그리고 `@media (prefers-color-scheme: dark)`의 `:root:not([data-theme=light]):not([data-htmlmemo-theme=light])` 규칙을 모두 지원하여, `시스템` 설정 시 시스템이 어두우면 밝은 달 아이콘(`#e8eaf0`)과 다크 팔레트(`#14161b` / `#1b1e25`)를, 시스템이 밝으면 어두운 해 아이콘(`#1f2328`)과 라이트 팔레트(`#fff` / `#f6f8fa`)를 항상 선명하게 표시합니다.
   2. **내보내기 시 원본 HTML 무결성 보존([`public/src/document.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document.js)):**
      - [`clearReaderSidebarArtifacts`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/document.js#L85-L90) 정리 대상에 `[data-htmlmemo-theme]`와 `'data-htmlmemo-theme'`를 추가하여 HTML 내보내기·재열기 시 리더가 부여한 임시 테마 속성이 남지 않도록 보장합니다.
-- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 913개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800)에서 `system` 설정 시 다크·라이트 감지 결과에 따라 내장 상단바와 일반 툴바 모두에서 달(`#e8eaf0`)·해(`#1f2328`) 아이콘이 선명하게 표시되는 것을 확인하고 `1.9.16` GitHub Pages 게시를 진행합니다.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 913개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800)에서 `system` 설정 시 다크·라이트 감지 결과에 따라 내장 상단바와 일반 툴바 모두에서 달(`#e8eaf0`)·해(`#1f2328`) 아이콘이 선명하게 표시되는 것을 확인하고, GitHub Actions(`41402586859`) 전체 성공 및 `https://seionwon.github.io/LibreMemo/src/version.js`(`1.9.16`) 게시 확인.
+
+<a id="hist-20261102-012"></a>
+### 2026-11-02 16:13:00 +09:00 — 상단 읽기 툴바의 현재 글꼴 표시 드롭다운 가로폭을 한글 4글자 폭(`58px`)으로 축소
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261102-012 |
+| 변경 종류 | 리더 상단 툴바 글꼴 선택(`<select>`) 컨트롤 가로폭 조정([`readingControlsStyle`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L973-L977), [`updateReadingControls`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L983-L995), [`.htmlmemo-source-toolbar select`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css#L126)) |
+| 상태 | 로컬 검증 완료 · 1.9.17 GitHub Pages 게시 진행 |
+
+- **목적·원인:**
+  1. 상단 읽기 툴바에서 현재 선택된 글꼴을 보여주는 `<select>`(`select[data-reading-font]` / `[data-htmlmemo-reading-font]`)의 최대 가로폭이 `96px`로 되어 있어 `"본고딕 (Noto Sans KR)"` 등을 선택했을 때 약 6~7글자 분량(`"본고딕 (Noto Sa"`)의 폭을 차지하던 것을, 한글 4글자 정도의 표시 폭만 가지도록 축소했습니다.
+- **동작·보존:**
+  1. **글꼴 표시 `<select>` 가로폭을 한글 4글자 폭(`58px`)으로 조정([`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js), [`public/design.tailwind.css`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css)):**
+     - [`readingControlsStyle`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L976)의 `[data-htmlmemo-reading-font],[data-htmlmemo-doc-topbar] select#reader-font,[data-htmlmemo-doc-topbar] select[data-reading-font]`와 [`public/design.tailwind.css`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css#L126)의 `.reader-controls-row>.htmlmemo-source-toolbar select` 가로폭을 `width: 58px; max-width: 58px`로 설정하여, 우측 드롭다운 화살표(`⌄`)를 제외한 텍스트 표시 영역이 `12px` 글꼴 기준 한글 4글자(예: `나눔고딕`, `프리텐다`, `본고딕 (`) 폭을 가지도록 통일했습니다.
+     - 드롭다운을 클릭해 펼쳤을 때는 전체 글꼴 이름(`본고딕 (Noto Sans KR)`, `프리텐다드 (Pretendard)` 등)이 그대로 표시되며, [`updateReadingControls`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L992-L993)에서 `title` 속성(`글꼴 종류: ...`)에 현재 선택된 전체 글꼴 이름을 함께 표시합니다.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 913개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800)에서 내장 상단바와 일반 툴바 모두에서 글꼴 `<select>`가 `58px`(한글 4글자 표시 폭)로 렌더링되는 것을 확인하고 `1.9.17` GitHub Pages 게시를 진행합니다.

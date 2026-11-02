@@ -283,9 +283,12 @@ test('font family selector changes font family when possible, disables for fixed
   assert.equal(r.supportsReadingFontFamily(),true);
   assert.equal(r.fontControl.disabled,false);
   assert.equal(r.fontControl.value,'default');
+  assert.equal(r.fontControl.title,'글꼴 종류: 기본');
+  assert.match(r.readingControlsStyle(),/\[data-htmlmemo-reading-font\],\[data-htmlmemo-doc-topbar\] select#reader-font,\[data-htmlmemo-doc-topbar\] select\[data-reading-font\]\{[^}]*width:58px!important;max-width:58px!important/);
   assert.equal(r.setReadingFontFamily('serif'),true);
   assert.equal(r.metadata.view.fontFamily,'serif');
   assert.equal(r.fontControl.value,'serif');
+  assert.equal(r.fontControl.title,'글꼴 종류: 명조');
   assert.match(doc.querySelector('#htmlmemo-reading-font-style').textContent,/KoPubWorldBatang/);
   assert.equal(writes,1);
   assert.equal(r.setReadingFontFamily('mono'),true);
@@ -294,6 +297,7 @@ test('font family selector changes font family when possible, disables for fixed
   assert.equal(r.setReadingFontFamily('Malgun Gothic'),true);
   assert.equal(r.metadata.view.fontFamily,'Malgun Gothic');
   assert.equal(r.fontControl.value,'Malgun Gothic');
+  assert.equal(r.fontControl.title,'글꼴 종류: 맑은 고딕');
   assert.match(doc.querySelector('#htmlmemo-reading-font-style').textContent,/Malgun Gothic/);
   assert.equal(r.setReadingFontFamily('나눔명조'),true);
   assert.equal(r.metadata.view.fontFamily,'NanumMyeongjo');
