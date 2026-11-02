@@ -5806,7 +5806,7 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
 | --- | --- |
 | ID | hist-20261102-014 |
 | 변경 종류 | 쪽 단위 문서(`.office-page`) 본문 합성 제목 제거 및 목차 위치 이동([`hangulPage`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/office-hangul.js#L125), [`renderDjvu`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/office-djvu.js#L77-L97), [`OFFICE_STYLE`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/office-common.js#L11), [`baseEditorStyle`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L165), [`jump`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L3759-L3779), [`pageOutlineTitle`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L4226-L4233), [`outline`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L4234-L4250)) |
-| 상태 | 로컬 검증 완료 · 1.9.19 GitHub Pages 게시 진행 |
+| 상태 | 구현·검증·GitHub Pages 게시 완료 (1.9.19) |
 
 - **목적·원인:**
   1. 한글(`HWP`/`HWPX`/`HML`) 및 `DjVu` 문서를 열 때 원본 문서에는 없는 페이지 제목(`<h2 id="rhwp-page-3">3쪽</h2>`, `<h2 id="djvu-page-3">3쪽</h2>`)이 오른쪽 본문 읽기 창(main pane)의 각 페이지 카드 사이에 표시되어 원본 화면 구성을 해치고 TTS 읽어주기에도 끼어드는 문제가 있었습니다.
@@ -5817,4 +5817,22 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
   2. **사이드바 목차 항목 클릭 시 오른쪽 창의 정확한 페이지 위치로 이동([`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js), [`public/src/migrate.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/migrate.js)):**
      - [`outline`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L4234-L4250)과 [`pageOutlineTitle`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L4226-L4233)(및 [`migrate.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/migrate.js#L378-L379))에서 `article[data-office-pages] > .office-page`의 각 목차 항목이 숨겨진 `<h2>`가 아닌 실제 페이지 `<section class="office-page">` 노드를 직접 가리키도록 매핑했습니다.
      - [`jump`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L3759-L3779), [`jumpToHash`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L3780-L3788), [`navigateSourceTarget`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L3796-L3802)에서 기존 문서의 숨겨진 `.office-page > h2`나 `.office-slide > h2` 해시로 이동할 때도 부모 페이지/슬라이드 `<section>`의 좌표를 기준으로 스크롤하고 `readingHeadingCursor`와 상단 위치 표시(`3 / 3`) 및 사이드바 활성 항목(`aria-current="location"`)을 즉시 동기화하도록 개선했습니다.
-- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 915개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800)에서 다크 모드 3쪽 문서의 오른쪽 본문 창에 `"1쪽"`·`"2쪽"`·`"3쪽"` 텍스트가 전혀 표시되지 않고(`visibleH2Count: 0`), 사이드바에서 `"3쪽"`을 클릭하면 오른쪽 창이 3쪽 시작 위치(`page3TopInViewport: 14`, 상단 `3 / 3`)로 정확히 스크롤되는 것을 확인했습니다. 이어서 GitHub Pages 게시 및 온라인 검증을 진행합니다.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 915개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800)에서 다크 모드 3쪽 문서의 오른쪽 본문 창에 `"1쪽"`·`"2쪽"`·`"3쪽"` 텍스트가 전혀 표시되지 않고(`visibleH2Count: 0`), 사이드바에서 `"3쪽"`을 클릭하면 오른쪽 창이 3쪽 시작 위치(`page3TopInViewport: 14`, 상단 `3 / 3`)로 정확히 스크롤되는 것을 확인하고, GitHub Actions(`41415905058`) 전체 성공 및 `https://seionwon.github.io/LibreMemo/src/version.js`(`1.9.19`) 게시 확인.
+
+<a id="hist-20261102-015"></a>
+### 2026-11-02 18:14:00 +09:00 — 상단 읽기 툴바의 뒤로 가기 버튼 아이콘을 모바일의 곡선형 되돌아가기 화살표(`↶`) 모양으로 통일
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261102-015 |
+| 변경 종류 | 리더 상단 툴바 뒤로 가기 버튼(`#reader-back`, `#back`, `[data-action="reading-back"]`) 아이콘 SVG 통일([`readingControlsStyle`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L975-L980), [`.htmlmemo-source-toolbar`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css#L121-L127)) |
+| 상태 | 로컬 검증 완료 · 1.9.20 GitHub Pages 게시 진행 |
+
+- **목적·원인:**
+  1. 상단 읽기 툴바(`.htmlmemo-source-toolbar` 및 `[data-htmlmemo-doc-topbar]`)의 글꼴 목록 맨 앞에 지정된 `'Apple SD Gothic Neo'`가 설치된 macOS 데스크톱 환경에서는 유니코드 `↶`(U+21B6) 문자가 모바일의 반원형 곡선 화살표가 아니라 세로 기둥이 길게 솟은 지팡이 모양(`↰` 형태) 글리프로 렌더링되고, 일부 구형 책 HTML은 `<button id="back">↰</button>`을 직접 사용해 모바일과 데스크톱 간 뒤로 가기 아이콘 모양이 서로 다르게 보이는 문제가 있었습니다.
+- **동작·보존:**
+  1. **모바일 곡선형 되돌아가기 화살표 SVG 아이콘(`--reader-back-icon`)으로 모든 환경에서 통일([`public/src/reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js), [`public/design.tailwind.css`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css)):**
+     - [`public/design.tailwind.css`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css#L121-L127)와 [`readingControlsStyle`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/reader.js#L975-L980)에 라이트(`stroke='#1f2328'`)·다크(`stroke='#e8eaf0'`) 및 시스템 다크 모드(`@media (prefers-color-scheme: dark)`)용 `--reader-back-icon` SVG 변수(`<path d='M4.5 14.5a8 8 0 0 1 15 0'/><path d='M4.5 9.5v5h5'/>`)를 추가했습니다.
+     - 일반 문서 툴바(`.reader-controls-row > .htmlmemo-source-toolbar [data-action=reading-back]`)와 책 내장 상단바(`[data-htmlmemo-doc-topbar] #reader-back, [data-htmlmemo-doc-topbar] #back, [data-htmlmemo-doc-topbar] [data-action=reading-back]`) 모두 `background-image: var(--reader-back-icon)`, `background-size: 13px 13px`, `color: transparent`를 적용하여, 운영체제 기본 글꼴이나 버튼 텍스트(`↶`/`↰`)에 관계없이 항상 모바일과 동일한 곡선형 반원 되돌아가기 화살표 아이콘으로 표시되도록 통일했습니다.
+     - 버튼의 DOM `textContent`(`↶`), 접근성 레이블(`이전 위치로 돌아가기`), 버튼 크기(`26×22px`) 및 HTML 내보내기 무결성은 그대로 유지됩니다.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 915개 단위 검사 통과 및 `codememo-browser`(포트 4173, 1280×800) 검증 완료. 이어서 GitHub Pages 게시 및 온라인 검증을 진행합니다.

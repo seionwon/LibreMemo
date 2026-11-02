@@ -263,7 +263,9 @@ test('source toolbar A+ extends 3 more steps beyond the book maximum and cleans 
   assert.match(styleText,/\[data-htmlmemo-doc-topbar\] button\[data-htmlmemo-font-reset\],\[data-htmlmemo-font-reset\]\{[^}]*border-radius:0!important/);
   assert.match(styleText,/border-radius:0 4px 4px 0!important/);
   assert.match(styleText,/--reader-theme-icon:url\(/);
+  assert.match(styleText,/--reader-back-icon:url\(/);
   assert.match(styleText,/select#reader-theme[\s\S]*width:24px!important[\s\S]*color:transparent!important[\s\S]*font-size:0px!important/);
+  assert.match(styleText,/\[data-htmlmemo-doc-topbar\] #reader-back,\[data-htmlmemo-doc-topbar\] #back,\[data-htmlmemo-doc-topbar\] \[data-action=reading-back\]\{background-image:var\(--reader-back-icon\)!important;background-repeat:no-repeat!important;background-position:center!important;background-size:13px 13px!important;color:transparent!important\}/);
   smaller.dispatchEvent(new (doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
   assert.equal(r.sourceFontExtraSteps,2);assert.equal(larger.disabled,false);
   smaller.dispatchEvent(new (doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));
