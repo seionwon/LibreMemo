@@ -260,6 +260,7 @@ test('source toolbar A+ extends 3 more steps beyond the book maximum and cleans 
   assert.equal(parseHTML(saved).metadata.view.sourceFontSteps,3);
   const styleText=r.readingControlsStyle();
   assert.match(styleText,/border-radius:4px 0 0 4px!important/);
+  assert.match(styleText,/\[data-htmlmemo-doc-topbar\] button\[data-htmlmemo-font-reset\],\[data-htmlmemo-font-reset\]\{[^}]*border-radius:0!important/);
   assert.match(styleText,/border-radius:0 4px 4px 0!important/);
   assert.match(styleText,/--reader-theme-icon:url\(/);
   assert.match(styleText,/select#reader-theme[\s\S]*width:24px!important[\s\S]*color:transparent!important[\s\S]*font-size:0px!important/);

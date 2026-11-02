@@ -405,14 +405,16 @@ function bindTabs() {
   }));
 }
 function activate(id) {
-  if(id!==activeId){
+  const sameTab=id===activeId,sameSidebar=sameTab&&!$('#sidebar').hidden&&reader()&&$('#sidebar').annotationReader===reader();
+  if(!sameTab){
     reader()?.stopSpeech();historyRequest++;
     const dialog=$('#dialog');if(dialog.open&&dialog.querySelector('[data-history-document]'))dialog.close();
   }
-  if(readerFocused && id!==activeId)void leaveReaderFocus();
-  closePopover(); closeSidebar({remember:false,clearSearch:false});$('.chrome').classList.remove('address-editing');activeId=id; $('#library').hidden=id!=='library';$('#execution').hidden=id!=='execution';$('#workspace').hidden=id==='library'||id==='execution';
+  if(readerFocused && !sameTab)void leaveReaderFocus();
+  if(!sameSidebar){closePopover(); closeSidebar({remember:false,clearSearch:false});}
+  $('.chrome').classList.remove('address-editing');activeId=id; $('#library').hidden=id!=='library';$('#execution').hidden=id!=='execution';$('#workspace').hidden=id==='library'||id==='execution';
   tabs.forEach(tab=>tab.host.hidden=tab.id!==id);renderTabs();updateChrome();
-  if(reader()){renderToolbar();if(reader().documentSidebarUI?.isConnected&&!reader().tocStrip){reader().applyTocWidth(preferences.sidebarWidth*reader().sidebarUnit(),{persist:false,snapStrip:false});reader().syncAfterTocResize();}restoreSidebar();if(reader().dynamicDirty)reader().scheduleDynamicRefresh();}else $('#toolbar').hidden=true;
+  if(reader()){if(!sameSidebar)renderToolbar();if(reader().documentSidebarUI?.isConnected&&!reader().tocStrip){reader().applyTocWidth(preferences.sidebarWidth*reader().sidebarUnit(),{persist:false,snapStrip:false});reader().syncAfterTocResize();}if(!sameSidebar)restoreSidebar();if(reader().dynamicDirty)reader().scheduleDynamicRefresh();}else $('#toolbar').hidden=true;
   if(id==='library')renderLibrary();
   if(id==='execution'){$('#status-left').textContent='앱 설치 · URL 공유 · 모든 데이터는 이 기기에 저장';document.title='앱 설치 · URL 공유 · LibreMemo';}
 }
@@ -571,7 +573,7 @@ async function createDocument(snapshot, handle = null, name = null, local = {}) 
   tab.queue.schedule();
   try { await tab.queue.flush(); } catch(error) { showError(error); }
   if(tab.closing || !tabs.includes(tab)){tab.opening=false;return tab;}
-  tab.opening=false;renderLibrary();if(activeId===tab.id){renderTabs();updateChrome();if($('#sidebar').hidden&&!tab.reader?.appSidebarClosed)restoreSidebar();}else activate(tab.id);
+  tab.opening=false;renderLibrary();activate(tab.id);
   if(tab.queue.error)return tab;
   if(tab.reader.bookIntegrity?.complete === false)toast(tab.reader.bookIntegrity.message, true);
   else if(parsed.metadata.warnings.length)toast(office?'문서를 열었습니다. 표시 범위 안내를 본문에서 확인해주세요.':`페이지를 저장했습니다. ${parsed.metadata.warnings.length}개의 리소스를 보관하지 못했습니다. 문서 정보에서 확인할 수 있어요.`,true);

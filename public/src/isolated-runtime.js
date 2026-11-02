@@ -97,7 +97,7 @@ function bootstrap(channel,preferences,mutationRoots) {
     const entries=[...dirty];dirty.clear();
     const roots=mutationRoots(entries);
     const patches=[];let length=0;
-    for(const [node,kind] of roots){const value=kind==='attributes'?{id:key(node),kind,tag:node.localName,attributes:[...node.attributes].map(a=>[a.name,a.value])}:{id:key(node),kind,html:html(node)};length+=value.html?.length||JSON.stringify(value.attributes).length;if(length>MAX){emit({type:'error',message:'문서 변경의 크기가 안전한 표시 한도(64MB)를 넘었습니다.'});return;}patches.push(value);}
+    for(const [node,kind] of roots){const value=kind==='attributes'?{id:key(node),kind,tag:node.localName,attributes:[...node.attributes].map(a=>[a.name,a.value]),revision:appliedInput}:{id:key(node),kind,html:html(node)};length+=value.html?.length||JSON.stringify(value.attributes).length;if(length>MAX){emit({type:'error',message:'문서 변경의 크기가 안전한 표시 한도(64MB)를 넘었습니다.'});return;}patches.push(value);}
     for(const node of [...controlNodes].slice(0,256)){
       if(!node.isConnected){controlNodes.delete(node);continue;}
       if(/^(?:file|password)$/i.test(node.type)||node.value.length>200000)continue;
@@ -113,12 +113,14 @@ function bootstrap(channel,preferences,mutationRoots) {
   const schedule=()=>{if(!timer)timer=setTimeout(publish,30);};
   new MutationObserver(records=>{
     if(!started)return;
+    let immediate=false;
     for(const record of records){
       for(const node of record.removedNodes||[])if(node.nodeType===1)removed.add(node);
       if(record.type==='childList'&&[...record.addedNodes,...record.removedNodes].every(node=>node.nodeType===1&&node.localName==='script'))continue;
       const node=record.target.nodeType===1?record.target:record.target.parentElement;if(!node||inert(node))continue;const kind=record.type==='attributes'?'attributes':'content';if(dirty.get(node)!=='content')dirty.set(node,kind);
+      if(record.type==='attributes'&&record.target===document.documentElement&&record.attributeName==='data-reader-ready'&&document.documentElement.dataset.readerReady==='false')immediate=true;
     }
-    schedule();
+    if(immediate){clearTimeout(timer);publish();}else schedule();
   }).observe(document,{subtree:true,childList:true,characterData:true,attributes:true});
   const command=value=>{
     if(value?.channel!==channel)return;
@@ -137,7 +139,7 @@ function bootstrap(channel,preferences,mutationRoots) {
     }
     if(!['click','input','change','toggle','submit'].includes(value.type)||!/^r\d{1,12}$/.test(value.id))return;
     const node=nodes.get(value.id);if(!node?.isConnected)return;
-    if(value.type==='toggle'&&node.localName==='details'){if(node.open!==!!value.open)node.open=!!value.open;return;}
+    if(value.type==='toggle'&&node.localName==='details'){if(Number.isSafeInteger(value.revision)&&value.revision>=0)appliedInput=Math.max(appliedInput,value.revision);if(node.open!==!!value.open)node.open=!!value.open;return;}
     if(value.type==='submit'&&node.localName==='form'){navigationEnabled=true;pendingNavigation=null;node.requestSubmit();return;}
     if(value.type==='input'||value.type==='change'){
       if(!['input','textarea','select'].includes(node.localName)||typeof value.value!=='string'||value.value.length>200000)return;
@@ -261,7 +263,7 @@ export class IsolatedRuntime {
         const temp=new DOMParser().parseFromString('<html><head></head><body></body></html>','text/html'),special=['html','head','body'].includes(patch.tag),node=special?(patch.tag==='html'?temp.documentElement:temp[patch.tag]):temp.createElement(patch.tag);if(!special)temp.body.append(node);
         for(const pair of patch.attributes)if(Array.isArray(pair)&&pair.length===2&&pair.every(v=>typeof v==='string'))try{node.setAttribute(pair[0],pair[1]);}catch{}
         node.setAttribute(ID,patch.id);
-        const safeDoc=sanitizeRuntimeHTML(temp.documentElement.outerHTML),safe=special?(patch.tag==='html'?safeDoc.documentElement:safeDoc[patch.tag]):safeDoc.body.firstElementChild;if(safe)this.copyAttributes(target,safe);
+        const safeDoc=sanitizeRuntimeHTML(temp.documentElement.outerHTML),safe=special?(patch.tag==='html'?safeDoc.documentElement:safeDoc[patch.tag]):safeDoc.body.firstElementChild;if(safe)this.copyAttributes(target,safe,patch.revision);
       }else if(patch.kind==='content'&&typeof patch.html==='string'&&patch.html.length<=MAX_HTML){
         const safe=sanitizeRuntimeHTML(target===this.doc.documentElement?patch.html:target===this.doc.head?'<html>'+patch.html+'<body></body></html>':target===this.doc.body?'<html><head></head>'+patch.html+'</html>':'<html><head></head><body>'+patch.html+'</body></html>');
         const replacement=target===this.doc.documentElement?safe.documentElement:target===this.doc.head?safe.head:target===this.doc.body?safe.body:safe.body.firstElementChild;
@@ -275,21 +277,31 @@ export class IsolatedRuntime {
     this.onPatch();
   }
   index(root) {for(const node of [root,...root.querySelectorAll('['+ID+']')]){const id=node.getAttribute(ID);if(validId(id)){this.nodes.set(id,node);if(!this.attributes.has(id))this.attributes.set(id,new Map([...node.attributes].map(a=>[a.name,a.value])));}}}
-  copyAttributes(target,source) {
+  copyAttributes(target,source,revision=null) {
     // App-owned marks/layout/runtime state are never author-controlled RPC.
-    const app=name=>name.startsWith('data-htmlmemo-')&&name!==ID,previous=this.attributes.get(target.getAttribute(ID)),next=new Map([...source.attributes].map(a=>[a.name,a.value]));
+    const id=target.getAttribute(ID),app=name=>name.startsWith('data-htmlmemo-')&&name!==ID,previous=this.attributes.get(id),next=new Map([...source.attributes].map(a=>[a.name,a.value]));
+    const staleToggle=target.localName==='details'&&Number.isSafeInteger(revision)&&revision<(this.controlRevisions.get(id)||0);
     for(const name of new Set([...(previous?.keys()||[...target.attributes].map(a=>a.name)),...next.keys()])){
       if(name==='disabled'&&target.hasAttribute('data-htmlmemo-source-max')){target.setAttribute('data-htmlmemo-source-max',String(next.has('disabled')));continue;}
       if(app(name)||previous&&previous.get(name)===next.get(name))continue;
-      if(name==='open'&&target.localName==='details'&&target.hasAttribute('data-htmlmemo-book-search-open'))continue;
+      if(name==='open'&&target.localName==='details'&&(target.hasAttribute('data-htmlmemo-book-search-open')||staleToggle)){
+        if(target.hasAttribute('open'))next.set('open',target.getAttribute('open')||'');else next.delete('open');
+        continue;
+      }
       if(name==='style'&&previous){
         const old=this.doc.createElement('span');old.setAttribute('style',previous.get(name)||'');
         for(const property of new Set([...Array.from(old.style),...Array.from(source.style)]))if(!property.startsWith('--htmlmemo-')&&(old.style.getPropertyValue(property)!==source.style.getPropertyValue(property)||old.style.getPropertyPriority(property)!==source.style.getPropertyPriority(property))){const value=source.style.getPropertyValue(property);if(value)target.style.setProperty(property,value,source.style.getPropertyPriority(property));else target.style.removeProperty(property);}
       }else if(next.has(name))target.setAttribute(name,next.get(name));else target.removeAttribute(name);
     }
-    const id=target.getAttribute(ID);if(validId(id))this.attributes.set(id,next);
+    if(validId(id))this.attributes.set(id,next);
   }
   send(value) {if(!this.disposed)this.port?.postMessage({channel:this.channel,...value});}
+  setDetailsOpen(node,open) {
+    const id=node?.getAttribute?.(ID);if(!validId(id))return;
+    const revision=++this.inputRevision;this.controlRevisions.set(id,revision);
+    const previous=this.attributes.get(id);if(previous){if(open)previous.set('open','');else previous.delete('open');}
+    this.send({type:'toggle',id,open:!!open,revision});
+  }
   setSidebar(open) {
     if(typeof open!=='boolean'||!this.doc.getElementById('reader-nav'))return;
     // The reader just changed these two source attributes locally. Track that
@@ -331,7 +343,7 @@ export class IsolatedRuntime {
       const navigate=!event.defaultPrevented;
       event.preventDefault();this.send({type:'click',id:control.getAttribute(ID),...(navigate?{}:{navigate:false})});
     },false);
-    add(this.doc,'toggle',event=>{const node=sourceTarget(event);if(node?.localName==='details')this.send({type:'toggle',id:node.getAttribute(ID),open:node.open});});
+    add(this.doc,'toggle',event=>{const node=sourceTarget(event);if(node?.localName==='details')this.setDetailsOpen(node,node.open);});
     add(this.doc.defaultView,'hashchange',()=>this.send({type:'hash',hash:this.doc.defaultView.location.hash}));
   }
   dispose() {this.disposed=true;clearTimeout(this.timer);this.reject?.(new DOMException('문서 열기가 취소되었습니다.','AbortError'));this.resolve=this.reject=null;for(const remove of this.listeners)remove();this.port?.close();this.window?.removeEventListener('message',this.receive);this.frame?.remove();if(this.url)URL.revokeObjectURL(this.url);this.nodes.clear();this.attributes.clear();}
