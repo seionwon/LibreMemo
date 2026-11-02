@@ -7,6 +7,7 @@ import { preparePDF, isPDFDocument } from './pdf-document.js';
 import {prepareOffice} from './office-import.js';
 import {OFFICE_MIMES} from './office-formats.js';
 import {IMAGE_MIMES,pastedImages,clipboardImageFile,isImagePasteTarget} from './image-formats.js';
+import {canSleep,cancelTabSleep,scheduleTabSleep} from './tab-sleep.js';
 import { listDocuments, getDocument, trashDocument, restoreDocument, deleteDocument, deleteTrashedDocuments, getSetting, setSetting, saveDocumentHTML, listRevisionPeriods, listRevisionDay, adjacentRevisionDay, getRevision, putDocumentRevision, checkpointAnnotations, putDocumentView, putDocumentSourceIdentity, writeExternalHTML, updateLibraryFolders, onStorageChange, readLibrary } from './storage.js';
 import {readWebPage,pastedPage,PASTE_LIMIT,isWebSearch,BrowserTabs} from './web.js';
 import { readLocalHTML, droppedHTMLFiles, findLocalDuplicates, identifyLocalFile, htmlExportName } from './local-files.js';
@@ -460,13 +461,15 @@ function bindTabs() {
 function activate(id) {
   const sameTab=id===activeId,sameSidebar=sameTab&&!$('#sidebar').hidden&&reader()&&$('#sidebar').annotationReader===reader();
   if(!sameTab){
-    reader()?.stopSpeech();historyRequest++;
+    reader()?.rememberPosition();reader()?.stopSpeech();historyRequest++;
     const dialog=$('#dialog');if(dialog.open&&dialog.querySelector('[data-history-document]'))dialog.close();
   }
   if(readerFocused && !sameTab)void leaveReaderFocus();
   if(!sameSidebar){closePopover(); closeSidebar({remember:false,clearSearch:false});}
   $('.chrome').classList.remove('address-editing');activeId=id; $('#library').hidden=id!=='library';$('#execution').hidden=id!=='execution';$('#workspace').hidden=id==='library'||id==='execution';
   tabs.forEach(tab=>tab.host.hidden=tab.id!==id);renderTabs();updateChrome();
+  tabs.forEach(tab=>tab.id===id?cancelTabSleep(tab):scheduleTabSleep(tab,sleepTab));
+  if(active()?.asleep)safely(()=>wakeTab(active()))();
   if(reader()){if(!sameSidebar)renderToolbar();if(reader().documentSidebarUI?.isConnected&&!reader().tocStrip){reader().applyTocWidth(preferences.sidebarWidth*reader().sidebarUnit(),{persist:false,snapStrip:false});reader().syncAfterTocResize();}if(!sameSidebar)restoreSidebar();if(reader().dynamicDirty)reader().scheduleDynamicRefresh();}else $('#toolbar').hidden=true;
   if(id==='library')renderLibrary();
   if(id==='execution'){$('#status-left').textContent='앱 설치 · URL 공유 · 모든 데이터는 이 기기에 저장';document.title='앱 설치 · URL 공유 · LibreMemo';syncStatusbarVisibility();}
@@ -489,13 +492,35 @@ function updateChrome() {
   document.title=tab?tab.title+' · LibreMemo':'LibreMemo · 나만의 앱 서재';
 }
 function createHost(id,type) { const host=document.createElement('div');host.id='workspace-'+id;host.className='workspace-host '+type+'-host';host.hidden=true;$('#workspaces').append(host);return host; }
-async function openRecord(record, prepared = null, {deferReady = false, sourceIdentity = null} = {}) {
+// A hidden long document is released entirely and reopened from storage on
+// return; the tab keeps its place, position and undo steps.
+async function sleepTab(tab) {
+  if(!tabs.includes(tab)||tab.id===activeId||!canSleep(tab))return;
+  await tab.queue.flush();await tab.checkpoints.flush({force:true});
+  if(!tabs.includes(tab)||tab.id===activeId||!canSleep(tab))return;
+  const history=tab.reader.history;tab.checkpoints.dispose();tab.reader.dispose();
+  tabs[tabs.indexOf(tab)]={id:tab.id,type:'document',title:tab.title,record:{id:tab.record.id,name:tab.record.name},asleep:true,history,host:createHost(tab.id,'document')};
+  renderTabs();
+}
+function wakeTab(tab) {
+  return tab.waking ||= (async()=>{
+    try{
+      const record=await getDocument(tab.record.id);
+      // The user may have moved on while storage answered; opening would pull them back.
+      if(!tabs.includes(tab)||activeId!==tab.id)return tabs.find(t=>t.id===tab.id);
+      if(!record||record.trashedAt){await closeTab(tab.id);throw Error('문서가 휴지통으로 이동했거나 삭제되었습니다. 서재를 다시 확인해주세요.');}
+      const position=tabs.indexOf(tab);tabs.splice(position,1);tab.host.remove();
+      return await openRecord(record,null,{wake:{id:tab.id,position,history:tab.history}});
+    }finally{tab.waking=null;}
+  })();
+}
+async function openRecord(record, prepared = null, {deferReady = false, sourceIdentity = null, wake = null} = {}) {
   if(!record||record.trashedAt)throw Error('휴지통의 문서는 먼저 복원한 뒤 열어주세요.');
   libraryTrash=false;
-  const existing=tabs.find(tab=>tab.record?.id===record.id);if(existing){if(existing.closePromise){await existing.closePromise;return openRecord(record,prepared,{deferReady,sourceIdentity});}activate(existing.id);return existing;}
+  const existing=tabs.find(tab=>tab.record?.id===record.id);if(existing){if(existing.closePromise){await existing.closePromise;return openRecord(record,prepared,{deferReady,sourceIdentity});}activate(existing.id);return existing.asleep?wakeTab(existing):existing;}
   if(!prepared && typeof record.html!=='string' && !record.file)record=await getDocument(record.id);
   if(!record||record.trashedAt)throw Error('문서가 휴지통으로 이동했거나 삭제되었습니다. 서재를 다시 확인해주세요.');
-  const opened=tabs.find(tab=>tab.record?.id===record.id);if(opened){if(opened.closePromise){await opened.closePromise;return openRecord(record,prepared,{deferReady,sourceIdentity});}activate(opened.id);return opened;}
+  const opened=tabs.find(tab=>tab.record?.id===record.id);if(opened){if(opened.closePromise){await opened.closePromise;return openRecord(record,prepared,{deferReady,sourceIdentity});}activate(opened.id);return opened.asleep?wakeTab(opened):opened;}
   // The library already holds a prepared, sanitized snapshot. Reopening it
   // should parse it once in the iframe, not clone the entire book in DOMParser first.
   const parsed=prepared || (isPDFDocument(record.metadata)?preparePDF(record.file,{metadata:record.metadata,title:record.title}):record.file ? {file:record.file,metadata:structuredClone(record.metadata),nativeScroll:true,savedMetadata:true} : record.metadata ? (() => {
@@ -506,7 +531,7 @@ async function openRecord(record, prepared = null, {deferReady = false, sourceId
       : record.html;
     return {html, metadata, nativeScroll: record.nativeScroll || metadata.execution?.allowScripts || record.byteSize >= 4 * 1024 * 1024, savedMetadata: true};
   })() : parseHTML(record.html,{title:record.title,source:record.source,allowScripts:true}));
-  const tab={id:uid(),type:'document',title:record.title,opening:true,persisted:!prepared,record:{...record,nativeScroll:!!parsed.nativeScroll},host:null};tab.host=createHost(tab.id,'document');
+  const tab={id:wake?.id||uid(),type:'document',title:record.title,opening:true,persisted:!prepared,record:{...record,nativeScroll:!!parsed.nativeScroll},host:null};tab.host=createHost(tab.id,'document');
   tab.queue=new SaveQueue(async()=>{
     await tab.reader.ready;
     // Early scrolling/edits must not save before the import identity is ready.
@@ -527,7 +552,7 @@ async function openRecord(record, prepared = null, {deferReady = false, sourceId
     delete tab.record.html;delete tab.record.file;delete tab.record.originalFile;
   },()=>{if(activeId===tab.id)saveStatus(tab);renderTabs();renderFolderState();});
   tab.checkpoints=new AnnotationCheckpoints(async()=>{await tab.queue.flush();await checkpointAnnotations(tab.record.id);},()=>{if(activeId===tab.id)saveStatus(tab);});
-  tabs.push(tab);activate(tab.id);
+  tabs.splice(wake?.position??tabs.length,0,tab);activate(tab.id);
   tab.reader=new Reader(tab.host,parsed,{
     sourceKey:record.contentKey||record.sourceIdentity?.digest||record.id,
     onChange:()=>{tab.queue.schedule();tab.checkpoints.schedule();if(activeId===tab.id){renderToolbar();if(['annotations','bookmarks','outline'].includes(sidebarMode))renderSidebar(sidebarMode);else updateSidebarCounts($('#sidebar'),tab.reader);tab.reader?.refreshDocumentSidebar();}},
@@ -553,6 +578,7 @@ async function openRecord(record, prepared = null, {deferReady = false, sourceId
   let baselineMetadata;
   try {
     await tab.reader.ready;
+    if(wake?.history)tab.reader.history=wake.history;
     baselineMetadata=structuredClone(tab.reader.metadata);
     if(sourceIdentity){const identity=await sourceIdentity;if(identity)tab.record.sourceIdentity=identity;}
   } catch(error) {tabs.splice(tabs.indexOf(tab),1);tab.checkpoints.dispose();tab.reader.dispose();activate('library');throw error;}
@@ -598,6 +624,7 @@ async function closeTab(id) {
   tab.closing=true;
   tab.closePromise=(async()=>{
     try{
+      cancelTabSleep(tab);if(tab.waking)await tab.waking.catch(()=>{});
       if(tab.reader){await tab.reader.ready;tab.reader.rememberPosition();await tab.queue.flush();await tab.checkpoints.flush({force:true});tab.checkpoints.dispose();tab.reader.dispose();}else tab.host.remove();
       browserTabs.forget(id);if(lastWebTab===tab)lastWebTab=null;tabs.splice(tabs.indexOf(tab),1);if(activeId===id)activate(tabs.at(-1)?.id||'library');else renderTabs();await refreshLibrary();
     }finally{tab.closing=false;tab.closePromise=null;}
