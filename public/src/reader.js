@@ -1441,7 +1441,8 @@ export class Reader {
       }
       this.pendingReadingAnchor=this.captureReadingAnchor?.();
       if((this.sourceFontExtraSteps||0)!==0||this.sourceFontAtMin||this.sourceFontResetSize){
-        event.preventDefault();event.stopImmediatePropagation();
+        event.preventDefault();
+        if(!this.runtime||(this.sourceFontExtraSteps||0)>0||this.sourceFontResetSize)event.stopImmediatePropagation();
         this.stepSourceFont(-1);
         return;
       }
@@ -1473,7 +1474,8 @@ export class Reader {
       }
       this.pendingReadingAnchor=this.captureReadingAnchor?.();
       if((this.sourceFontExtraSteps||0)!==0||this.sourceFontAtMax||this.sourceFontResetSize){
-        event.preventDefault();event.stopImmediatePropagation();
+        event.preventDefault();
+        if(!this.runtime||(this.sourceFontExtraSteps||0)<0||this.sourceFontResetSize)event.stopImmediatePropagation();
         this.stepSourceFont(1);
         return;
       }
