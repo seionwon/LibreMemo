@@ -377,7 +377,7 @@ test('clearing or leaving whole-book search cancels pending navigation and a tim
 test('annotation list names what each annotation marks, the heading above it and when it was made',()=>{
   installDOM();const a=sidebar();
   const doc=documentFor('<html><head></head><body><main><h1>첫 장</h1><p>머리말입니다.</p><h2>설치하기</h2><p data-htmlmemo-anchor="n7">에이전트를 설치하는 문단입니다.</p><p>강조할 <mark data-htmlmemo-mark data-htmlmemo-id="h1">핵심 문장</mark>이 있습니다.</p></main></body></html>');
-  Object.setPrototypeOf(a.r,Reader.prototype);delete a.r.outline;a.r.doc=doc;
+  Object.setPrototypeOf(a.r,Reader.prototype);delete a.r.outline;delete a.r.jump;a.r.doc=doc;
   const created=new Date(2026,9,21,23,40).getTime();
   a.r.metadata.annotations=[{id:'p1',type:'pen',color:'#334155',anchor:'n7',anchorTarget:null,points:[{x:0,y:0}],created},
     {id:'h1',type:'highlight',color:'#edcf67',textAnchor:{quote:'핵심 문장',start:0,end:5},created},
@@ -846,4 +846,27 @@ test('embedded native TOC items can be edited without shifting textIndex offsets
   assert.equal(exported.querySelector('#reader-tree summary').textContent,'1권 입문','exported source DOM keeps original TOC text');
   assert.equal(exported.querySelector('#reader-tree a').textContent,'첫 장','exported source DOM keeps original chapter link text');
   assert.equal(exported.querySelector('[data-htmlmemo-toc-original],[data-htmlmemo-toc-edit],[data-htmlmemo-toc-edited]'),null);
+});
+
+test('office page documents do not render synthetic page headings in the main pane and sidebar clicks jump to the exact page section',()=>{
+  installDOM();const a=sidebar();
+  const doc=documentFor('<html><head></head><body><main><article data-office-pages data-rhwp><section class="office-page" id="rhwp-page-1" data-page-title="1쪽"><svg viewBox="0 0 800 1100"></svg></section><section class="office-page" id="rhwp-page-2" data-page-title="2쪽"><svg viewBox="0 0 800 1100"></svg></section><section class="office-page" id="rhwp-page-3"><h2 id="legacy-page-3">3쪽</h2><svg viewBox="0 0 800 1100"></svg></section></article></main></body></html>');
+  const pages=[...doc.querySelectorAll('.office-page')];
+  pages.forEach((p,i)=>{p.getClientRects=()=>[{top:i*900,height:860}];p.getBoundingClientRect=()=>({top:i*900,left:0,width:800,height:860});});
+  const legacyH2=doc.getElementById('legacy-page-3');
+  legacyH2.getClientRects=()=>[];legacyH2.getBoundingClientRect=()=>({top:0,left:0,width:0,height:0});
+  Object.setPrototypeOf(a.r,Reader.prototype);delete a.r.outline;delete a.r.jump;
+  Object.defineProperties(a.r,{scrollTop:{value:0,writable:true},scrollLeft:{value:0,writable:true}});
+  a.r.doc=doc;a.r.nativeScroll=true;a.r.zoom=1;a.r.linkHistory=[];
+  a.r.plainReadingButtons={};a.r.layerOrigin=()=>({top:0,left:0});a.r.revealNestedScroll=()=>{};a.r.updateReadingControls=()=>{};
+  assert.match(a.r.baseEditorStyle(),/article\[data-office-pages\]>\.office-page>h2\{display:none!important\}/);
+  const items=a.r.outline();
+  assert.deepEqual(items.map(i=>i.title),['1쪽','2쪽','3쪽']);
+  assert.deepEqual(items.map(i=>i.node),pages);
+  assert.equal(a.r.navigateSourceTarget(items[2].node),true);
+  assert.equal(a.r.scrollTop,1788);
+  assert.equal(a.r.readingHeadingState().current,2);
+  assert.equal(a.r.jumpToHash('#legacy-page-3'),true);
+  assert.equal(a.r.scrollTop,1788);
+  assert.equal(a.r.readingHeadingState().current,2);
 });

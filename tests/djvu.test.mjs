@@ -35,7 +35,7 @@ test('real DjVu WASM renders native pixels, Korean positions and common text anc
 test('bundled DjVu supplies every page in source order and reports progress',async()=>{
   const bytes=await readFile('tests/fixtures/djvu/bundled.djvu'),progress=[];assert.equal(inspectDjvu(bytes).pages,2);
   const result=await renderDjvu(bytes,'two pages',{...options,onProgress:(...args)=>progress.push(args)}),doc=documentFor(await result.file.text());
-  assert.deepEqual([...doc.querySelectorAll('h2')].map(n=>n.textContent),['1쪽','2쪽']);assert.match(textIndex(doc).text,/한국어[\s\S]*Second page/);assert.deepEqual(progress,[[1,2],[2,2]]);
+  assert.equal(doc.querySelector('.office-page h2'),null);assert.deepEqual([...doc.querySelectorAll('.office-page')].map(n=>n.getAttribute('data-page-title')),['1쪽','2쪽']);assert.match(textIndex(doc).text,/한국어[\s\S]*Second page/);assert.deepEqual(progress,[[1,2],[2,2]]);
 });
 test('DjVu IW44 color and JB2 bilevel codecs render in both pinned WASM variants',async()=>{
   await initialize();const scalar=await import('../public/vendor/djvu/scalar/djvu_rs.js');await scalar.default({module_or_path:await readFile('public/vendor/djvu/scalar/djvu_rs_bg.wasm')});

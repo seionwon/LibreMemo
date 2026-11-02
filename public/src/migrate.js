@@ -375,6 +375,8 @@ export async function migrateAnnotations({annotations = [], bookmarks = [], outl
     const headings = (() => {
       const slides = [...doc.querySelectorAll('article[data-office-slides] > .office-slide')];
       if (slides.length) return slides.map((node, idx) => ({node, level: 1, originalTitle: node.getAttribute('data-slide-title') || node.querySelector('h1,h2,h3')?.textContent.trim() || `${idx + 1}쪽`, index: idx}));
+      const pages = [...doc.querySelectorAll('article[data-office-pages] > .office-page')];
+      if (pages.length) return pages.map((node, idx) => ({node, level: 1, originalTitle: node.getAttribute('data-page-title') || node.querySelector(':scope > h1,:scope > h2,:scope > h3')?.textContent.trim() || `${idx + 1}쪽`, index: idx}));
       const ebook = [...(doc.querySelector('template[data-ebook-outline]')?.content.querySelectorAll('a[href]') || [])].map(a => ({node: doc.getElementById(a.getAttribute('href').slice(1)), level: Math.max(1, Math.min(16, Number(a.dataset.level) || 1)), originalTitle: a.textContent.trim()})).filter(e => e.node && e.originalTitle).map((e, idx) => ({...e, index: idx}));
       if (ebook.length) return ebook;
       return [...doc.querySelectorAll('h1,h2,h3,h4,h5,h6')].filter(n => n.textContent.trim() && !n.closest('[data-htmlmemo-ui]')).map((node, idx) => ({node, level: Number(node.localName[1]), originalTitle: String(node.textContent || '').replace(/\s+/g, ' ').trim(), index: idx}));

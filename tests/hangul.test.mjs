@@ -12,7 +12,7 @@ installDOM();const fixtures=await hangulFixtures();
 test('rhwp reads each format with pages, exact Korean search text, shared highlights and export roundtrip',async()=>{
   for(const [format,bytes] of Object.entries(fixtures)){
     const parsed=parseHTML((await renderOffice(bytes,format,'한글')).html),doc=documentFor(parsed.html),index=textIndex(doc);
-    assert.equal(parsed.nativeScroll,true);assert.equal(doc.querySelectorAll('.office-page').length,2);
+    assert.equal(parsed.nativeScroll,true);assert.equal(doc.querySelectorAll('.office-page').length,2);assert.equal(doc.querySelector('.office-page h2'),null);assert.deepEqual([...doc.querySelectorAll('.office-page')].map(n=>n.getAttribute('data-page-title')),['1쪽','2쪽']);
     assert.match(index.text,/검색하는 한국어 본문입니다/);assert.match(index.text,/표 안의 검색 본문/);assert.match(index.text,/두 번째 쪽의 본문과 북마크/);
     assert.ok([...doc.querySelectorAll('text')].every(n=>n.closest('[aria-hidden="true"]')),'vector glyphs do not repeat TTS');
     const start=index.text.indexOf('한국어'),quote='한국어';assert.ok(wrapOffsets(doc,start,start+quote.length,{'data-htmlmemo-mark':'hangul'},'background:#ffaa0055',index).length);

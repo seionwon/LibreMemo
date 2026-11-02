@@ -74,6 +74,7 @@ export async function renderDjvu(bytes,title,{initialize=()=>ready??=init(),enco
   try{
     doc=WasmDocument.from_bytes(bytes);const count=doc.page_count();
     if(!count||count>DJVU_MAX_PAGES)throw Error('DjVu 문서는 1~10,000쪽 범위로 나누어 가져와 주세요.');
+    let outline='<template data-ebook-outline>';for(let i=1;i<=count;i++)outline+='<a href="#djvu-page-'+i+'" data-level="1">'+i+'쪽</a>';outline+='</template>';parts.push(outline);
     useWebp=!customEncode&&count>10;
     const maxRenderPixels=!customEncode&&count>10?(count>200?1600000:count>50?2200000:3200000):DJVU_MAX_PIXELS;
     for(let i=0;i<count;i++){
@@ -93,7 +94,7 @@ export async function renderDjvu(bytes,title,{initialize=()=>ready??=init(),enco
         const transcript=!overlay&&plain.trim()?'<p class="office-note" data-tts-skip>이 쪽의 문자 정보 · 원본에 글자별 위치가 없습니다.</p><pre class="office-plain">'+esc(plain)+'</pre>':'';
         const logicalWidth=Math.max(320,Math.min(1600,width*96/Math.max(25,dpi)));
         const mime=png.type==='image/webp'?'image/webp':'image/png';
-        parts.push('<section class="office-page" style="width:'+logicalWidth/16+'em"><h2 id="djvu-page-'+(i+1)+'">'+(i+1)+'쪽</h2><div class="djvu-scan" data-djvu-page="'+(i+1)+'"><svg xmlns="http://www.w3.org/2000/svg" width="'+width+'" height="'+height+'" viewBox="0 0 '+width+' '+height+'"><image width="'+width+'" height="'+height+'" href="data:'+mime+';base64,',...await pngParts(png),'"/>'+overlay+'</svg></div>'+transcript+'</section>');
+        parts.push('<section class="office-page" id="djvu-page-'+(i+1)+'" data-page-title="'+(i+1)+'쪽" style="width:'+logicalWidth/16+'em"><div class="djvu-scan" data-djvu-page="'+(i+1)+'"><svg xmlns="http://www.w3.org/2000/svg" width="'+width+'" height="'+height+'" viewBox="0 0 '+width+' '+height+'"><image width="'+width+'" height="'+height+'" href="data:'+mime+';base64,',...await pngParts(png),'"/>'+overlay+'</svg></div>'+transcript+'</section>');
         total+=overlay.length+transcript.length;if(total>DJVU_MAX_OUTPUT)throw Error('DjVu 읽기 화면이 2GB를 넘습니다. 문서를 나누어 가져와 주세요.');
         onProgress(i+1,count);
       }finally{page?.free();}

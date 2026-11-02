@@ -122,7 +122,7 @@ export function hangulPage(svg,page,warnings=[],measure=hangulMeasure,layout=nul
     }
     return result;
   }
-  return '<section class="office-page" style="width:'+width/16+'em"><h2 id="rhwp-page-'+(page+1)+'">'+(page+1)+'쪽</h2><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+width+' '+height+'" width="'+width+'" height="'+height+'">'+children(root.svg,0)+'</svg></section>';
+  return '<section class="office-page" id="rhwp-page-'+(page+1)+'" data-page-title="'+(page+1)+'쪽" style="width:'+width/16+'em"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+width+' '+height+'" width="'+width+'" height="'+height+'">'+children(root.svg,0)+'</svg></section>';
 }
 
 export async function renderHangul(bytes,format,warnings){
@@ -144,6 +144,7 @@ export async function renderHangul(bytes,format,warnings){
       if(size>2*1024*1024*1024)throw Error('한글 문서의 읽기 화면이 2GB를 넘습니다. 문서를 나누어 가져와 주세요.');
       body.push(html);
     }
-    return size>=64*1024*1024?new Blob(['<article data-office-pages data-rhwp>',...body,'</article>']):'<article data-office-pages data-rhwp>'+body.join('')+'</article>';
+    const outline='<template data-ebook-outline>'+body.map((_,i)=>'<a href="#rhwp-page-'+(i+1)+'" data-level="1">'+(i+1)+'쪽</a>').join('')+'</template>';
+    return size>=64*1024*1024?new Blob(['<article data-office-pages data-rhwp>',outline,...body,'</article>']):'<article data-office-pages data-rhwp>'+outline+body.join('')+'</article>';
   }finally{doc?.free();}
 }

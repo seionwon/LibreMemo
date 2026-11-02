@@ -162,7 +162,7 @@ export class Reader {
     });
   }
   baseEditorStyle() {
-    return 'article[data-office-slides]>.office-slide>h2{display:none!important}html[data-htmlmemo-drawing] #htmlmemo-annotation-layer,html[data-htmlmemo-drawing] #htmlmemo-annotation-layer *{pointer-events:none!important}html[data-htmlmemo-picking] [data-htmlmemo-mark],html[data-htmlmemo-picking] [data-htmlmemo-mark] *{cursor:pointer!important}html[data-htmlmemo-picking] [data-htmlmemo-hit]{pointer-events:stroke!important;cursor:pointer!important}html[data-htmlmemo-picking="select"] #htmlmemo-annotation-layer,html[data-htmlmemo-picking="select"] [data-htmlmemo-id],html[data-htmlmemo-picking="select"] [data-htmlmemo-hit]{touch-action:none!important}[data-htmlmemo-preview],[data-htmlmemo-preview] *{pointer-events:none!important}[data-htmlmemo-drag-source]{opacity:.25!important;pointer-events:none!important}html[data-htmlmemo-moving],html[data-htmlmemo-moving][data-htmlmemo-picking] *{cursor:grabbing!important;user-select:none!important;-webkit-user-select:none!important}' + this.layoutEditorStyle() + this.textMarkingStyle() + this.readerUIScaleStyle();
+    return 'article[data-office-slides]>.office-slide>h2,article[data-office-pages]>.office-page>h2{display:none!important}html[data-htmlmemo-drawing] #htmlmemo-annotation-layer,html[data-htmlmemo-drawing] #htmlmemo-annotation-layer *{pointer-events:none!important}html[data-htmlmemo-picking] [data-htmlmemo-mark],html[data-htmlmemo-picking] [data-htmlmemo-mark] *{cursor:pointer!important}html[data-htmlmemo-picking] [data-htmlmemo-hit]{pointer-events:stroke!important;cursor:pointer!important}html[data-htmlmemo-picking="select"] #htmlmemo-annotation-layer,html[data-htmlmemo-picking="select"] [data-htmlmemo-id],html[data-htmlmemo-picking="select"] [data-htmlmemo-hit]{touch-action:none!important}[data-htmlmemo-preview],[data-htmlmemo-preview] *{pointer-events:none!important}[data-htmlmemo-drag-source]{opacity:.25!important;pointer-events:none!important}html[data-htmlmemo-moving],html[data-htmlmemo-moving][data-htmlmemo-picking] *{cursor:grabbing!important;user-select:none!important;-webkit-user-select:none!important}' + this.layoutEditorStyle() + this.textMarkingStyle() + this.readerUIScaleStyle();
   }
   readerUIScaleStyle(){
     return `[data-htmlmemo-doc-topbar]{zoom:var(--htmlmemo-reader-ui-scale,1);width:var(--htmlmemo-reader-ui-width,100%)!important;translate:var(--htmlmemo-reader-ui-left,0px) 0px;overflow-x:auto!important;scrollbar-width:none;white-space:nowrap}
@@ -3758,19 +3758,24 @@ export class Reader {
   async back() { const p = this.linkHistory.pop(); if (!p) return false; this.scrollTop=p.top; this.scrollLeft=p.left;this.readingHeadingCursor=p.heading?{node:p.heading,top:this.scrollTop}:null; this.rememberPosition();this.updateReadingControls();this.callbacks.onView?.(); return true; }
   jump(target,{align='center'}={}) {
     if(this.pdf){void this.pdf.navigateNode(target).catch(error=>this.callbacks.onError?.(error));return;}
-    this.revealNestedScroll(target,{align});
+    const boxTarget=target?.matches?.('.office-page > h2, .office-slide > h2')?target.parentElement:target;
+    this.revealNestedScroll(boxTarget,{align});
     if(align==='start'){
       // TOC targets can be whole chapters. Align their beginning, rather than
       // centring the height/width of a large section somewhere inside the pane.
       this.scrollLeft=0;
-      const r=target.getBoundingClientRect();
+      const r=boxTarget.getBoundingClientRect();
       if(this.nativeScroll)this.scrollTop=Math.max(0,(r.top-this.layerOrigin().top)*this.zoom-12);
       else{
         const frame=this.frame?.getBoundingClientRect?.(),view=this.viewport.getBoundingClientRect?.();
         this.scrollTop=Math.max(0,frame&&view?this.scrollTop+frame.top+r.top*this.zoom-view.top-12:(r.top+this.rootScrollTop())*this.zoom-12);
       }
-    }else{const r=target.getBoundingClientRect(),origin=this.layerOrigin();this.scrollTop=Math.max(0,(r.top-origin.top+r.height/2)*this.zoom-this.viewport.clientHeight/2);this.scrollLeft=Math.max(0,(r.left-origin.left+r.width/2)*this.zoom-this.viewport.clientWidth/2);}
-    if(this.plainReadingButtons)this.readingHeadingCursor=/^h[1-6]$/i.test(target.localName)?{node:target,top:this.scrollTop}:null;
+    }else{const r=boxTarget.getBoundingClientRect(),origin=this.layerOrigin();this.scrollTop=Math.max(0,(r.top-origin.top+r.height/2)*this.zoom-this.viewport.clientHeight/2);this.scrollLeft=Math.max(0,(r.left-origin.left+r.width/2)*this.zoom-this.viewport.clientWidth/2);}
+    if(this.plainReadingButtons){
+      if(!this.readingHeadingNodes&&this.doc)this.readingHeadingState();
+      const cursorNode=this.readingHeadingIndices?.has(target)?target:(this.readingHeadingIndices?.has(boxTarget)?boxTarget:(/^h[1-6]$/i.test(target?.localName)?target:null));
+      this.readingHeadingCursor=cursorNode?{node:cursorNode,top:this.scrollTop}:null;
+    }
   }
   jumpToHash(hash) {
     if(this.pdf&&/^#pdf-page-\d+$/.test(hash)){void this.pdf.go(Number(hash.slice(10)),0,{history:true}).catch(error=>this.callbacks.onError?.(error));return true;}
@@ -3779,7 +3784,7 @@ export class Reader {
     const target=this.doc.getElementById(id)||[...this.doc.querySelectorAll('a[name]')].find(a=>a.name===id);
     if(!target)return false;
     this.linkHistory.push({top:this.scrollTop,left:this.scrollLeft});if(this.linkHistory.length>128)this.linkHistory.shift();
-    this.jump(target,{align:'start'});this.callbacks.onView?.();return true;
+    this.jump(target,{align:'start'});this.updateReadingControls?.();this.callbacks?.onView?.();return true;
   }
   async navigateSourceHash(hash) {
     if(this.preparing||this.disposed||typeof hash!=='string'||!hash.startsWith('#')||hash.length>=2000)return false;
@@ -3789,11 +3794,11 @@ export class Reader {
     return this.navigateSourceTarget(target);
   }
   navigateSourceTarget(target) {
-    if(this.pdf){return this.pdf.navigateNode(target).catch(error=>{this.callbacks.onError?.(error);return false;});}
+    if(this.pdf){return this.pdf.navigateNode(target).catch(error=>{this.callbacks?.onError?.(error);return false;});}
     if(this.preparing||this.disposed||target?.ownerDocument!==this.doc||!target.isConnected||!this.doc.body.contains(target)||this.isInsideTocOrTopbar(target)||target.closest('script,style,template,[data-htmlmemo-ui]'))return false;
     this.cancelAnnotationJump?.();this.annotationJumpGeneration=(this.annotationJumpGeneration||0)+1;
     this.linkHistory.push({top:this.scrollTop,left:this.scrollLeft});if(this.linkHistory.length>128)this.linkHistory.shift();
-    this.jump(target,{align:'start'});this.callbacks.onView?.();return true;
+    this.jump(target,{align:'start'});this.updateReadingControls?.();this.callbacks?.onView?.();return true;
   }
   async jumpOutlineSection(section) {
     if(!this.annotationBookPaths().has(section))return false;
@@ -4218,12 +4223,22 @@ export class Reader {
     const raw=best&&!(isNum(best.text)&&String(best.text).replace(/\D+/g,'')===String(index+1))?clean(best.text).replace(new RegExp('^'+(index+1)+'\\s*/\\s*'+total+'(?:\\s+|[-:.)]\\s*)?'),'').trim():'';
     const title=raw?prefix+' '+raw:prefix;node.setAttribute('data-slide-title',title);svgEl?.setAttribute('aria-label',title);return title;
   }
+  pageOutlineTitle(node,index){
+    const saved=(node?.getAttribute?.('data-page-title')||'').trim();
+    if(saved)return saved;
+    const heading=node?.querySelector?.(':scope > h1,:scope > h2,:scope > h3')?.textContent?.replace(/\s+/g,' ').trim();
+    const title=heading||`${index+1}쪽`;
+    node?.setAttribute?.('data-page-title',title);
+    return title;
+  }
   outline() {
     if(this.pdf){this.pdf.applyOutlineEdits?.();return this.pdf.entries||[];}
     if(this.cachedOutlineDoc!==this.doc||!this.cachedOutline?.length||!this.cachedOutline.every(e=>e.node?.isConnected)){
       this.cachedOutlineDoc=this.doc;
       const slides=[...this.doc.querySelectorAll('article[data-office-slides] > .office-slide')];
+      const pages=!slides.length?[...this.doc.querySelectorAll('article[data-office-pages] > .office-page')]:[];
       if(slides.length)this.cachedOutline=slides.map((node,index)=>{const originalTitle=this.slideOutlineTitle(node,index,slides.length);return {node,level:1,title:originalTitle,originalTitle,index};});
+      else if(pages.length)this.cachedOutline=pages.map((node,index)=>{const originalTitle=this.pageOutlineTitle?this.pageOutlineTitle(node,index):(node.getAttribute('data-page-title')||node.querySelector(':scope > h1,:scope > h2,:scope > h3')?.textContent?.trim()||`${index+1}쪽`);return {node,level:1,title:originalTitle,originalTitle,index};});
       else{
         const entries=[...(this.doc.querySelector('template[data-ebook-outline]')?.content.querySelectorAll('a[href]')||[])].map(a=>({node:this.doc.getElementById(a.getAttribute('href').slice(1)),level:clamp(Number(a.dataset.level)||1,1,16),originalTitle:a.textContent.trim()})).filter(e=>e.node&&e.originalTitle).map((e,index)=>({...e,title:e.originalTitle,index}));
         if(entries.length)this.cachedOutline=entries;
