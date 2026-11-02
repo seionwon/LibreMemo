@@ -22,7 +22,7 @@ test('a failed sleep stays quiet and the tab stays usable',async()=>{
 });
 test('a sleeping tab keeps its place, id, position source and undo steps',async()=>{
   const app=await readFile('public/src/app.js','utf8');
-  assert.match(app,/reader\(\)\?\.rememberPosition\(\);reader\(\)\?\.stopSpeech\(\)/);
+  assert.match(app,/reader\(\)\?\.flushPosition\(\);reader\(\)\?\.stopSpeech\(\)/);
   assert.match(app,/const history=tab\.reader\.history;tab\.checkpoints\.dispose\(\);tab\.reader\.dispose\(\)/);
   assert.match(app,/tabs\.splice\(wake\?\.position\?\?tabs\.length,0,tab\)/);
   assert.match(app,/if\(wake\?\.history\)tab\.reader\.history=wake\.history/);

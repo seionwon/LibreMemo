@@ -35,7 +35,7 @@ test('real Chrome: Pages-only PDF uses the HTML and Markdown UI, saves page anno
     chrome=await launchChrome();const page=chrome.page;await page.send('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false});await page.navigate(env.url);
     const original=await readFile(new URL('fixtures/unified-reader.pdf',import.meta.url));await chooseFile(page,original,'같은 읽기 도구.pdf');await page.waitFor(ready,30000);await saved(page,"window.__pdfRecords[0].metadata.format==='pdf'");
     assert.equal(await page.evaluate("document.querySelector('[data-sidebar-view=outline]').getAttribute('aria-pressed')"),'true');assert.equal(await page.evaluate('document.querySelectorAll("#sidebar [data-heading]").length'),3);
-    const pdfControls=await page.evaluate(controls);assert.equal(pdfControls.height,24);assert.deepEqual(pdfControls.actions,['toggle-sidebar','reading-back','previous-heading','next-heading','speak','font-smaller','font-reset','font-larger','zoom']);
+    const pdfControls=await page.evaluate(controls);assert.equal(pdfControls.height,24);assert.deepEqual(pdfControls.actions,['toggle-sidebar','reading-back','previous-heading','next-heading','speak','font-smaller','font-reset','font-larger','reading-layout','zoom']);
     // Pixel data plus an actual visible raster guard the hidden-iframe canvas
     // regression; a populated but unpainted canvas is insufficient.
     assert.equal(await page.evaluate(`(()=>{const image=${doc}.querySelector('[data-pdf-raster]'),canvas=${doc}.querySelector('canvas'),pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;return image.getBoundingClientRect().height>100&&pixels.some((n,i)=>i%4!==3&&n<100);})()`),true);

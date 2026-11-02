@@ -573,6 +573,7 @@ export class Reader {
       this.pager?.scrolled();this.scheduleReadingProgress();
       clearTimeout(this.positionTimer);
       this.positionTimer = setTimeout(() => {
+        this.positionTimer = 0;
         if (this.disposed) return;
         this.rememberPosition(); this.callbacks.onView?.();
       }, 250);
@@ -3032,6 +3033,12 @@ export class Reader {
     }
     if(!this.preparing&&this.layer?.isConnected)this.renderDrawingLayer();
     this.rememberPosition(); this.callbacks.onView?.();
+  }
+  // Leaving a tab must not lose a scroll still in its debounce, and must not
+  // rewrite the saved view of a document that was only looked at.
+  flushPosition() {
+    if(!this.positionTimer)return;
+    clearTimeout(this.positionTimer);this.positionTimer=0;this.rememberPosition();
   }
   rememberPosition() {
     // Hidden tabs can report zero geometry; never replace the last visible reading position with it.
