@@ -48,6 +48,8 @@ export class PdfReader{
     this.root.removeAttribute('data-htmlmemo-anchor');this.relayout();
     const style=this.doc.createElement('style');style.id='htmlmemo-pdf-style';style.textContent=PDF_STYLE;this.doc.head.append(style);
     this.doc.body.style.width=this.width*this.scale+'px';
+    this.reader.naturalWidth=this.width*this.scale;this.reader.frame.style.width=this.reader.naturalWidth+'px';
+    if(this.reader.viewport?.clientWidth>0&&this.reader.fitZoom&&this.reader.applyZoom){this.reader.autoFit=this.reader.metadata.view.autoFit!==false;this.reader.zoom=clamp(this.reader.autoFit?this.reader.fitZoom():(this.reader.metadata.view.zoom||this.reader.fitZoom()),.2,8);this.reader.applyZoom();}
     this.entries=await this.readOutline();
     const position=this.reader.metadata.view.pdfPosition,page=clamp(Number(position?.page)||1,1,this.count);
     await this.ensure(page);if(this.disposed)return;
@@ -104,7 +106,7 @@ export class PdfReader{
     let slot=this.slots.get(page);if(slot)return slot.ready;
     const node=this.doc.createElement('section');node.id='pdf-page-'+page;node.className='htmlmemo-pdf-page';node.dataset.pdfPage=page;node.dataset.htmlmemoAnchor='n'+page;node.setAttribute('aria-label',page+'쪽');
     const inner=this.doc.createElement('div');inner.className='htmlmemo-pdf-page-inner';node.append(inner);this.root.append(node);
-    slot={page,node,inner,controller:new AbortController(),used:performance.now()};slot.image=new PdfPageImage(inner);this.slots.set(page,slot);this.place(slot);
+    slot={page,node,inner,controller:new AbortController(),used:performance.now()};slot.image=new PdfPageImage(inner,{publishImage:false});this.slots.set(page,slot);this.place(slot);
     slot.ready=(async()=>{
       const pdfPage=await this.pdf.getPage(page);if(this.disposed||slot.controller.signal.aborted)return null;slot.pdfPage=pdfPage;
       const viewport=pdfPage.getViewport({scale:SCALE}),previous=this.size(page);this.sizes.set(page,{width:viewport.width,height:viewport.height});
@@ -133,20 +135,29 @@ export class PdfReader{
     this.watchedPixelRatio=this.pixelRatio();this.pixelRatioQuery=this.appWindow.matchMedia?.('(resolution: '+this.watchedPixelRatio+'dppx)');
     this.pixelRatioQuery?.addEventListener('change',this.onResolutionChange,{once:true});
   }
+  pagePriority(slot){
+    const frame=this.reader.frame?.getBoundingClientRect?.(),view=this.reader.viewport?.getBoundingClientRect?.(),box=slot.node?.getBoundingClientRect?.(),zoom=frame?.width/this.reader.frame?.offsetWidth;
+    if(!(zoom>0)||!(view?.width>0)||!(view?.height>0)||!(box?.width>0)||!(box?.height>0))return 0;
+    const left=frame.left+box.left*zoom,top=frame.top+box.top*zoom,right=left+box.width*zoom,bottom=top+box.height*zoom;
+    return right>view.left&&left<view.left+view.width&&bottom>view.top&&top<view.top+view.height?0:Math.max(1,Math.abs(slot.page-(this.pageAt?.()||slot.page)));
+  }
   visibleRegion(slot){
     const frame=this.reader.frame.getBoundingClientRect(),view=this.reader.viewport.getBoundingClientRect(),box=slot.node.getBoundingClientRect(),zoom=frame.width/this.reader.frame.offsetWidth;
     if(!(zoom>0))return null;
-    return pdfVisibleRasterRegion({left:frame.left+box.left*zoom,top:frame.top+box.top*zoom,width:box.width*zoom,height:box.height*zoom},view,this.size(slot.page));
+    const size=this.size(slot.page),pageBox={left:frame.left+box.left*zoom,top:frame.top+box.top*zoom,width:box.width*zoom,height:box.height*zoom},rasterZoom=pageBox.width/size.width;
+    if(!(rasterZoom>0)||!Number.isFinite(rasterZoom))return null;
+    if(pdfRasterDensity(size.width,size.height,rasterZoom,this.pixelRatio(),PDF_DETAIL_PIXELS)>=rasterZoom*this.pixelRatio()-.01)return {left:0,top:0,width:size.width,height:size.height,visible:{left:0,top:0,width:size.width,height:size.height},rasterZoom};
+    return pdfVisibleRasterRegion(pageBox,view,size);
   }
   clearDetail(slot){slot.detailController?.abort();slot.detail?.dispose();slot.detail?.element.remove();slot.detail=null;slot.detailFailed=null;}
   renderPage(slot){
     if(this.disposed||slot.controller.signal.aborted)return;
     const region=this.visibleRegion(slot),size=this.size(slot.page),pixelRatio=this.pixelRatio();
-    // Neighbours retain a small complete page. Every intersecting page gets its
-    // own screen-density crop, including the second page in a continuous view.
+    // Retain a hidden low-memory canvas for glyph-ink snapping while only
+    // publishing high-resolution detail rasters to the visible page DOM.
     if(!slot.painting&&!slot.image.raster){
       slot.painting=true;
-      void renderPdfPageImage({doc:this.pdf,pageNumber:slot.page,width:size.width,sliceTop:0,sliceBottom:1,rasterZoom:1,pixelRatio,maxPixels:PDF_PREVIEW_PIXELS,priority:()=>this.visibleRegion(slot)?0:1,signal:slot.controller.signal,image:slot.image,renderOptions:()=>({annotationMode:this.pdfjs.AnnotationMode.ENABLE}),waitForIdle:async()=>{},onSize:()=>{}}).catch(error=>{if(!this.disposed&&!slot.controller.signal.aborted)this.reader.callbacks.onError?.(error);}).finally(()=>{slot.painting=false;});
+      void renderPdfPageImage({doc:this.pdf,pageNumber:slot.page,width:size.width,sliceTop:0,sliceBottom:1,rasterZoom:1,pixelRatio,maxPixels:PDF_PREVIEW_PIXELS,preview:false,priority:()=>this.pagePriority(slot)+2,signal:slot.controller.signal,image:slot.image,renderOptions:()=>({annotationMode:this.pdfjs.AnnotationMode.ENABLE}),waitForIdle:async()=>{},onSize:()=>{}}).catch(error=>{if(!this.disposed&&!slot.controller.signal.aborted)this.reader.callbacks.onError?.(error);}).finally(()=>{slot.painting=false;});
     }
     if(!region){this.clearDetail(slot);return;}
     const density=pdfRasterDensity(region.width,region.height,region.rasterZoom,pixelRatio,PDF_DETAIL_PIXELS);
@@ -156,7 +167,7 @@ export class PdfReader{
     if(!slot.detail){const layer=this.doc.createElement('div');layer.className='htmlmemo-pdf-detail';slot.inner.append(layer);slot.detail=new PdfPageImage(layer,{retainCanvas:false});}
     const image=slot.detail,controller=new AbortController();slot.detailController=controller;slot.detailPainting=true;
     const signal=AbortSignal.any([slot.controller.signal,controller.signal]);let refresh=true;
-    void renderPdfPageImage({doc:this.pdf,pageNumber:slot.page,width:size.width,sliceLeft:region.left/size.width,sliceRight:(region.left+region.width)/size.width,sliceTop:region.top/size.height,sliceBottom:(region.top+region.height)/size.height,rasterZoom:region.rasterZoom,pixelRatio,maxPixels:PDF_DETAIL_PIXELS,preview:false,priority:()=>this.visibleRegion(slot)?0:1,signal,image,renderOptions:()=>({annotationMode:this.pdfjs.AnnotationMode.ENABLE}),waitForIdle:async()=>{},onSize:()=>{}}).catch(error=>{
+    void renderPdfPageImage({doc:this.pdf,pageNumber:slot.page,width:size.width,sliceLeft:region.left/size.width,sliceRight:(region.left+region.width)/size.width,sliceTop:region.top/size.height,sliceBottom:(region.top+region.height)/size.height,rasterZoom:region.rasterZoom,pixelRatio,maxPixels:PDF_DETAIL_PIXELS,preview:false,priority:()=>this.pagePriority(slot),signal,image,renderOptions:()=>({annotationMode:this.pdfjs.AnnotationMode.ENABLE}),waitForIdle:async()=>{},onSize:()=>{}}).catch(error=>{
       if(!this.disposed&&!signal.aborted){refresh=false;slot.detailFailed=key;this.reader.callbacks.onError?.(error);}
     }).finally(()=>{slot.detailPainting=false;if(slot.detailController===controller)slot.detailController=null;
       // A zoom, pan or density change during painting must get another turn.
@@ -170,12 +181,14 @@ export class PdfReader{
     if(this.reader.annotationDrag||this.reader.gesture||this.reader.textMarkGesture){for(const slot of this.slots.values())if(slot.node.dataset.pdfReady)this.renderPage(slot);return;}
     const logical=this.logicalTop,page=this.pageAt(logical),end=this.pageAt(logical+this.reader.viewport.clientHeight/this.reader.zoom),wanted=new Set();
     if(this.total*this.scale>WINDOW_HEIGHT&&(logical-this.base<WINDOW_HEIGHT*.15||logical-this.base>WINDOW_HEIGHT*.8)){const old=this.base;this.windowAt(logical);if(old!==this.base)this.doc.defaultView.scrollTo(this.reader.rootScrollLeft(),logical-this.base);}
-    for(let p=Math.max(1,page-1);p<=Math.min(this.count,end+1,page+63);p++)wanted.add(p);this.wanted=wanted;
+    for(let p=page;p<=Math.min(this.count,end,page+63);p++)wanted.add(p);
+    for(let d=1;d<=4&&wanted.size<8;d++){if(end+d<=this.count)wanted.add(end+d);if(d<=3&&page-d>=1)wanted.add(page-d);}
+    this.wanted=wanted;
     await this.ensure(page);for(const number of wanted)if(number!==page)void this.ensure(number).catch(error=>{if(!this.disposed)this.reader.callbacks.onError?.(error);});
     if(this.disposed)return;
     for(const slot of this.slots.values()){
       if(wanted.has(slot.page)){slot.used=performance.now();if(slot.node.dataset.pdfReady)this.renderPage(slot);}
-      else {this.clearDetail(slot);if(!slot.painting&&slot.image.canvas){slot.image.dispose();slot.image=new PdfPageImage(slot.inner);slot.pdfPage?.cleanup();}}
+      else {if(!slot.detail?.raster)this.clearDetail(slot);if(!slot.painting&&slot.image.canvas){slot.image.dispose();slot.image=new PdfPageImage(slot.inner,{publishImage:false});slot.pdfPage?.cleanup();}}
     }
     const selection=this.doc.getSelection();
     const retained=[...this.slots.values()].sort((a,b)=>b.used-a.used);

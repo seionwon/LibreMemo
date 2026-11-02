@@ -76,3 +76,30 @@ test('PDF catches a silent display-density change once and skips hidden or dispo
   pdf.reader.host.hidden=false;pdf.appWindow.document.hidden=true;pdf.checkPixelRatio();assert.equal(refreshes,1);
   pdf.appWindow.document.hidden=false;pdf.checkPixelRatio();assert.equal(refreshes,2);pdf.disposed=true;ratio=2;pdf.checkPixelRatio();assert.equal(refreshes,2);
 });
+
+test('PDF scrolling pre-renders full-page high-resolution detail without publishing blurry preview images or re-rendering on scroll',async t=>{
+  const fixture=rasterFixture(t),doc=documentFor('<html><head></head><body><section id="p1"><div></div></section><section id="p2"><div></div></section></body></html>');
+  const create=doc.createElement.bind(doc),images=[];
+  doc.createElement=name=>{const node=create(name);if(name==='canvas'){node.getContext=()=>({canvas:node});node.toBlob=done=>done(new Blob(['raster'],{type:'image/png'}));}if(name==='img')images.push(node);return node;};
+  let scrollTop=0;
+  const s1=doc.querySelector('#p1'),s2=doc.querySelector('#p2');
+  s1.getBoundingClientRect=()=>({left:0,top:-scrollTop,width:600,height:800});
+  s2.getBoundingClientRect=()=>({left:0,top:812-scrollTop,width:600,height:800});
+  const slot1={page:1,node:s1,inner:s1.firstElementChild,controller:new AbortController(),image:new rendering.PdfPageImage(s1.firstElementChild,{publishImage:false})};
+  const slot2={page:2,node:s2,inner:s2.firstElementChild,controller:new AbortController(),image:new rendering.PdfPageImage(s2.firstElementChild,{publishImage:false})};
+  const pdf=Object.create(PdfReader.prototype);
+  Object.assign(pdf,{doc,pdf:fixture.pdf,pdfjs:{AnnotationMode:{ENABLE:1}},scale:1,slots:new Map([[1,slot1],[2,slot2]]),reader:{zoom:1,frame:{offsetWidth:600,getBoundingClientRect:()=>({left:0,top:0,width:600,height:1612})},viewport:{getBoundingClientRect:()=>({left:0,top:0,width:600,height:500})},callbacks:{onError:error=>{throw error;}}},size:()=>({width:600,height:800}),pageAt:()=>scrollTop<800?1:2,pixelRatio:()=>2,schedule(){}});
+  pdf.renderPage(slot1);pdf.renderPage(slot2);
+  await settle(()=>!slot1.painting&&!slot1.detailPainting&&!slot2.painting&&!slot2.detailPainting);
+  for(const img of images)img.onload?.();
+  assert.equal(slot1.image.image,null,'hidden ink-snap canvas must never publish a low-resolution preview img');
+  assert.equal(slot2.image.image,null,'offscreen neighbor must never publish a low-resolution preview img');
+  assert.deepEqual(slot1.detail.raster,{left:0,top:0,width:600,height:800,pixelWidth:1200,pixelHeight:1600});
+  assert.deepEqual(slot2.detail.raster,{left:0,top:0,width:600,height:800,pixelWidth:1200,pixelHeight:1600});
+  const beforeScrollCount=fixture.renders.length;
+  scrollTop=350;pdf.renderPage(slot1);pdf.renderPage(slot2);
+  scrollTop=820;pdf.renderPage(slot1);pdf.renderPage(slot2);
+  await settle(()=>!slot1.detailPainting&&!slot2.detailPainting);
+  assert.equal(fixture.renders.length,beforeScrollCount,'scrolling within and across pre-rendered pages must reuse full-page high-res detail without re-rendering');
+  slot1.controller.abort();slot2.controller.abort();slot1.image.dispose();slot2.image.dispose();slot1.detail.dispose();slot2.detail.dispose();
+});

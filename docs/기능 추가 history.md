@@ -5664,7 +5664,7 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
 | --- | --- |
 | ID | hist-20261102-007 |
 | 변경 종류 | About 대화상자 템플릿([`#about-content`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/index.html#L62)) 및 스타일([`.about-features`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css#L190-L193)) 개편 · DjVu 오픈소스 고지 링크 추가 |
-| 상태 | 로컬 검증 완료 · 1.9.11 GitHub Pages 게시 진행 |
+| 상태 | 로컬 검증 완료 · 1.9.11 GitHub Pages 게시 완료 |
 
 - **목적·원인:**
   1. 기존 `설정 → About` 대화상자(`#about-content`)는 초기 버전 설명(`웹 페이지를 한 파일로 보관하고, 읽고, 주석을 남깁니다.`)만 표시하고 있어, 현재 LibreMemo가 지원하는 다양한 문서·전자책·스캔·한글·Office·미디어 포맷, 맞춤 읽기(글자 크기 `A−·A·A+`, 글꼴 계열·이름 선택, 화면 테마, TTS), 주석·북마크·이력·새 판 옮기기, 폴더 트리·휴지통·보관 파일(`.librememo`)/HTML/PDF 내보내기, 전용 데이터 폴더 및 기기 간 암호화 동기화 기능을 안내하도록 개편했습니다.
@@ -5672,4 +5672,25 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
   1. **현재 LibreMemo 전체 기능 요약 및 오픈소스 라이선스 링크 보완([`public/index.html`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/index.html), [`public/design.tailwind.css`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/design.tailwind.css)):**
      - [`#about-content`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/index.html#L62)에서 지원 포맷(`HTML·MHTML`, `PDF`, `EPUB·MOBI·AZW3·FB2·CBZ`, `DjVu`, `HWP·HWPX·HML`, `Word·Excel·PowerPoint·ODT·ODS·ODP`, `CSV·TSV·JSON`, `마크다운·텍스트`, `이미지·자막`)과 4개 핵심 기능 영역(`맞춤 읽기와 음성 읽기`, `주석·북마크·이력`, `서재 정리와 내보내기`, `로컬 보관과 기기 동기화`)을 `.about-features` 정의 목록(`<dl>`)으로 정리했습니다.
      - 오픈소스 라이선스 링크 목록에 기존 `LibreMemo · MIT 라이선스`, `PDF 내보내기 도구`, `전자책 읽기 도구`, `문서 읽기 도구의 오픈소스 라이선스`, `한글 문서 읽기 도구`와 함께 `DjVu 문서 읽기 도구`(`./vendor/djvu/THIRD_PARTY_NOTICES`) 링크를 추가했습니다.
-- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 907개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800)에서 실제 `설정 → About` 대화상자 렌더링·스크린샷 확인 및 GitHub Pages 게시 진행.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 907개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800)에서 실제 `설정 → About` 대화상자 렌더링·스크린샷 확인 및 `https://seionwon.github.io/LibreMemo/src/version.js`에서 `1.9.11` 온라인 게시 확인.
+
+<a id="hist-20261102-008"></a>
+### 2026-11-02 11:22:00 +09:00 — PDF 문서 스크롤 시 저해상도→고해상도 전환을 제거하고 페이지 전체·인접 페이지 고해상도 선렌더링 적용
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261102-008 |
+| 변경 종류 | PDF 페이지 렌더링 파이프라인([`PdfPageImage`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf/page-rendering.js#L100-L127), [`renderPdfPageImage`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf/page-rendering.js#L130-L197)) 및 스크롤·가시 영역 관리([`PdfReader`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js#L102-L195)) 개선 |
+| 상태 | 로컬 검증 완료 · 1.9.12 GitHub Pages 게시 진행 |
+
+- **목적·원인:**
+  1. 기존 PDF 리더는 각 페이지마다 먼저 `PDF_PREVIEW_PIXELS`(`512 × 1024`) 예산의 저해상도 프리뷰 이미지(`slot.image`의 `<img data-pdf-raster>`)를 화면에 노출한 뒤 현재 뷰포트 조각(`overscan = 48px`)만 고해상도(`slot.detail`)로 덧그렸기 때문에, 스크롤할 때마다 저해상도 화면이 먼저 보였다가 고해상도로 바뀌며 눈의 피로를 유발했습니다.
+- **동작·보존:**
+  1. **저해상도 프리뷰 이미지 노출 제거 및 고해상도 직접 렌더링([`public/src/pdf/page-rendering.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf/page-rendering.js), [`public/src/pdf-reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js)):**
+     - [`PdfPageImage`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf/page-rendering.js#L100-L127)에 `publishImage` 옵션을 도입하여, 글자 잉크 경계 스냅(`snapRectInk`)용 내부 캔버스(`slot.image = new PdfPageImage(inner, { publishImage: false })`)는 숨김 `<canvas>`만 유지하고 저해상도 `<img data-pdf-raster>`를 DOM에 게시하지 않도록 했습니다.
+     - [`renderPdfPageImage`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf/page-rendering.js#L130-L149)의 기본값을 `preview = false`로 전환하고, `preview === false`일 때는 인접 페이지 백그라운드 선렌더링(`priority() > 0`)에서도 `PDF_PREVIEW_PIXELS`로 해상도를 낮추지 않고 `PDF_DETAIL_PIXELS` 목표 해상도로 바로 렌더링하도록 수정했습니다.
+  2. **페이지 전체 고해상도 래스터 유지 및 인접 페이지 선렌더링·캐시 보존([`public/src/pdf-reader.js`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js)):**
+     - [`visibleRegion`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js#L144-L151)에서 페이지 전체가 목표 디스플레이 밀도(`rasterZoom * pixelRatio`)로 `PDF_DETAIL_PIXELS`(`16 MP`) 및 최대 변(`8192px`) 안에 들어오는 일반 배율 구간에서는 뷰포트 일부(`overscan = 48px`)만 잘라내지 않고 페이지 전체(`{ left: 0, top: 0, width: size.width, height: size.height }`)를 고해상도로 렌더링하도록 변경했습니다. (800% 등 초고배율에서만 기존 뷰포트 크롭 폴백을 사용합니다.)
+     - [`updateVisible`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js#L179-L195)에서 현재 보이는 페이지(`priority = 0`)를 최우선 렌더링한 뒤 인접 페이지(`end + 1..4`, `page - 1..3`)를 거리순 우선순위(`pagePriority(slot)`)로 미리 고해상도 렌더링하고, 최근 본 12개 슬롯의 고해상도 `slot.detail`을 즉시 삭제하지 않고 유지하여 위아래 스크롤 시 항상 고해상도 화면만 보이도록 개선했습니다.
+     - [`open`](file:///Users/ls/MemoSuite/code-projects/u1/CodeMemo/HTMLMemo/public/src/pdf-reader.js#L50-L54) 시 첫 페이지 `ensure(page)` 호출 전에 초기 맞춤 배율(`fitZoom` / `applyZoom`)을 먼저 동기화하여 첫 페이지가 처음부터 최종 표시 배율의 고해상도로 렌더링되도록 했습니다.
+- **검증 및 게시:** `npm run build`, `npm run check`, `npm test` 908개 단위 검사 통과, `codememo-browser`(포트 4173, 1280×800)에서 실제 PDF 문서 열기·스크롤 시 모든 `<img data-pdf-raster>`가 저해상도 전환 없이 고해상도로만 유지되는 것을 확인하고 GitHub Pages 게시 진행.

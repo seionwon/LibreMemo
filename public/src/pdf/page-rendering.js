@@ -102,7 +102,7 @@ export class PdfPageImage {
     url = null;
     revision = 0;
     disposed = false;
-    constructor(element,{retainCanvas=true}={}) { this.element = element;this.retainCanvas=retainCanvas; }
+    constructor(element,{retainCanvas=true,publishImage=true}={}) { this.element = element;this.retainCanvas=retainCanvas;this.publishImage=publishImage; }
     discardCanvas(canvas) { if(canvas){canvas.remove();canvas.width=0;canvas.height=0;} }
     publish(canvas,width,height,{left=0,top=0}={}) {
         if(this.disposed){this.discardCanvas(canvas);return;}
@@ -112,6 +112,7 @@ export class PdfPageImage {
         canvas.dataset.pdfRendered='true';this.element.prepend(canvas);
         this.raster={left,top,width,height,pixelWidth:canvas.width,pixelHeight:canvas.height};
         this.element.style.width=width+'px';this.element.style.height=height+'px';
+        if(!this.publishImage){if(!this.retainCanvas&&this.canvas===canvas){this.discardCanvas(canvas);this.canvas=null;}return;}
         canvas.toBlob(blob=>{
             if(!blob||this.disposed||this.revision!==revision)return;
             const url=URL.createObjectURL(blob),image=this.element.ownerDocument.createElement('img');
@@ -125,8 +126,8 @@ export class PdfPageImage {
     dispose() { this.disposed=true;this.revision++;this.discardCanvas(this.canvas);this.canvas=null;this.raster=null;this.image?.remove();this.image=null;if(this.url)URL.revokeObjectURL(this.url);this.url=null; }
 }
 
-/** Paint a small complete image first, then replace it atomically with detail. */
-export async function renderPdfPageImage({ doc, pageNumber, width, sliceTop, sliceBottom, sliceLeft=0, sliceRight=1, rasterZoom, pixelRatio=globalThis.devicePixelRatio||globalThis.window?.devicePixelRatio||1, maxPixels, preview=true, priority, signal, image, renderOptions, waitForIdle, onSize }) {
+/** Paint directly at target detail density unless an explicit preview pass is requested. */
+export async function renderPdfPageImage({ doc, pageNumber, width, sliceTop, sliceBottom, sliceLeft=0, sliceRight=1, rasterZoom, pixelRatio=globalThis.devicePixelRatio||globalThis.window?.devicePixelRatio||1, maxPixels, preview=false, priority, signal, image, renderOptions, waitForIdle, onSize }) {
     const check = () => { if (signal.aborted)
         throw aborted(); };
     check();
@@ -138,7 +139,7 @@ export async function renderPdfPageImage({ doc, pageNumber, width, sliceTop, sli
     const bandHeight = viewport.height * Math.max(1e-6, sliceBottom - sliceTop);
     const left=viewport.width*sliceLeft, top=viewport.height*sliceTop;
     const area = regionWidth * bandHeight;
-    const budget = priority() > 0 ? Math.min(maxPixels, PDF_PREVIEW_PIXELS) : maxPixels;
+    const budget = preview && priority() > 0 ? Math.min(maxPixels, PDF_PREVIEW_PIXELS) : maxPixels;
     const detail = pdfRasterDensity(regionWidth,bandHeight,rasterZoom,pixelRatio,budget);
     const canvas = image.canvas;
     const matchingSize = canvas && image.raster?.left===left && image.raster?.top===top && parseFloat(canvas.style.width) === regionWidth && parseFloat(canvas.style.height) === bandHeight;
