@@ -505,6 +505,9 @@ html[data-app-sidebar-resizing] iframe{pointer-events:none!important}
  .swatches.preset-swatches{grid-template-columns:repeat(auto-fit,minmax(22px,1fr))}
  #library .hero-actions{gap:4px}
  #library .hero-actions .secondary-button{padding-inline:4px}
+ /* Four actions and the guide share one row: the YouTube action becomes its logo. */
+ #library .hero-youtube-icon{display:block;color:#e53935}
+ #library .hero-youtube-label{display:none}
 }
 
 /* Dedicated-folder hierarchy: compact paths, tree and identical folder rows in both views. */
@@ -806,6 +809,7 @@ summary:focus-visible{outline:2px solid var(--green);outline-offset:3px}
 .viewer-preset p{margin:3px 0 0;font-size:11.5px;color:var(--color-muted);overflow-wrap:anywhere}.viewer-preset .viewer-preset-fit{color:var(--color-ink);font-weight:500}.viewer-preset-actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.viewer-preset-actions button{min-height:26px;padding-inline:7px;border:1px solid var(--color-line);border-radius:5px;background:transparent;font-size:11.5px}.viewer-preset-actions .viewer-preset-apply{border-color:var(--green);color:var(--green);font-weight:600}.viewer-preset-actions button:disabled{opacity:.45}.viewer-preset-empty{margin:12px 0 0;color:var(--color-muted);font-size:12px}
 .viewer-location{display:grid;gap:10px}.viewer-location>label{display:grid;grid-template-columns:40px 1fr;align-items:center;gap:8px}.viewer-location-left{margin:0;color:var(--color-muted);font-size:12px}.viewer-location-auto{display:flex;align-items:center;justify-content:space-between;gap:8px}.viewer-location h3{margin-bottom:0}.viewer-book-info{display:grid;grid-template-columns:48px 1fr;gap:4px 8px;margin:0;font-size:12px}.viewer-book-info dt{color:var(--color-muted)}.viewer-book-info dd{margin:0;overflow-wrap:anywhere}
 /* YouTube: player pane above a subtitle document, the YouTube dialog and card thumbnails. */
+.hero-youtube-icon{display:none}
 .workspace-host.has-youtube{display:flex;flex-direction:column}.workspace-host.has-youtube>.reader-viewport{flex:1;min-height:0;height:auto}
 .youtube-pane{flex:none;position:relative;z-index:5;background:#0f0f10;color:#f1f1f1;border-bottom:1px solid #000}
 .youtube-video{position:relative;width:100%;max-width:min(100%,calc(40vh*16/9));margin:0 auto;aspect-ratio:16/9;background:#000}.youtube-video iframe,.youtube-frame{position:absolute;inset:0;width:100%;height:100%;border:0}
