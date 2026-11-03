@@ -6268,3 +6268,16 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
 - **수정:** 「펜과 색상」 창의 높이를 `min(620px, 화면 높이 − 40px)`로 제한하고 넘치는 내용은 창 안에서 스크롤합니다. 창을 화면 어디로든 끌어 놓을 수 있고, 맨 아래 스타일 칸은 창 안에서 스크롤해 봅니다.
 - **검증:** `npm run check`, `npm test` 970개, `npm run build`, `git diff --check` 통과. 실패했던 실제 Chrome 검사(펜과 색상 창 위치·설정 유지)를 이 Mac에서 돌려 통과했습니다. 이 판은 1.9.40~1.9.43의 변경을 모두 담아 게시 후 검사를 다시 받습니다.
 - **게시 (2026-11-03 21:12 +09:00):** 커밋 `ca0b065`의 [Actions 41631601703](https://github.com/seionwon/LibreMemo/actions/runs/41631601703)에서 build·deploy·verify가 모두 성공했고, 1.9.40~1.9.44의 변경을 담은 게시 후 Chrome 검사 87개가 모두 통과했습니다. 공개 `version.js` 1.9.44를 확인했습니다.
+
+<a id="hist-20261103-022"></a>
+### 2026-11-03 23:28 +09:00 — 자막 확장 프로그램의 정확한 설치 주소 보여 주기 (1.9.45)
+
+| 항목 | 내용 |
+| --- | --- |
+| ID | hist-20261103-022 |
+| 변경 종류 | 안내 문구(`public/src/youtube.js`, `public/src/help-content.js`), 스타일(`public/design.tailwind.css`), 단위·Chrome 검사 |
+| 상태 | 게시 진행 중 |
+
+- **요청:** 「"YouTube Subtitle Downloader"라는 이름을 가진 앱은 여럿이야. 그 가운데 하나만 작동함. 따라서, 내가 제공한 해당 확장의 URL이 사용자에게 제공되어야 함.」
+- **바뀐 동작:** 내 서재 → 유튜브 → 「자막 파일 받는 방법 (Mac · Chrome)」 맨 위에 「같은 이름의 확장 프로그램이 여럿 있습니다. 이 주소의 확장만 작동합니다.」와 설치 주소 https://chromewebstore.google.com/detail/ognjcegpcoafidcfbepkfgnolnnibcjp 를 글자 그대로 보여 줍니다. 주소는 누르면 Chrome 웹 스토어의 그 확장이 새 탭에서 열리고, 한 번 누르면 전체가 선택되어 복사하기 쉽습니다. 「확장 프로그램 설치」 단추는 그대로 같은 주소를 엽니다. 첫 단계 안내에도 웹 스토어에서 이름으로 검색해 다른 것을 설치하지 말라는 말을 넣었고, 도움말의 「유튜브 영상의 자막에 주석 달기」에도 같은 주소와 주의를 적었습니다.
+- **검증:** `npm run check`(238개 파일), `npm test` 970개 통과(유튜브 안내 검사에 주소 글자 노출·같은 이름 주의 확인 추가), `npm run build`, `git diff --check` 통과. 실제 Chrome 검사 「compact library」에 유튜브 창을 열어 안내 칸이 보이고 링크 글자와 주소가 정확히 그 확장 주소인지 확인하는 단계를 추가했습니다. 이 Mac 실행 환경은 `CODEMEMO_BROWSER_AUTOMATION=unavailable`이라 Chrome을 직접 실행하지 않았고, 제한된 검증 서비스(codememo-browser)는 새 프로필에서 「저장 폴더를 먼저 설정하세요」 화면에 막혀 유튜브 창까지 열지 못했습니다(폴더 선택 불가). 실제 Chrome 확인은 게시 후 GitHub Actions 검사에서 받습니다.

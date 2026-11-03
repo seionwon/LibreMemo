@@ -83,6 +83,8 @@ test('the Mac guide uses the subtitle extension and the automatic translation Yo
   const text=MAC_GUIDE.join(' ');
   for(const words of ['YouTube Subtitle Downloader','자동 번역','한국어','SRT','챕터','자막 파일 고르기'])assert.ok(text.includes(words),words);
   assert.doesNotMatch(guideHTML(),/collabpals|data-guide-tab/i);
+  assert.ok(guideHTML().includes('>'+SUBTITLE_EXTENSION+'</a>'),'the exact store address is shown, not only behind a button');
+  assert.match(guideHTML(),/같은 이름의 확장 프로그램이 여럿/);
 });
 
 test('chapters pasted from a description become the outline; otherwise timestamps by length',()=>{
