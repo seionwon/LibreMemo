@@ -4,7 +4,7 @@ import { installDOM } from './dom.mjs';
 import { zipFiles } from '../public/src/zip.js';
 import { parseHTML, serializeHTML } from '../public/src/document.js';
 import { validThumbnail } from '../public/src/model.js';
-import { parseYouTubeInput, parseStart, validateYouTube, youtubeDocumentHTML, cueTimes, cueAt, clock, playlistFolderName, matchSubtitleFiles, subtitlesFromZip, decodeSubtitle, subtitleFormat, subtitleSiteURL, DOWNLOAD_GUIDES, guideHTML } from '../public/src/youtube.js';
+import { parseYouTubeInput, parseStart, validateYouTube, youtubeDocumentHTML, cueTimes, cueAt, clock, playlistFolderName, matchSubtitleFiles, subtitlesFromZip, decodeSubtitle, subtitleFormat, SUBTITLE_SITE, DOWNLOAD_GUIDES, guideHTML } from '../public/src/youtube.js';
 installDOM();
 
 test('YouTube links of every common shape give the video, playlist and start time',()=>{
@@ -81,7 +81,11 @@ test('the download guide covers every platform and opens the site with the link 
   assert.deepEqual(DOWNLOAD_GUIDES.map(g=>g.id),['mac','pc','android','iphone']);
   for(const guide of DOWNLOAD_GUIDES)assert.ok(guide.steps.length>=3);
   assert.match(guideHTML(),/data-guide="iphone" hidden/);
-  assert.equal(subtitleSiteURL('https://www.youtube.com/watch?v=dQw4w9WgXcQ'),'https://downsub.com/?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ');
+  assert.equal(SUBTITLE_SITE,'https://www.collabpals.com/tools/youtube-subtitle-downloader');
+  for(const guide of DOWNLOAD_GUIDES)assert.match(guide.steps.join(' '),/Korean[\s\S]*Download \.srt/);
+  // CollabPals names files after the title, with the language last.
+  const {matches}=matchSubtitleFiles([{name:'inside-the-mind-of-a-master-procrastinator-tim-urban-ted-ko.srt'}],[{videoId:'arj7oStGLkU',title:'Inside the Mind of a Master Procrastinator | Tim Urban | TED'}]);
+  assert.equal(matches.get('arj7oStGLkU')?.name,'inside-the-mind-of-a-master-procrastinator-tim-urban-ted-ko.srt');
 });
 
 test('a card picture is kept on export only when it is a small inline image',()=>{

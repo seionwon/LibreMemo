@@ -22,7 +22,7 @@ import { openDeviceSync } from './sync-ui.js';
 import {openHelp} from './help.js';
 import { DataFolder, supportsDataFolder, CHROME_REQUIRED_MESSAGE, createStorageSubfolder, storageFolderName } from './data-folder.js';
 import {validateFolders,folderPath,folderDescendants,editLibraryFolders,LibraryIndex} from './library-folders.js';
-import {parseYouTubeInput,cueTimes,youtubeDocumentHTML,subtitleFormat,decodeSubtitle,matchSubtitleFiles,subtitlesFromZip,playlistFolderName,watchURL,playlistURL,subtitleSiteURL,guideHTML,validateYouTube} from './youtube.js';
+import {parseYouTubeInput,cueTimes,youtubeDocumentHTML,subtitleFormat,decodeSubtitle,matchSubtitleFiles,subtitlesFromZip,playlistFolderName,watchURL,playlistURL,SUBTITLE_SITE,guideHTML,validateYouTube} from './youtube.js';
 
 const PUBLIC_APP_URL = publicAppURL(location);
 for(const template of $$('#about-content,#export-guide-content'))template.innerHTML=template.innerHTML.replaceAll('https://seionwon.github.io/LibreMemo/',PUBLIC_APP_URL);
@@ -979,6 +979,12 @@ function scheduleThumbnail(tab){
     }).catch(()=>{/* the card keeps its format tile */});
   },1500);
 }
+/** The subtitle site cannot be opened with a link filled in: copy the link, then open it. */
+function openSubtitleSite(link){
+  const copied=navigator.clipboard?.writeText?navigator.clipboard.writeText(link):Promise.reject(Error('clipboard'));
+  window.open(SUBTITLE_SITE,'_blank','noopener');
+  copied.then(()=>toast('영상 주소를 복사했습니다. 자막 사이트의 「Paste a YouTube link」 칸에 붙여넣으세요.'),()=>toast('영상 주소를 복사하지 못했습니다. 자막 사이트에 YouTube 주소를 직접 붙여넣어 주세요.',true));
+}
 function mountYouTube(tab){
   tab.youtube?.dispose();tab.youtube=null;
   if(!tab.reader?.metadata?.youtube)return;
@@ -989,6 +995,7 @@ function mountYouTube(tab){
       // Playback position is a reading position: saved quietly, never as an annotation edit.
       onTime:now=>{tab.queue.schedule({background:true});if(now)void tab.queue.flush().catch(()=>{});},
       onBookmark:title=>{tab.reader.addBookmark(title);if(reader()===tab.reader){if(tab.reader.documentSidebarUI?.isConnected&&tab.reader.documentSidebarMode==='bookmarks')tab.reader.showDocumentSidebarView('bookmarks');else if(sidebarMode==='bookmarks')renderSidebar('bookmarks');}toast('이 장면을 북마크했습니다.');},
+      onFetch:()=>{const youtube=record().metadata.youtube;openSubtitleSite(watchURL(youtube.videoId));},
       onAttach:safely(async()=>{
         const files=await pickSubtitleFiles(true);if(!files.length)return;
         const self=record(),list=self.metadata.youtube.playlistId&&files.length>1?playlistRecords(self.metadata.youtube.playlistId):[self];
@@ -1037,7 +1044,11 @@ function youtubeDialog(){
       create.textContent=found.length?'자막 붙이기':'만들기';
     };
     url.oninput=update;$d('[data-youtube-folder]').onchange=update;
-    $d('[data-youtube-site]').onclick=()=>{if(parsed)window.open(subtitleSiteURL(parsed.playlistId&&($d('[data-youtube-folder]').checked||!parsed.videoId)?playlistURL(parsed.playlistId):watchURL(parsed.videoId)),'_blank','noopener');};
+    $d('[data-youtube-site]').onclick=()=>{
+      if(!parsed)return;
+      if(!parsed.videoId){toast('자막 사이트는 영상을 하나씩 받습니다. 재생목록을 만든 뒤 각 영상 화면의 「자막 받기」를 눌러 주세요.',true);return;}
+      openSubtitleSite(watchURL(parsed.videoId));
+    };
     $d('[data-youtube-files]').onclick=async()=>{const picked=await pickSubtitleFiles(true);if(!picked.length)return;files=picked;$d('[data-youtube-file-list]').textContent=files.length===1?files[0].name:`${files.length}개 파일 · ${files.slice(0,2).map(f=>f.name).join(', ')}${files.length>2?' …':''}`;update();};
     create.onclick=safely(async()=>{
       if(busy||!parsed)return;busy=true;create.disabled=true;const say=text=>{if(status.isConnected)status.textContent=text;};
@@ -1075,7 +1086,7 @@ function youtubeDialog(){
         const record=await saveYouTubeRecord({title,youtube:{videoId:parsed.videoId,playlistId:parsed.playlistId,channel:meta.channel,thumbnail},subtitle,mediaTime:parsed.start});
         dialog.close();renderLibrary();await openRecord(record);
         try{await dataFolder?.flush();}catch(error){showError(error);}
-        toast(subtitle?'영상과 자막을 열었습니다. 자막의 시각을 누르면 그 장면으로 갑니다.':'영상을 열었습니다. 영상 막대의 「자막 붙이기」로 자막 파일을 붙이세요.');
+        toast(subtitle?'영상과 자막을 열었습니다. 자막의 시각을 누르면 그 장면으로 갑니다.':'영상을 열었습니다. 영상 막대의 「자막 받기」로 자막 파일을 받은 뒤 「자막 붙이기」로 붙이세요.');
       }catch(error){say(error.message||String(error));throw error;}
       finally{busy=false;if(create.isConnected)update();}
     });

@@ -67,7 +67,7 @@ const STYLE='<style>.youtube-empty{max-width:640px;margin:48px auto;padding:24px
  */
 export function youtubeDocumentHTML(title,subtitle=null,warnings=[]){
   const body=subtitle?renderSubtitles(subtitle.text,subtitle.format,warnings)
-    :STYLE+'<article class="office-subtitles youtube-empty" data-youtube-empty><strong>아직 자막이 없습니다.</strong><p>위쪽 영상 막대의 「자막 붙이기」로 이 영상의 자막 파일(.srt, .vtt 등)을 고르면, 영상과 함께 움직이는 자막에 형광펜·메모·북마크를 달 수 있습니다.</p></article>';
+    :STYLE+'<article class="office-subtitles youtube-empty" data-youtube-empty><strong>아직 자막이 없습니다.</strong><p>위쪽 영상 막대의 「자막 받기」로 자막 파일(.srt)을 받고 「자막 붙이기」로 고르면, 영상과 함께 움직이는 자막에 형광펜·메모·북마크를 달 수 있습니다.</p></article>';
   return officeHTML(title,body,warnings);
 }
 
@@ -149,34 +149,37 @@ export async function subtitlesFromZip(bytes){
   return out;
 }
 
-/** Opens the subtitle site with the link already filled in. */
-export const subtitleSiteURL=link=>'https://downsub.com/?url='+encodeURIComponent(link);
+// CollabPals: free, no sign-up, every caption language the video has (Korean included),
+// one video at a time. It cannot take the link in its address, so LibreMemo copies the
+// link to the clipboard and opens the page; the learner pastes it.
+export const SUBTITLE_SITE='https://www.collabpals.com/tools/youtube-subtitle-downloader';
+const PICK='「Language」에서 원하는 언어(한국어는 <b>Korean</b>, 자동 생성 자막은 「… (automatic)」)를 고르고, 「Format」은 <b>.srt</b> 그대로 둔 채 <b>Download .srt</b>를 누릅니다.';
 
 // Shown in the YouTube dialog. Kept as data so tests can check every platform is covered.
 export const DOWNLOAD_GUIDES=[
   {id:'mac',label:'Mac',steps:[
-    '아래 「자막 사이트 열기」를 누릅니다. 영상 주소가 채워진 채로 자막 사이트(DownSub)가 새 탭에 열립니다.',
-    '잠시 기다리면 언어 목록이 나옵니다. 원하는 언어(예: Korean, English) 줄의 <b>SRT</b> 버튼을 누릅니다. 광고 속의 큰 「Download」·「설치」 버튼은 누르지 마세요.',
-    '파일은 Finder의 <b>다운로드</b> 폴더에 저장됩니다.',
-    'LibreMemo로 돌아와 「자막 파일 고르기」에서 다운로드 폴더의 .srt 파일을 고릅니다.']},
+    '아래 「자막 사이트 열기」를 누릅니다. 영상 주소가 복사되고 자막 사이트(CollabPals)가 새 탭에 열립니다.',
+    '「Paste a YouTube link」 칸을 누르고 <b>⌘V</b>로 붙여넣은 뒤 <b>Get subtitles</b>를 누릅니다.',
+    PICK,
+    '파일은 Finder의 <b>다운로드</b> 폴더에 저장됩니다. LibreMemo로 돌아와 「자막 파일 고르기」에서 그 .srt 파일을 고릅니다.']},
   {id:'pc',label:'Windows PC',steps:[
-    '아래 「자막 사이트 열기」를 누릅니다. 영상 주소가 채워진 채로 자막 사이트(DownSub)가 새 탭에 열립니다.',
-    '언어 목록에서 원하는 언어 줄의 <b>SRT</b> 버튼을 누릅니다. 광고 속의 큰 「Download」·「설치」 버튼은 누르지 마세요.',
-    'Chrome·Edge 오른쪽 위에 다운로드 표시가 뜨고, 파일은 파일 탐색기의 <b>다운로드</b> 폴더에 저장됩니다.',
-    'LibreMemo로 돌아와 「자막 파일 고르기」에서 다운로드 폴더의 .srt 파일을 고릅니다.']},
+    '아래 「자막 사이트 열기」를 누릅니다. 영상 주소가 복사되고 자막 사이트(CollabPals)가 새 탭에 열립니다.',
+    '「Paste a YouTube link」 칸을 누르고 <b>Ctrl+V</b>로 붙여넣은 뒤 <b>Get subtitles</b>를 누릅니다.',
+    PICK,
+    '파일은 파일 탐색기의 <b>다운로드</b> 폴더에 저장됩니다. LibreMemo로 돌아와 「자막 파일 고르기」에서 그 .srt 파일을 고릅니다.']},
   {id:'android',label:'Android',steps:[
     'YouTube 앱에서 보던 영상이라면 「공유」 → 「복사」로 링크를 복사해 위 칸에 붙여넣습니다.',
-    '아래 「자막 사이트 열기」를 누르면 Chrome(또는 삼성 인터넷) 새 탭에서 자막 사이트가 열립니다.',
-    '원하는 언어 줄의 <b>SRT</b> 버튼을 누릅니다. 광고 버튼은 누르지 말고, 광고 창이 열리면 닫고 돌아옵니다. 화면 아래에 「다운로드 완료」가 뜹니다.',
-    'LibreMemo로 돌아와 「자막 파일 고르기」를 누르고 <b>최근 항목</b>이나 <b>다운로드</b>에서 .srt 파일을 고릅니다.']},
+    '아래 「자막 사이트 열기」를 누르면 영상 주소가 복사되고 Chrome(또는 삼성 인터넷) 새 탭에서 자막 사이트가 열립니다.',
+    '「Paste a YouTube link」 칸을 <b>길게 눌러 붙여넣기</b>한 뒤 <b>Get subtitles</b>를 누릅니다. '+PICK,
+    '화면 아래에 다운로드 완료가 뜨면 LibreMemo로 돌아와 「자막 파일 고르기」를 누르고 <b>최근 항목</b>이나 <b>다운로드</b>에서 .srt 파일을 고릅니다.']},
   {id:'iphone',label:'iPhone',steps:[
     'YouTube 앱에서 보던 영상이라면 「공유」 → 「링크 복사」로 링크를 복사해 위 칸에 붙여넣습니다.',
-    '아래 「자막 사이트 열기」를 누르면 Safari 새 탭에서 자막 사이트가 열립니다.',
-    '원하는 언어 줄의 <b>SRT</b> 버튼을 누르고, 「다운로드할까요?」가 나오면 <b>다운로드</b>를 누릅니다. 파일은 <b>파일</b> 앱의 <b>다운로드</b> 폴더에 저장됩니다.',
-    'LibreMemo로 돌아와 「자막 파일 고르기」 → 「찾아보기」 → 「다운로드」에서 .srt 파일을 고릅니다.']},
+    '아래 「자막 사이트 열기」를 누르면 영상 주소가 복사되고 Safari 새 탭에서 자막 사이트가 열립니다.',
+    '「Paste a YouTube link」 칸을 <b>눌러 붙여넣기</b>한 뒤 <b>Get subtitles</b>를 누릅니다. '+PICK+' 「다운로드할까요?」가 나오면 <b>다운로드</b>를 누릅니다.',
+    '파일은 <b>파일</b> 앱의 <b>다운로드</b> 폴더에 저장됩니다. LibreMemo로 돌아와 「자막 파일 고르기」 → 「찾아보기」 → 「다운로드」에서 .srt 파일을 고릅니다.']},
 ];
 export function guideHTML(){
   return '<div class="youtube-guide-tabs" role="tablist">'+DOWNLOAD_GUIDES.map((g,i)=>'<button type="button" role="tab" data-guide-tab="'+g.id+'" aria-selected="'+(i===0)+'">'+esc(g.label)+'</button>').join('')+'</div>'
     +DOWNLOAD_GUIDES.map((g,i)=>'<ol class="youtube-guide-steps" data-guide="'+g.id+'"'+(i?' hidden':'')+'>'+g.steps.map(step=>'<li>'+step+'</li>').join('')+'</ol>').join('')
-    +'<p class="youtube-guide-note">재생목록은 영상마다 자막을 받은 뒤, 「자막 파일 고르기」에서 여러 파일(또는 zip 하나)을 한꺼번에 고르면 파일 이름으로 영상을 찾아 붙입니다. 자막은 개인 공부에만 쓰세요.</p>';
+    +'<p class="youtube-guide-note">이 사이트는 영상을 하나씩만 받습니다. 재생목록은 각 영상 화면의 「자막 받기」로 영상마다 받은 뒤, 「자막 파일 고르기」에서 여러 파일(또는 zip 하나)을 한꺼번에 고르면 파일 이름으로 영상을 찾아 붙입니다. 자막은 개인 공부에만 쓰세요.</p>';
 }
