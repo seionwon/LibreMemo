@@ -115,6 +115,13 @@ export class YouTubePane {
       const selection=this.reader.doc?.getSelection?.();if(selection&&!selection.isCollapsed)return;
       const cue=this.cues.find(c=>c.el===time.closest('.subtitle-cue'));if(cue){this.quietUntil=0;this.seek(cue.start,true);}
     };
+    // A timestamp in the outline ("1:40 …", in the app or the document sidebar) also moves the video there.
+    this.onOutlineClick=event=>{
+      if(tab.host.hidden)return;
+      const item=event.target?.closest?.('.outline-item[data-heading]'),m=String(item?.title||item?.textContent||'').trim().match(/^(?:(\d+):)?(\d{1,2}):(\d{2})(?:\s|$)/);
+      if(m){this.quietUntil=0;this.seek((+m[1]||0)*3600+(+m[2])*60+(+m[3]));}
+    };
+    document.addEventListener('click',this.onOutlineClick,true);
     // A hidden tab stops speaking; the learner returns to the same place.
     this.visibility=new MutationObserver(()=>{if(tab.host.hidden)this.player?.pauseVideo?.();});
     this.visibility.observe(tab.host,{attributes:true,attributeFilter:['hidden']});
@@ -144,9 +151,14 @@ export class YouTubePane {
     }});
   }
   message(text){const el=this.pane.querySelector('.youtube-message');el.textContent=text;el.hidden=false;}
-  time(){try{return this.player?.getCurrentTime?.()||0;}catch{return 0;}}
+  /** The playing time; right after a seek, the target until the player reports it (it answers with the old time for a moment). */
+  time(){
+    let t=0;try{t=this.player?.getCurrentTime?.()||0;}catch{}
+    if(this.target){if(Math.abs(t-this.target.t)<1.5||Date.now()>this.target.until)this.target=null;else return this.target.t;}
+    return t;
+  }
   toggle(){if(!this.player?.getPlayerState)return;if(this.player.getPlayerState()===1)this.player.pauseVideo();else this.player.playVideo();}
-  seek(seconds,play=false){if(!this.player?.seekTo)return;this.player.seekTo(Math.max(0,seconds),true);if(play)this.player.playVideo();this.tick(true);}
+  seek(seconds,play=false){if(!this.player?.seekTo)return;seconds=Math.max(0,seconds);this.target={t:seconds,until:Date.now()+2500};this.player.seekTo(seconds,true);if(play)this.player.playVideo();this.tick(true);}
   seekBy(delta){this.seek(this.time()+delta);}
   setSiblings(prev,next){this.$('prev').hidden=!prev;this.$('next').hidden=!next;this.$('prev').title=prev?'이전 영상: '+prev:'';this.$('next').title=next?'다음 영상: '+next:'';}
   tick(force=false){
@@ -181,7 +193,7 @@ export class YouTubePane {
     requestAnimationFrame(()=>requestAnimationFrame(()=>this.callbacks.onBookmark(title)));
   }
   dispose(){
-    if(this.disposed)return;this.disposed=true;clearInterval(this.timer);this.visibility.disconnect();
+    if(this.disposed)return;this.disposed=true;clearInterval(this.timer);this.visibility.disconnect();document.removeEventListener('click',this.onOutlineClick,true);
     if(this.ready)this.remember(true);
     try{this.player?.destroy?.();}catch{}
     for(const type of ['wheel','touchmove','keydown'])this.reader.viewport?.removeEventListener(type,this.onUserScroll);
