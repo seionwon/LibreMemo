@@ -66,9 +66,17 @@ const pref=(key,fallback,valid)=>{try{const v=Number(localStorage.getItem('libre
 const savePref=(key,value)=>{try{localStorage.setItem('librememo-youtube-'+key,String(value));}catch{}};
 export const skipSeconds=()=>pref('skip',5,v=>[5,10,15].includes(v));
 export const setSkipSeconds=value=>savePref('skip',value);
-const DOC_STYLE='.subtitle-time{cursor:pointer;border-radius:4px}.subtitle-time:hover{text-decoration:underline}'
+// Compact cue rows: the start time (h:mm:ss / m:ss) beside the text on one row.
+// The saved label ("00:01:02.345 → …") stays in the document for annotations and
+// time parsing; it is clipped and the short clock is drawn from data-clock.
+const DOC_STYLE='.subtitle-cue{display:flex;align-items:baseline;gap:.55em;padding:.12em .35em;border-bottom:0}'
+  +'.subtitle-time{position:relative;flex:none;width:3em;height:1.5em;margin:0;overflow:hidden;white-space:nowrap;color:transparent;cursor:pointer;border-radius:4px;user-select:none}'
+  +'[data-htmlmemo-yt-long] .subtitle-time{width:4.2em}'
+  +'.subtitle-time::before{content:attr(data-clock);position:absolute;inset:0;color:var(--htmlmemo-reader-muted,#667085);line-height:1.5em;text-align:right}'
+  +'.subtitle-time:hover::before{text-decoration:underline}'
+  +'.subtitle-text{flex:1;min-width:0;margin:0}'
   +'[data-htmlmemo-yt-now]{background:rgba(229,57,53,.08);box-shadow:inset 3px 0 #e53935;border-radius:4px}'
-  +'[data-htmlmemo-yt-now] .subtitle-time{color:#d32f2f;font-weight:600}';
+  +'[data-htmlmemo-yt-now] .subtitle-time::before{color:#d32f2f;font-weight:600}';
 
 /**
  * The player above one YouTube document. The subtitle stays the document: the pane
@@ -140,7 +148,8 @@ export class YouTubePane {
     const doc=this.reader.doc;if(!doc)return;
     if(!doc.getElementById('htmlmemo-youtube-style')){const style=doc.createElement('style');style.id='htmlmemo-youtube-style';style.textContent=DOC_STYLE;doc.head.append(style);}
     doc.removeEventListener('click',this.onDocClick);doc.addEventListener('click',this.onDocClick);
-    this.cues=[...doc.querySelectorAll('.subtitle-cue')].map(el=>{const t=cueTimes(el.querySelector('.subtitle-time')?.textContent);return t&&{el,start:t.start,end:t.end,text:(el.querySelector('.subtitle-text')?.textContent||'').trim()};}).filter(Boolean).sort((a,b)=>a.start-b.start);
+    this.cues=[...doc.querySelectorAll('.subtitle-cue')].map(el=>{const time=el.querySelector('.subtitle-time'),t=cueTimes(time?.textContent);if(t&&time.dataset.clock!==clock(t.start))time.dataset.clock=clock(t.start);return t&&{el,start:t.start,end:t.end,text:(el.querySelector('.subtitle-text')?.textContent||'').trim()};}).filter(Boolean).sort((a,b)=>a.start-b.start);
+    doc.querySelector('[data-subtitles]')?.toggleAttribute('data-htmlmemo-yt-long',this.cues.some(c=>c.start>=3600));
   }
   async mount(){
     let YT;try{YT=await loadYouTubeAPI();}catch(error){this.message(error.message);return;}

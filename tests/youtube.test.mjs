@@ -117,3 +117,17 @@ test('a card picture is kept on export only when it is a small inline image',()=
     assert.equal(again.metadata.thumbnail,kept?thumbnail:undefined);
   }
 });
+
+test('the player shows each cue compactly: start time to the second beside the text, saved label kept',async()=>{
+  const {YouTubePane}=await import('../public/src/youtube-ui.js');
+  const long=SRT+'\n3\n01:02:03,900 --> 01:02:05,000\nLate line\n';
+  const doc=new DOMParser().parseFromString(youtubeDocumentHTML('Video',{text:long,format:'srt'}),'text/html');
+  const labels=[...doc.querySelectorAll('.subtitle-time')].map(n=>n.textContent);
+  const pane={reader:{doc},onDocClick(){}};YouTubePane.prototype.indexCues.call(pane);
+  assert.deepEqual([...doc.querySelectorAll('.subtitle-time')].map(n=>n.dataset.clock),['0:01','1:02','1:02:03']);
+  assert.deepEqual([...doc.querySelectorAll('.subtitle-time')].map(n=>n.textContent),labels,'the saved label text is unchanged');
+  assert.deepEqual(pane.cues.map(c=>c.start),[1,62.25,3723.9]);
+  assert.equal(doc.querySelector('[data-subtitles]').hasAttribute('data-htmlmemo-yt-long'),true);
+  const css=doc.getElementById('htmlmemo-youtube-style').textContent;
+  assert.match(css,/\.subtitle-cue\{display:flex;align-items:baseline/);assert.match(css,/content:attr\(data-clock\)/);assert.match(css,/\.subtitle-time\{[^}]*color:transparent/);
+});

@@ -1583,6 +1583,15 @@ test('real Chrome: compact library shares titles and sources, keeps dense views 
     await page.click('#youtube-button');await page.waitFor('document.querySelector("#dialog").open&&document.querySelector(".youtube-guide-extension")');
     assert.equal(await page.evaluate(`(()=>{const box=document.querySelector('.youtube-guide-extension'),link=box.querySelector('a'),r=box.getBoundingClientRect();return box.closest('details').open&&r.width>0&&r.height>0&&box.textContent.includes('같은 이름의 확장 프로그램이 여럿')&&link.textContent===link.href&&link.href==='https://chromewebstore.google.com/detail/ognjcegpcoafidcfbepkfgnolnnibcjp';})()`),true,'the YouTube guide shows the exact subtitle extension address');
     await page.click('#dialog [data-dialog-close]');await page.waitFor('!document.querySelector("#dialog").open');
+    // YouTube subtitle rows: start time (to the second) beside the text on one row.
+    const ytRows=await page.evaluate(`(async()=>{const {youtubeDocumentHTML}=await import('./src/youtube.js'),{YouTubePane}=await import('./src/youtube-ui.js');
+      const srt='1\\n00:00:01,000 --> 00:00:03,500\\nHello there, a fairly long subtitle line that should wrap on a narrow frame without moving under the time\\n\\n2\\n01:02:03,900 --> 01:02:05,000\\nLate line\\n';
+      const f=document.createElement('iframe');f.style.cssText='position:fixed;left:0;top:0;width:420px;height:300px;border:0';const loaded=new Promise(r=>f.onload=r);f.srcdoc=youtubeDocumentHTML('Video',{text:srt,format:'srt'});document.body.append(f);await loaded;
+      const d=f.contentDocument,pane={reader:{doc:d},onDocClick(){}};YouTubePane.prototype.indexCues.call(pane);await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      const rows=[...d.querySelectorAll('.subtitle-cue')].map(cue=>{const t=cue.querySelector('.subtitle-time'),x=cue.querySelector('.subtitle-text'),rt=t.getBoundingClientRect(),rx=x.getBoundingClientRect(),probe=d.createElement('span'),st=getComputedStyle(t);probe.style.cssText='position:absolute;white-space:nowrap;font:'+st.font+';font-variant-numeric:tabular-nums';probe.textContent=t.dataset.clock;d.body.append(probe);const need=probe.getBoundingClientRect().width;probe.remove();
+        return {clock:getComputedStyle(t,'::before').content,sameRow:Math.abs(rt.top-rx.top)<6,beside:rx.left>=rt.right-1,fits:need<=rt.width+.5,wrappedBeside:rx.height<=rt.height*1.2||rx.left>=rt.right-1};});
+      f.remove();return rows;})()`);
+    assert.deepEqual(ytRows.map(r=>r.clock),['"0:01"','"1:02:03"']);assert.ok(ytRows.every(r=>r.sameRow&&r.beside&&r.fits&&r.wrappedBeside),JSON.stringify(ytRows));
     assert.equal(await page.evaluate('!!document.querySelector("#data-folder-card,#library-data-folder,#data-folder-summary,#data-folder-description")'),false);
     const filenameMetrics=[];
     for(const width of [1280,800,600,390,320]){
