@@ -72,3 +72,10 @@ test('auto-scroll pauses on reading input, resumes, changes speed and stops; the
     pager.startAuto(40);bottom=700;tick(16);assert.equal(pager.autoSpeed,0,'reaching the end stops');
   }finally{performance.now=realNow;}
 });
+
+test('text on a --green fill uses --on-green, which is dark in the dark theme',async()=>{
+  const {readFile}=await import('node:fs/promises');const css=await readFile(new URL('../public/design.tailwind.css',import.meta.url),'utf8');
+  const filled=css.match(/[^{}]+\{(?=[^{}]*background:var\(--green\))(?=[^{}]*[{;]color:)[^{}]*\}/g)||[];
+  assert.ok(filled.length>=4);for(const rule of filled)assert.match(rule,/color:var\(--on-green\)/,rule);
+  const dark=css.match(/:root\[data-theme=dark\]\{[^}]*\}/g);assert.ok(dark.length>=2);for(const rule of dark)assert.match(rule,/--on-green:#10151e/);
+});

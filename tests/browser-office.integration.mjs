@@ -73,6 +73,9 @@ test('real Chrome: Pages-only foliate annotations, hierarchical TOC, cross-links
         // Auto-scroll: starting closes the panel; the bottom bar pauses, resumes, changes speed and ends it.
         const host='.document-host:not([hidden])',bar=host+' .auto-scroll-bar',y=doc+'.defaultView.scrollY',before=await page.evaluate(y);
         await page.evaluate(doc+'.defaultView.scrollTo(0,0)');await page.click(host+' [data-action=reading-layout]');await page.waitFor('document.querySelector("'+host+' .reading-layout-panel")');
+        // The selected reading-mode button stays legible in both themes (WCAG AA 4.5:1).
+        const contrast=await page.evaluate(`(()=>{const root=document.documentElement,was=root.dataset.theme,lum=c=>{const v=c.match(/\\d+(\\.\\d+)?/g).slice(0,3).map(n=>{n/=255;return n<=.03928?n/12.92:((n+.055)/1.055)**2.4;});return .2126*v[0]+.7152*v[1]+.0722*v[2];},out={};for(const theme of ['light','dark']){root.dataset.theme=theme;const b=document.querySelector('${host} .reading-layout-flow [aria-checked="true"]'),st=getComputedStyle(b),a=lum(st.color),z=lum(st.backgroundColor);out[theme]=(Math.max(a,z)+.05)/(Math.min(a,z)+.05);}root.dataset.theme=was;return out;})()`);
+        assert.ok(contrast.light>=4.5&&contrast.dark>=4.5,JSON.stringify(contrast));
         await page.evaluate(`[...document.querySelectorAll('${host} .reading-panel-tabs button')].find(n=>n.textContent==='이동').click()`);
         await page.evaluate(`(()=>{const s=document.querySelector('${host} .viewer-location-auto select');s.value='80';})()`);await page.click(host+' .viewer-location-start');
         await page.waitFor('!document.querySelector("'+host+' .reading-layout-panel")&&document.querySelector("'+bar+'")');await page.waitFor(y+'>40',8000);
