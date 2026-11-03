@@ -3425,8 +3425,19 @@ export class Reader {
     if(!item||!drag.contentRoot.contains(node)||this.isInteractiveControl(node)||drag.index.text.slice(item.start,item.end)!==node.textContent)return null;
     return item.start+clamp(offset,0,item.end-item.start);
   }
-  startAnnotationDrag(event) {
-    const id=this.annotationIdAt(event.target),source=this.metadata.annotations.find(a=>a.id===id);
+  /** The memo box or free text under the pointer, found by position: other tools turn annotation picking off. */
+  noteAtPoint(event) {
+    const layer=this.doc?.getElementById(LAYER_ID);if(!layer)return null;
+    for(const node of [...layer.querySelectorAll('[data-htmlmemo-id]')].reverse()){
+      const id=node.getAttribute('data-htmlmemo-id'),annotation=this.metadata.annotations.find(a=>a.id===id);
+      if(!annotation||!['note','text'].includes(annotation.type))continue;
+      const rect=node.getBoundingClientRect();
+      if(rect.width&&event.clientX>=rect.left&&event.clientX<=rect.right&&event.clientY>=rect.top&&event.clientY<=rect.bottom)return id;
+    }
+    return null;
+  }
+  startAnnotationDrag(event,id=this.annotationIdAt(event.target)) {
+    const source=this.metadata.annotations.find(a=>a.id===id);
     if(!source||!this.annotationInSection(source)||this.isInteractiveControl(event.target))return false;
     if(!this.layer?.isConnected)this.renderDrawingLayer();
     const drag={pointerId:event.pointerId,source,annotation:structuredClone(source),section:currentSection(this.doc),start:this.point(event),moved:false,delta:{x:0,y:0}};
@@ -3468,7 +3479,7 @@ export class Reader {
   moveAnnotationDrag(event) {
     const drag=this.annotationDrag;if(!drag||drag.pointerId!==event.pointerId)return false;
     event.preventDefault();event.stopPropagation();
-    if(this.disposed||this.tool!=='select'||drag.section!==currentSection(this.doc)){this.cancelAnnotationDrag();return true;}
+    if(this.disposed||this.tool!=='select'&&!drag.anyTool||drag.section!==currentSection(this.doc)){this.cancelAnnotationDrag();return true;}
     const point=this.point(event);let dx=point.x-drag.start.x,dy=point.y-drag.start.y;
     if(drag.geometry&&drag.container){
       const bounds=this.drawingBounds(drag.container);
@@ -3543,6 +3554,8 @@ export class Reader {
     }
     this.cancelAnnotationDrag();
     if(drag.moved){event.preventDefault();event.stopPropagation();if(next)this.commit(this.metadata.annotations.map(a=>a.id===next.id?next:a));}
+    // A plain tap on a memo box or free text under another tool opens it, as the select tool does.
+    else if(drag.anyTool){event.preventDefault();event.stopPropagation();this.suppressAnnotationClick=performance.now()+500;this.selectedId=drag.source.id;this.callbacks.onSelect?.(this.selectedId);}
     return true;
   }
   textMarkPoint(event,strict=false) {
@@ -3602,6 +3615,8 @@ export class Reader {
     this.suppressAnnotationClick=0;
     if(this.annotationDrag){this.cancelAnnotationDrag();return;}
     if(this.tool==='select'&&this.startAnnotationDrag(event))return;
+    // A memo box or free text moves by dragging whatever tool is on (often the one that just wrote it).
+    if(this.tool!=='select'&&this.tool!=='eraser'){const id=this.noteAtPoint(event);if(id&&this.startAnnotationDrag(event,id)){this.annotationDrag.anyTool=true;return;}}
     if (this.tool === 'eraser') {
       const id = this.annotationIdAt(event.target); if (id) { event.preventDefault(); if(event.pointerType==='touch')this.touchErase={pointerId:event.pointerId,id};else this.remove(id); } return;
     }

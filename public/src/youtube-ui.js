@@ -99,10 +99,14 @@ export class YouTubePane {
         <p class="youtube-now" data-yt="now" aria-live="off"></p>
       </div>`;
     const viewport=this.reader.viewport;viewport.before(pane);tab.host.classList.add('has-youtube');
-    const $=name=>pane.querySelector(`[data-yt="${name}"]`);this.$=$;
-    $('play').onclick=()=>{const playing=this.player?.getPlayerState?.()===1;this.toggle();this.flash(icon(playing?'pause':'play',34));};
-    $('back').onclick=()=>{const n=skipSeconds();this.seekBy(-n);this.flash(icon('undo',26)+'<span>'+n+'초</span>');};
-    $('forward').onclick=()=>{const n=skipSeconds();this.seekBy(n);this.flash('<span>'+n+'초</span>'+icon('redo',26));};
+    const $=name=>pane.querySelector(`[data-yt="${name}"]`);this.$=$;this.video=pane.querySelector('.youtube-video');
+    // One tap acts after a short wait; a second tap in that time toggles full screen instead.
+    const tap=action=>()=>{if(this.tapTimer){clearTimeout(this.tapTimer);this.tapTimer=0;this.toggleFullscreen();return;}this.tapTimer=setTimeout(()=>{this.tapTimer=0;action();},250);};
+    $('play').onclick=tap(()=>{const playing=this.player?.getPlayerState?.()===1;this.toggle();this.flash(icon(playing?'pause':'play',34));});
+    $('back').onclick=tap(()=>{const n=skipSeconds();this.seekBy(-n);this.flash(icon('undo',26)+'<span>'+n+'초</span>');});
+    $('forward').onclick=tap(()=>{const n=skipSeconds();this.seekBy(n);this.flash('<span>'+n+'초</span>'+icon('redo',26));});
+    this.onFullscreenKey=event=>{if(event.key==='Escape'&&this.video.classList.contains('youtube-fill'))this.toggleFullscreen();};
+    document.addEventListener('keydown',this.onFullscreenKey);
     $('rate').onchange=event=>{const value=Number(event.target.value);savePref('rate',value);this.player?.setPlaybackRate?.(value);};
     $('follow').onclick=()=>{this.follow=!this.follow;$('follow').setAttribute('aria-pressed',String(this.follow));this.quietUntil=0;if(this.follow)this.reveal(true);};
     $('mark').onclick=()=>this.bookmark();
@@ -154,6 +158,18 @@ export class YouTubePane {
   }
   // An unplayable video keeps YouTube's own message and links reachable.
   message(text){const el=this.pane.querySelector('.youtube-message');el.textContent=text;el.hidden=false;this.pane.querySelector('.youtube-zones').hidden=true;}
+  /**
+   * Full screen for the video with its tap zones. Browsers without element full screen
+   * (iPhone Safari) get the same picture filling the window; Esc or a double tap returns.
+   */
+  toggleFullscreen(){
+    const video=this.video,doc=video.ownerDocument;
+    if(doc.fullscreenElement===video||doc.webkitFullscreenElement===video){(doc.exitFullscreen||doc.webkitExitFullscreen)?.call(doc);return;}
+    if(video.classList.contains('youtube-fill')){video.classList.remove('youtube-fill');return;}
+    const fill=()=>video.classList.add('youtube-fill'),request=video.requestFullscreen||video.webkitRequestFullscreen;
+    if(!request){fill();return;}
+    try{const result=request.call(video);result?.catch?.(fill);}catch{fill();}
+  }
   /** A short sign in the middle of the picture, as YouTube shows for taps. */
   flash(html){const el=this.pane.querySelector('.youtube-flash');el.innerHTML=html;el.classList.remove('show');void el.offsetWidth;el.classList.add('show');}
   /** The playing time; right after a seek, the target until the player reports it (it answers with the old time for a moment). */
@@ -198,7 +214,7 @@ export class YouTubePane {
     requestAnimationFrame(()=>requestAnimationFrame(()=>this.callbacks.onBookmark(title)));
   }
   dispose(){
-    if(this.disposed)return;this.disposed=true;clearInterval(this.timer);this.visibility.disconnect();document.removeEventListener('click',this.onOutlineClick,true);
+    if(this.disposed)return;this.disposed=true;clearInterval(this.timer);clearTimeout(this.tapTimer);document.removeEventListener('keydown',this.onFullscreenKey);this.visibility.disconnect();document.removeEventListener('click',this.onOutlineClick,true);
     if(this.ready)this.remember(true);
     try{this.player?.destroy?.();}catch{}
     for(const type of ['wheel','touchmove','keydown'])this.reader.viewport?.removeEventListener(type,this.onUserScroll);

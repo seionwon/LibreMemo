@@ -33,6 +33,24 @@ test('all drawing and memo annotations move as one saved edit with their appeara
     r.undo();assert.deepEqual(r.metadata.annotations,original);r.redo();assert.deepEqual(r.metadata.annotations,[moved]);
   }
 });
+test('a memo box or free text moves with any tool on, and a plain tap opens it',async()=>{
+  for(const [type,tool] of [['note','note'],['text','text'],['note','highlight'],['text','pen']]){
+    const f=fixture(type),{r,doc}=f,original=structuredClone(r.metadata.annotations);let selected=null;
+    r.tool=tool;r.callbacks.onSelect=id=>{selected=id;};
+    // Other tools turn annotation picking off, so the box is found by its rendered position.
+    for(const node of doc.querySelectorAll('[data-htmlmemo-id]'))node.getBoundingClientRect=()=>({left:70,right:200,top:30,bottom:90,width:130,height:60});
+    r.pointerDown(f.event(80,40));assert.equal(r.annotationDrag?.anyTool,true,type+' with '+tool);
+    r.pointerMove(f.event(120,65));await r.pointerUp(f.event(120,65));
+    const moved=r.metadata.annotations[0];assert.equal(f.changes,1);assert.equal(moved.id,original[0].id);assert.notDeepEqual(moved.points,original[0].points);assert.equal(selected,null);
+    // The move re-rendered the layer; the box now sits 40px right and 25px down.
+    for(const node of doc.querySelectorAll('[data-htmlmemo-id]'))node.getBoundingClientRect=()=>({left:110,right:240,top:55,bottom:115,width:130,height:60});
+    r.pointerDown(f.event(120,65));await r.pointerUp(f.event(120,65));assert.equal(selected,original[0].id);assert.equal(f.changes,1);
+  }
+  // Outside the box the tool works as before; the eraser keeps erasing.
+  const f=fixture('note'),{r,doc}=f;r.tool='note';
+  for(const node of doc.querySelectorAll('[data-htmlmemo-id]'))node.getBoundingClientRect=()=>({left:70,right:200,top:30,bottom:90,width:130,height:60});
+  r.pointerDown(f.event(400,400));assert.ok(!r.annotationDrag);r.cancelDrawingGesture?.();
+});
 test('drag threshold uses screen pixels across zoom levels and a short click creates no edit',async()=>{
   for(const zoom of [.5,1,2]){
     const f=fixture(),{r}=f;r.zoom=zoom;const before=structuredClone(r.metadata.annotations);
