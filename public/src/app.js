@@ -5,8 +5,8 @@ import { openEditionProbe, migrateAnnotations } from './migrate.js';
 import { Reader } from './reader.js';
 import { preparePDF, isPDFDocument } from './pdf-document.js';
 import {prepareOffice} from './office-import.js';
-import {OFFICE_MIMES} from './office-formats.js';
-import {IMAGE_MIMES,pastedImages,clipboardImageFile,isImagePasteTarget} from './image-formats.js';
+import {OFFICE_MIMES,OFFICE_FORMATS} from './office-formats.js';
+import {IMAGE_MIMES,IMAGE_EXTENSIONS,pastedImages,clipboardImageFile,isImagePasteTarget} from './image-formats.js';
 import {canSleep,cancelTabSleep,scheduleTabSleep} from './tab-sleep.js';
 import {AI_TEXT_LIMIT,aiSearchRequest,aiSearchURL} from './ai-search.js';
 import { listDocuments, getDocument, trashDocument, restoreDocument, deleteDocument, deleteTrashedDocuments, getSetting, setSetting, saveDocumentHTML, listRevisionPeriods, listRevisionDay, adjacentRevisionDay, getRevision, putDocumentRevision, checkpointAnnotations, putDocumentView, putDocumentSourceIdentity, writeExternalHTML, updateLibraryFolders, onStorageChange, readLibrary } from './storage.js';
@@ -21,6 +21,7 @@ import { openDeviceSync } from './sync-ui.js';
 import {openHelp} from './help.js';
 import { DataFolder, supportsDataFolder, CHROME_REQUIRED_MESSAGE, createStorageSubfolder, storageFolderName } from './data-folder.js';
 import {validateFolders,folderPath,folderDescendants,editLibraryFolders,LibraryIndex} from './library-folders.js';
+import {parseYouTubeInput,youtubeDocumentHTML,subtitleFormat,decodeSubtitle,matchSubtitleFiles,subtitlesFromZip,playlistFolderName,watchURL,playlistURL,subtitleSiteURL,guideHTML,validateYouTube} from './youtube.js';
 
 const PUBLIC_APP_URL = publicAppURL(location);
 for(const template of $$('#about-content,#export-guide-content'))template.innerHTML=template.innerHTML.replaceAll('https://seionwon.github.io/LibreMemo/',PUBLIC_APP_URL);
@@ -271,6 +272,21 @@ async function refreshLibrary() {
   })().finally(()=>{libraryRead=null;});
   return libraryRead;
 }
+// Every card shows a thumbnail of the same shape: a video's own picture, otherwise
+// a tile coloured by format, so the card view reads as one consistent grid.
+const THUMB_KINDS={video:['영상','#cc0000','youtube'],pdf:['PDF','#c2410c','file'],image:['이미지','#2563eb','file'],subtitle:['자막','#7c3aed','subtitles'],word:['문서','#1d4ed8','file'],hangul:['한글','#0e7490','file'],sheet:['표','#15803d','grid'],slides:['슬라이드','#b45309','file'],ebook:['전자책','#a16207','library'],djvu:['DjVu','#6b7280','file'],markdown:['MD','#334155','text'],text:['TXT','#475569','text'],web:['웹','#0f766e','globe']};
+function thumbKind(record){
+  if(record.metadata?.youtube)return 'video';
+  if(isPDFDocument(record.metadata))return 'pdf';
+  const name=String(record.name||'').toLowerCase(),ext=name.endsWith('.fb2.zip')?'fb2.zip':name.match(/\.([a-z0-9]+)$/)?.[1]||'';
+  if(IMAGE_EXTENSIONS.includes(ext))return 'image';
+  return THUMB_KINDS[OFFICE_FORMATS[ext]]?OFFICE_FORMATS[ext]:'web';
+}
+function cardThumb(record){
+  const kind=thumbKind(record),[label,color,glyph]=THUMB_KINDS[kind],picture=record.metadata?.youtube?.thumbnail;
+  if(picture)return `<span class="card-thumb card-thumb-picture" aria-hidden="true"><img src="${esc(picture)}" alt="" loading="lazy" decoding="async"><span class="card-thumb-play">${icon('play',13)}</span></span>`;
+  return `<span class="card-thumb" style="--thumb:${color}" aria-hidden="true">${icon(glyph,26)}<b>${esc(label)}</b></span>`;
+}
 function renderLibrary() {
   indexLibraryFolders();
   if(activeId!=='library')return;
@@ -301,13 +317,13 @@ function renderLibrary() {
   if(libraryGridState!==result){
   grid.innerHTML=shownFolders.map(item=>`<article class="library-folder-card" data-library-item="folder" data-library-id="${item.id}" data-folder-target="${item.id}" draggable="true"><button class="library-folder-open" data-library-folder="${item.id}" title="${esc(libraryPathLabel(item.id))}">${icon('folder',22)}<span><strong>${esc(item.name)}</strong><small>${folderDocumentCount(item.id)}개 문서 · ${libraryFolderChildren.get(item.id)?.length||0}개 하위 폴더</small></span></button><button class="icon-button card-menu" data-folder-menu="${item.id}" aria-label="${esc(item.name)} 폴더 메뉴">${icon('more',17)}</button></article>`).join('')+shown.map(record=>{
     const count=record.metadata?.annotations?.length||0,bookmarkCount=record.metadata?.bookmarks?.length||0;const progress=record.metadata?.view?.scrollTop||0;
-    const host=esc(displayHost(record.source)), title=esc(record.title), originalName=typeof record.name==='string'?esc(record.name):'', size=record.byteSize?formatBytes(record.byteSize):'HTML';
+    const host=esc(displayHost(record.source)), title=esc(record.title), originalName=record.metadata?.youtube?esc(record.metadata.youtube.channel||''):typeof record.name==='string'?esc(record.name):'', size=record.byteSize?formatBytes(record.byteSize):'HTML';
     const date=formatDate(record[dateField]),dateTitle=esc(dateLabel+': '+formatDate(record[dateField],true));
     const timestamp=new Date(record[dateField]),time=String(timestamp.getHours()).padStart(2,'0')+':'+String(timestamp.getMinutes()).padStart(2,'0');
     // Both layouts share one title/source. A decorative preview used to repeat
     // them above the details, and list mode kept a third hidden copy.
     const place=esc(libraryPathLabel(record.folderId||'')),progressLabel=libraryTrash||filter?place:progress?'이어서 읽기':'새 문서';
-    return `<article class="document-card" data-record="${record.id}" ${libraryTrash?'':`data-library-item="document" data-library-id="${record.id}"`} draggable="${!libraryTrash}"><button class="card-open" ${libraryTrash?'data-trash-menu':'data-open'}="${record.id}" ${libraryTrash?`aria-label="${title} 복원 또는 영구 삭제"`:''}><div class="card-details"><span class="list-file-icon" aria-hidden="true">${icon(libraryTrash?'trash':'file',16)}</span><div class="library-title"><h3 class="list-title" title="${title}">${title}</h3>${originalName?`<span class="list-filename" title="${originalName}">${originalName}</span>`:''}</div><p class="card-source"><span class="list-host" title="${host}">${host}</span><span class="list-date" title="${dateTitle}" aria-label="${dateTitle}">${date}<span class="card-time"> ${time}</span></span></p><div class="card-meta"><span class="list-mark-counts"><span class="list-annotations" title="주석 ${count}개" aria-label="주석 ${count}개">${icon('highlight',13)} <span>${count}</span></span><span class="list-bookmarks" title="북마크 ${bookmarkCount}개" aria-label="북마크 ${bookmarkCount}개">${icon('bookmark',13)} <span>${bookmarkCount}</span></span></span><span class="list-size">${size}</span><span class="list-progress" title="${progressLabel}">${progressLabel} ${icon(libraryTrash?'undo':'forward',13)}</span></div></div></button><button class="card-menu icon-button" ${libraryTrash?'data-trash-menu':'data-card-menu'}="${record.id}" aria-label="${title} ${libraryTrash?'휴지통':'문서'} 메뉴">${icon('more',17)}</button></article>`;
+    return `<article class="document-card" data-record="${record.id}" ${libraryTrash?'':`data-library-item="document" data-library-id="${record.id}"`} draggable="${!libraryTrash}"><button class="card-open" ${libraryTrash?'data-trash-menu':'data-open'}="${record.id}" ${libraryTrash?`aria-label="${title} 복원 또는 영구 삭제"`:''}>${cardThumb(record)}<div class="card-details"><span class="list-file-icon" aria-hidden="true">${icon(libraryTrash?'trash':'file',16)}</span><div class="library-title"><h3 class="list-title" title="${title}">${title}</h3>${originalName?`<span class="list-filename" title="${originalName}">${originalName}</span>`:''}</div><p class="card-source"><span class="list-host" title="${host}">${host}</span><span class="list-date" title="${dateTitle}" aria-label="${dateTitle}">${date}<span class="card-time"> ${time}</span></span></p><div class="card-meta"><span class="list-mark-counts"><span class="list-annotations" title="주석 ${count}개" aria-label="주석 ${count}개">${icon('highlight',13)} <span>${count}</span></span><span class="list-bookmarks" title="북마크 ${bookmarkCount}개" aria-label="북마크 ${bookmarkCount}개">${icon('bookmark',13)} <span>${bookmarkCount}</span></span></span><span class="list-size">${size}</span><span class="list-progress" title="${progressLabel}">${progressLabel} ${icon(libraryTrash?'undo':'forward',13)}</span></div></div></button><button class="card-menu icon-button" ${libraryTrash?'data-trash-menu':'data-card-menu'}="${record.id}" aria-label="${title} ${libraryTrash?'휴지통':'문서'} 메뉴">${icon('more',17)}</button></article>`;
   }).join('');
   libraryGridState=result;
   }
@@ -499,7 +515,7 @@ async function sleepTab(tab) {
   if(!tabs.includes(tab)||tab.id===activeId||!canSleep(tab))return;
   await tab.queue.flush();await tab.checkpoints.flush({force:true});
   if(!tabs.includes(tab)||tab.id===activeId||!canSleep(tab))return;
-  const history=tab.reader.history;tab.checkpoints.dispose();tab.reader.dispose();
+  tab.youtube?.dispose();const history=tab.reader.history;tab.checkpoints.dispose();tab.reader.dispose();
   tabs[tabs.indexOf(tab)]={id:tab.id,type:'document',title:tab.title,record:{id:tab.record.id,name:tab.record.name},asleep:true,history,host:createHost(tab.id,'document')};
   renderTabs();
 }
@@ -589,6 +605,7 @@ async function openRecord(record, prepared = null, {deferReady = false, sourceId
   } catch(error) {tabs.splice(tabs.indexOf(tab),1);tab.checkpoints.dispose();tab.reader.dispose();activate('library');throw error;}
   if(parsed.file){tab.record.file=parsed.file;delete tab.record.html;tab.reader.initialHTML=null;tab.record.metadata=tab.reader.metadata;tab.record.source=tab.reader.metadata.source;tab.title=tab.record.title=tab.reader.metadata.title;}
   if(activeId===tab.id)restoreSidebar();
+  mountYouTube(tab);
   renderToolbar();
   updateChrome();
   // Preserve the imported/current annotation baseline before the first new edit.
@@ -630,7 +647,7 @@ async function closeTab(id) {
   tab.closePromise=(async()=>{
     try{
       cancelTabSleep(tab);if(tab.waking)await tab.waking.catch(()=>{});
-      if(tab.reader){await tab.reader.ready;tab.reader.rememberPosition();await tab.queue.flush();await tab.checkpoints.flush({force:true});tab.checkpoints.dispose();tab.reader.dispose();}else tab.host.remove();
+      if(tab.reader){await tab.reader.ready;tab.youtube?.dispose();tab.reader.rememberPosition();await tab.queue.flush();await tab.checkpoints.flush({force:true});tab.checkpoints.dispose();tab.reader.dispose();}else tab.host.remove();
       browserTabs.forget(id);if(lastWebTab===tab)lastWebTab=null;tabs.splice(tabs.indexOf(tab),1);if(activeId===id)activate(tabs.at(-1)?.id||'library');else renderTabs();await refreshLibrary();
     }finally{tab.closing=false;tab.closePromise=null;}
   })();
@@ -831,6 +848,179 @@ function imagePasteDialog(){
       finally{if(button.isConnected)button.disabled=false;}
     };
     requestAnimationFrame(()=>$('[data-image-paste-target]',dialog)?.focus());
+  });
+}
+// ── YouTube: a video (or each video of a playlist) becomes a subtitle document
+// with the player above it. The learner brings the subtitle file; see youtube.js.
+const youtubeUI=()=>import('./youtube-ui.js');
+const SUBTITLE_ACCEPT='.srt,.vtt,.smi,.sami,.ass,.ssa,.zip';
+function guidePlatform(){const ua=navigator.userAgent;return /iPhone|iPad|iPod/.test(ua)||/Macintosh/.test(ua)&&navigator.maxTouchPoints>1?'iphone':/Android/.test(ua)?'android':/Macintosh|Mac OS X/.test(ua)?'mac':'pc';}
+async function pickSubtitleFiles(multiple=true){
+  if(openPicker()){
+    try{const handles=await window.showOpenFilePicker({multiple,types:[{description:'자막 파일',accept:{'text/plain':['.srt','.vtt','.smi','.sami','.ass','.ssa'],'application/zip':['.zip']}}]});return await Promise.all(handles.map(handle=>handle.getFile()));}
+    catch(error){if(error?.name==='AbortError')return [];if(!['SecurityError','NotSupportedError','TypeError'].includes(error?.name))throw error;}
+  }
+  return new Promise(resolve=>{
+    const input=document.createElement('input');input.type='file';input.multiple=multiple;input.accept=SUBTITLE_ACCEPT;input.hidden=true;document.body.append(input);
+    const done=files=>{input.remove();resolve(files);};
+    input.onchange=()=>done([...input.files]);input.oncancel=()=>done([]);input.click();
+  });
+}
+/** Files (and subtitle files inside zips) as {name,text,format}. Unsupported files are reported. */
+async function readSubtitleFiles(files){
+  const out=[],skipped=[];
+  for(const file of files){
+    if(/\.zip$/i.test(file.name)){for(const entry of await subtitlesFromZip(new Uint8Array(await file.arrayBuffer())))out.push({name:entry.name,text:decodeSubtitle(entry.bytes),format:subtitleFormat(entry.name)});continue;}
+    const format=subtitleFormat(file.name);if(!format){skipped.push(file.name);continue;}
+    if(file.size>64*1024*1024)throw Error(file.name+': 자막 파일이 너무 큽니다.');
+    out.push({name:file.name,text:decodeSubtitle(new Uint8Array(await file.arrayBuffer())),format});
+  }
+  return {subtitles:out,skipped};
+}
+async function saveYouTubeRecord({title,youtube,subtitle=null,folderId=libraryFolderId,created=Date.now(),mediaTime=0}){
+  const warnings=[],html=youtubeDocumentHTML(title,subtitle,warnings);
+  const parsed=parseHTML(html,{title,source:watchURL(youtube.videoId,youtube.playlistId),warnings},{includeMetadata:true,allowScripts:false});
+  parsed.metadata.youtube=validateYouTube({...youtube,...(subtitle?{subtitle:{name:subtitle.name}}:{})});
+  if(mediaTime>0)parsed.metadata.view.mediaTime=mediaTime;
+  const record={id:uid(),title,name:subtitle?.name||filename(title),source:parsed.metadata.source,created,modified:created,folderId,fileHandle:null,originalHandle:null,metadata:parsed.metadata};
+  if(subtitle)record.originalFile=new File([subtitle.text],subtitle.name,{type:'text/plain'});
+  await saveDocumentHTML(record,parsed.html,{revision:{baseline:true}});
+  const {html:body,file,originalFile,...summary}=record;cacheLibraryDocument(summary);
+  return record;
+}
+const youtubeRecords=()=>records.filter(record=>record.metadata?.youtube&&!record.trashedAt);
+/** The documents of one playlist in playlist order. */
+const playlistRecords=playlistId=>youtubeRecords().filter(r=>r.metadata.youtube.playlistId===playlistId).sort((a,b)=>(a.metadata.youtube.index??0)-(b.metadata.youtube.index??0));
+/** Swap a video's subtitle: a new document replaces the old one, which goes to the trash. */
+async function replaceYouTubeSubtitle(old,subtitle){
+  const tab=tabs.find(t=>t.record?.id===old.id),metadata=tab?.reader?.metadata||old.metadata,marks=(metadata.annotations?.length||0)+(metadata.bookmarks?.length||0);
+  if(marks&&!await confirmDialog('자막을 바꿀까요?',`「${old.title}」에 주석·북마크가 ${marks}개 있습니다. 새 자막으로 새 문서를 만들고, 지금 문서는 주석과 함께 휴지통으로 옮깁니다(복원 가능).`,'자막 바꾸기'))return null;
+  const mediaTime=Number(metadata.view?.mediaTime)||0;
+  const record=await saveYouTubeRecord({title:old.title,youtube:metadata.youtube,subtitle,folderId:old.folderId||'',created:old.created,mediaTime});
+  if(tab)await closeTab(tab.id);
+  await trashDocument(old.id);
+  return record;
+}
+/** Attach subtitle files to the given video documents (matched by name), or to `only` when it is one file for one video. */
+async function attachYouTubeSubtitles(files,candidates,{only=null}={}){
+  const {subtitles,skipped}=await readSubtitleFiles(files);
+  if(!subtitles.length)throw Error(skipped.length?'자막 파일(.srt, .vtt, .smi, .ass, .ssa 또는 그것을 담은 .zip)을 골라주세요.':'고른 파일에 자막이 없습니다.');
+  const videos=candidates.map(r=>({videoId:r.metadata.youtube.videoId,title:r.title,record:r}));
+  let {matches,unmatched}=matchSubtitleFiles(subtitles,videos);
+  if(only&&subtitles.length===1&&!matches.size){matches=new Map([[only.metadata.youtube.videoId,subtitles[0]]]);unmatched=[];}
+  let attached=0,opened=null;
+  for(const video of videos){
+    const subtitle=matches.get(video.videoId);if(!subtitle)continue;
+    const record=await replaceYouTubeSubtitle(video.record,subtitle);if(!record)continue;
+    attached++;if(only&&video.record.id===only.id)opened=record;
+  }
+  await refreshLibrary();try{await dataFolder?.flush();}catch(error){showError(error);}
+  if(opened)await openRecord(opened);
+  const notes=[unmatched.length?`영상을 찾지 못한 자막 ${unmatched.length}개: ${unmatched.slice(0,3).map(s=>s.name).join(', ')}${unmatched.length>3?' …':''}`:'',skipped.length?`자막이 아닌 파일 ${skipped.length}개는 건너뛰었습니다.`:''].filter(Boolean);
+  toast((attached?`자막 ${attached}개를 붙였습니다.`:'붙인 자막이 없습니다.')+(notes.length?' '+notes.join(' '):''),!attached);
+  return attached;
+}
+function mountYouTube(tab){
+  tab.youtube?.dispose();tab.youtube=null;
+  if(!tab.reader?.metadata?.youtube)return;
+  void youtubeUI().then(({YouTubePane})=>{
+    if(!tabs.includes(tab)||tab.closing||!tab.reader||tab.youtube)return;
+    const record=()=>records.find(r=>r.id===tab.record.id)||tab.record;
+    tab.youtube=new YouTubePane(tab,{
+      // Playback position is a reading position: saved quietly, never as an annotation edit.
+      onTime:now=>{tab.queue.schedule({background:true});if(now)void tab.queue.flush().catch(()=>{});},
+      onBookmark:title=>{tab.reader.addBookmark(title);if(reader()===tab.reader){if(tab.reader.documentSidebarUI?.isConnected&&tab.reader.documentSidebarMode==='bookmarks')tab.reader.showDocumentSidebarView('bookmarks');else if(sidebarMode==='bookmarks')renderSidebar('bookmarks');}toast('이 장면을 북마크했습니다.');},
+      onAttach:safely(async()=>{
+        const files=await pickSubtitleFiles(true);if(!files.length)return;
+        const self=record(),list=self.metadata.youtube.playlistId&&files.length>1?playlistRecords(self.metadata.youtube.playlistId):[self];
+        await attachYouTubeSubtitles(files,list.some(r=>r.id===self.id)?list:[self,...list],{only:self});
+      }),
+      onNavigate:safely(async step=>{
+        const self=record(),list=playlistRecords(self.metadata.youtube.playlistId||''),at=list.findIndex(r=>r.id===self.id),next=list[at+step];
+        if(next)await openRecord(next);
+      }),
+    });
+    const self=record(),list=self.metadata?.youtube?.playlistId?playlistRecords(self.metadata.youtube.playlistId):[],at=list.findIndex(r=>r.id===self.id);
+    if(at>=0)tab.youtube.setSiblings(list[at-1]?.title||'',list[at+1]?.title||'');
+    // On a phone the sidebar would cover the video; the learner opens it when needed.
+    if(innerWidth<=760&&activeId===tab.id&&!$('#sidebar').hidden)closeSidebar({remember:false});
+  }).catch(showError);
+}
+function youtubeDialog(){
+  const firstTime=!localStorage.getItem('librememo-youtube-guide-seen');
+  modal(`<section data-youtube-dialog class="youtube-dialog"><div class="dialog-heading"><h2>${icon('youtube',20)} 유튜브 영상에 주석 달기</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>
+    <p class="dialog-description">YouTube 영상이나 재생목록 주소를 넣고, 받아 둔 자막 파일을 고르세요. 영상은 위에서 재생되고, 아래 자막에 형광펜·메모·북마크를 달 수 있습니다.</p>
+    <label class="youtube-field"><span>YouTube 주소</span><input type="url" data-youtube-url inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=… 또는 재생목록 주소"></label>
+    <p class="youtube-detect" data-youtube-detect aria-live="polite"></p>
+    <div class="youtube-files"><button type="button" class="secondary-button" data-youtube-files>${icon('subtitles',16)} 자막 파일 고르기</button><span data-youtube-file-list>고른 자막 없음 · 나중에 붙여도 됩니다</span></div>
+    <fieldset class="youtube-options"><legend>옵션</legend>
+      <label><input type="checkbox" data-youtube-folder checked> 재생목록이면 재생목록 이름의 폴더를 만들고 영상마다 문서를 만들기</label>
+      <label>앞뒤로 건너뛰기 <select data-youtube-skip>${[5,10,15].map(n=>`<option value="${n}">${n}초</option>`).join('')}</select></label>
+    </fieldset>
+    <details class="youtube-guide" ${firstTime?'open':''}><summary>자막 파일 받는 방법 (Mac · Windows · Android · iPhone)</summary>
+      <p><button type="button" class="secondary-button" data-youtube-site disabled>${icon('external',15)} 자막 사이트 열기</button> <small>주소를 넣으면 눌러집니다.</small></p>${guideHTML()}</details>
+    <p class="dialog-status" data-youtube-status role="status"></p>
+    <div class="dialog-actions"><button class="secondary-button" data-dialog-close>취소</button><button class="primary-button" data-youtube-create disabled>만들기</button></div></section>`,dialog=>{
+    try{localStorage.setItem('librememo-youtube-guide-seen','1');}catch{}
+    const $d=selector=>$(selector,dialog),url=$d('[data-youtube-url]'),status=$d('[data-youtube-status]'),create=$d('[data-youtube-create]');
+    let files=[],parsed=null,busy=false;
+    $d('[data-youtube-skip]').value=String(localStorage.getItem('librememo-youtube-skip')||5);
+    $d('[data-youtube-skip]').onchange=event=>youtubeUI().then(ui=>ui.setSkipSeconds(Number(event.target.value)));
+    const showGuide=id=>{for(const tab of $$('[data-guide-tab]',dialog))tab.setAttribute('aria-selected',String(tab.dataset.guideTab===id));for(const list of $$('[data-guide]',dialog))list.hidden=list.dataset.guide!==id;};
+    for(const tab of $$('[data-guide-tab]',dialog))tab.onclick=()=>showGuide(tab.dataset.guideTab);
+    showGuide(guidePlatform());
+    const existing=()=>parsed?.playlistId&&$d('[data-youtube-folder]').checked?playlistRecords(parsed.playlistId):parsed?.videoId?youtubeRecords().filter(r=>r.metadata.youtube.videoId===parsed.videoId):[];
+    const update=()=>{
+      parsed=parseYouTubeInput(url.value);
+      const list=parsed?.playlistId&&$d('[data-youtube-folder]').checked,found=existing();
+      $d('[data-youtube-detect]').textContent=!url.value.trim()?'':!parsed?'YouTube 영상·재생목록 주소가 아닙니다.':(list?'재생목록입니다. 폴더를 만들고 영상마다 문서를 만듭니다.':'영상 1개입니다.')+(found.length?` 이미 서재에 ${found.length}개가 있어 고른 자막만 붙입니다.`:'');
+      $d('[data-youtube-site]').disabled=!parsed;create.disabled=busy||!parsed||found.length&&!files.length;
+      create.textContent=found.length?'자막 붙이기':'만들기';
+    };
+    url.oninput=update;$d('[data-youtube-folder]').onchange=update;
+    $d('[data-youtube-site]').onclick=()=>{if(parsed)window.open(subtitleSiteURL(parsed.playlistId&&($d('[data-youtube-folder]').checked||!parsed.videoId)?playlistURL(parsed.playlistId):watchURL(parsed.videoId)),'_blank','noopener');};
+    $d('[data-youtube-files]').onclick=async()=>{const picked=await pickSubtitleFiles(true);if(!picked.length)return;files=picked;$d('[data-youtube-file-list]').textContent=files.length===1?files[0].name:`${files.length}개 파일 · ${files.slice(0,2).map(f=>f.name).join(', ')}${files.length>2?' …':''}`;update();};
+    create.onclick=safely(async()=>{
+      if(busy||!parsed)return;busy=true;create.disabled=true;const say=text=>{if(status.isConnected)status.textContent=text;};
+      try{
+        const found=existing();
+        if(found.length){say('자막을 붙이는 중…');const attached=await attachYouTubeSubtitles(files,found,{only:found.length===1?found[0]:null});if(attached)dialog.close();return;}
+        const ui=await youtubeUI(),{subtitles,skipped}=files.length?await readSubtitleFiles(files):{subtitles:[],skipped:[]};
+        if(files.length&&!subtitles.length)throw Error('고른 파일에서 자막(.srt, .vtt, .smi, .ass, .ssa)을 찾지 못했습니다.');
+        if(parsed.playlistId&&$d('[data-youtube-folder]').checked){
+          say('재생목록을 읽는 중…');
+          const [ids,info]=await Promise.all([ui.playlistVideoIds(parsed.playlistId),ui.playlistInfo(parsed.playlistId)]);
+          if(!ids.length)throw Error('재생목록에 영상이 없습니다.');
+          let done=0;say(`영상 ${ids.length}개의 제목과 썸네일을 받는 중… 0/${ids.length}`);
+          const videos=await ui.mapLimit(ids,4,async videoId=>{const [meta,thumbnail]=await Promise.all([ui.videoInfo(videoId),ui.thumbnailData(videoId)]);say(`영상 ${ids.length}개의 제목과 썸네일을 받는 중… ${++done}/${ids.length}`);return {videoId,title:meta.title,channel:meta.channel,thumbnail};});
+          const prefix=new RegExp('^'+(info.title||'￿').replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*[-:|·–—]\\s*','i');
+          videos.forEach((v,i)=>{v.title=(v.title.replace(prefix,'').trim()||v.title||`영상 ${i+1}`);});
+          const {matches,unmatched}=matchSubtitleFiles(subtitles,videos);
+          const parentId=libraryFolderId,taken=libraryFolders.filter(f=>f.parentId===parentId).map(f=>f.name),folderId=uid(),name=playlistFolderName(info.title,taken);
+          await updateLibraryFolders((folders,documents)=>editLibraryFolders(folders,documents,{type:'create',id:folderId,parentId,name}));
+          const base=Date.now();
+          for(const [i,v] of videos.entries()){
+            say(`문서를 만드는 중… ${i+1}/${videos.length}`);
+            // Earlier videos get later times, so "newest first" lists the playlist in order.
+            await saveYouTubeRecord({title:v.title,youtube:{videoId:v.videoId,playlistId:parsed.playlistId,index:i,playlistTitle:info.title,channel:v.channel||info.channel,thumbnail:v.thumbnail},subtitle:matches.get(v.videoId)||null,folderId,created:base-i*1000});
+          }
+          dialog.close();libraryFolderId=folderId;await refreshLibrary();activate('library');
+          try{await dataFolder?.flush();}catch(error){showError(error);}
+          toast(`「${name}」 폴더에 영상 ${videos.length}개를 만들었습니다. 자막 ${matches.size}개를 붙였습니다.`+(unmatched.length?` 영상을 찾지 못한 자막 ${unmatched.length}개는 각 영상의 「자막 붙이기」로 붙여주세요.`:'')+(skipped.length?` 자막이 아닌 파일 ${skipped.length}개는 건너뛰었습니다.`:''));
+          return;
+        }
+        say('영상 정보를 받는 중…');
+        const [meta,thumbnail]=await Promise.all([ui.videoInfo(parsed.videoId),ui.thumbnailData(parsed.videoId)]);
+        const title=meta.title||'YouTube 영상 '+parsed.videoId,video={videoId:parsed.videoId,title};
+        const subtitle=subtitles.length>1?(matchSubtitleFiles(subtitles,[video]).matches.get(parsed.videoId)||subtitles[0]):subtitles[0]||null;
+        const record=await saveYouTubeRecord({title,youtube:{videoId:parsed.videoId,playlistId:parsed.playlistId,channel:meta.channel,thumbnail},subtitle,mediaTime:parsed.start});
+        dialog.close();renderLibrary();await openRecord(record);
+        try{await dataFolder?.flush();}catch(error){showError(error);}
+        toast(subtitle?'영상과 자막을 열었습니다. 자막의 시각을 누르면 그 장면으로 갑니다.':'영상을 열었습니다. 영상 막대의 「자막 붙이기」로 자막 파일을 붙이세요.');
+      }catch(error){say(error.message||String(error));throw error;}
+      finally{busy=false;if(create.isConnected)update();}
+    });
+    requestAnimationFrame(()=>url.focus());
   });
 }
 function duplicateImportDialog(local, matches) {
@@ -1966,6 +2156,7 @@ function bindUI() {
   addressForm.onsubmit=safely(async event=>{event.preventDefault();const value=$('#address').value;$('.chrome').classList.remove('address-editing');$('#address').blur();await openBrowser(value,active()?.type!=='browser');});
   $('#save-page').onclick=safely(savePage);$('#hero-import').onclick=safely(importFiles);
   $('#image-paste-button').onclick=imagePasteDialog;
+  $('#youtube-button').onclick=youtubeDialog;
   $('#file-input').onchange=safely(async event=>{const files=[...event.target.files],parentId=libraryFolderId;event.target.value='';for(const file of files)await openLocalFile(file,parentId);});
   $('#settings-file-input').onchange=safely(async event=>{const file=event.target.files[0];event.target.value='';if(file){await restoreSettings(file);settingsDialog();}});
   $('#library-filter').oninput=renderLibrary;$('#library-sort').onchange=safely(e=>{if(libraryTrash){trashSort=e.target.value;renderLibrary();return;}const [librarySort,librarySortDirection]=e.target.value.split(':');changePreferences({librarySort,librarySortDirection});});$$('[data-library-view]').forEach(button=>button.onclick=safely(()=>changePreferences({libraryView:button.dataset.libraryView})));$('#settings-button').onclick=settingsDialog;$('#web-help-button').onclick=()=>webHelpDialog();$('#paste-button').onclick=()=>pasteTextDialog();
