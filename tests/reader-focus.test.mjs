@@ -446,9 +446,18 @@ test('a touch double tap on empty space toggles full screen once, while drags, s
 });
 test('full screen closes an open book sidebar and restores it on exit, leaving a closed one closed',()=>{
  for(const initiallyOpen of [true,false]){
-  const toggles=[];const r={zoom:1,autoFit:false,open:initiallyOpen,documentSidebarOpen(){return this.open;},toggleDocumentSidebar(open){toggles.push(open);this.open=open;},fitZoom:()=>1.5,setZoom(zoom,autoFit){this.zoom=zoom;this.autoFit=autoFit;},measure(){}};
+  const toggles=[];const r={zoom:1,autoFit:false,open:initiallyOpen,documentSidebarUI:{isConnected:true},restoreFocusSidebar:Reader.prototype.restoreFocusSidebar,documentSidebarOpen(){return this.open;},toggleDocumentSidebar(open){toggles.push(open);this.open=open;},fitZoom:()=>1.5,setZoom(zoom,autoFit){this.zoom=zoom;this.autoFit=autoFit;},measure(){}};
   Reader.prototype.setFocusLayout.call(r,true);assert.equal(r.open,false);assert.equal(r.zoom,1.5);
   Reader.prototype.setFocusLayout.call(r,false);assert.equal(r.open,initiallyOpen);assert.equal(r.zoom,1);
   assert.deepEqual(toggles,initiallyOpen?[false,true]:[]);
  }
+});
+test('leaving full screen reopens a phone book drawer even after the window resizes back to phone width',()=>{
+ const listeners={},attrs=new Set(['data-htmlmemo-compact-ui']),drawer=[];
+ const win={addEventListener:(type,fn)=>listeners[type]=fn,removeEventListener:type=>delete listeners[type],requestAnimationFrame:fn=>fn(),setTimeout:()=>1,clearTimeout(){}};
+ const r={host:{ownerDocument:{defaultView:win}},documentSidebarUI:{isConnected:true},doc:{documentElement:{hasAttribute:name=>attrs.has(name),setAttribute:name=>attrs.add(name)}},
+  documentSidebarOpen:()=>attrs.has('data-htmlmemo-sidebar-open'),toggleDocumentSidebar(){},setDocumentSidebarDrawer:open=>drawer.push(open)};
+ Reader.prototype.restoreFocusSidebar.call(r);assert.ok(attrs.has('data-htmlmemo-sidebar-open'));assert.deepEqual(drawer,[true]);
+ attrs.delete('data-htmlmemo-sidebar-open');listeners.resize();assert.ok(attrs.has('data-htmlmemo-sidebar-open'));
+ r.focusSidebarCleanup();assert.equal(listeners.resize,undefined);
 });

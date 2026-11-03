@@ -2891,10 +2891,30 @@ export class Reader {
       this.setZoom(this.fitZoom(),true);
     } else if (this.focusLayout) {
       const previous=this.focusLayout;this.focusLayout=null;
-      if (previous.sidebar && !this.documentSidebarOpen()) this.toggleDocumentSidebar(true);
       this.setZoom(previous.zoom,previous.autoFit);
+      if (previous.sidebar) this.restoreFocusSidebar();
     }
     this.measure();
+  }
+  // Leaving browser full screen resizes the window after this runs (for example
+  // from a wide full screen back to a phone drawer), so check again once it settles.
+  restoreFocusSidebar() {
+    const reopen=()=>{
+      if (this.disposed || this.focusLayout || !this.documentSidebarUI?.isConnected) return;
+      if (!this.documentSidebarOpen()) this.toggleDocumentSidebar(true);
+      if (this.doc?.documentElement?.hasAttribute?.('data-htmlmemo-compact-ui') && !this.documentSidebarOpen()) {
+        this.doc.documentElement.setAttribute('data-htmlmemo-sidebar-open', '');
+        this.setDocumentSidebarDrawer(true);
+      }
+    };
+    reopen();
+    const win = this.host?.ownerDocument?.defaultView;
+    if (!win?.addEventListener) return;
+    this.focusSidebarCleanup?.();
+    const onResize = () => win.requestAnimationFrame(reopen);
+    const timer = win.setTimeout(() => this.focusSidebarCleanup?.(), 1500);
+    win.addEventListener('resize', onResize);
+    this.focusSidebarCleanup = () => {win.removeEventListener('resize', onResize); win.clearTimeout(timer); this.focusSidebarCleanup = null;};
   }
   restoreOpeningPosition() {
     if(this.pdf){const position=this.metadata.view.pdfPosition;if(position)this.pdf.seek(position.page,position.y,false);return;}
@@ -4615,6 +4635,7 @@ export class Reader {
   }
   stopSpeech() { this.readAloud?.close(); this.host?.ownerDocument?.defaultView?.speechSynthesis?.cancel(); }
   dispose() {
+    this.focusSidebarCleanup?.();
     this.pdf?.dispose();
     this.readingThemeQuery?.removeEventListener?.('change',this.readingThemeChange);
     this.cancelTextMarkGesture();this.cancelAnnotationDrag();

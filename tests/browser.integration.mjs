@@ -2461,7 +2461,9 @@ test('real Chrome: native sidebar view choices are visible on open and preserve 
       const nativeSidebarWidth=`(()=>{const d=${doc},s=d.querySelector('[data-htmlmemo-native-sidebar]'),r=s.getBoundingClientRect(),w=d.defaultView.innerWidth;return d.defaultView.getComputedStyle(s).display==='none'?0:Math.max(0,Math.min(r.right,w)-Math.max(r.left,0));})()`;
       assert.ok(await page.evaluate(nativeSidebarWidth)>100);
       await doubleClickNative('#reader-main',true);await page.waitFor(`document.querySelector("#app").classList.contains("reader-focus")&&${nativeSidebarWidth}<=16&&document.querySelector(".chrome").getBoundingClientRect().height>0`);
-      await doubleClickNative('#reader-main',true);await page.waitFor(`!document.querySelector("#app").classList.contains("reader-focus")&&!document.fullscreenElement&&${nativeSidebarWidth}>100`);
+      await doubleClickNative('#reader-main',true);
+      try{await page.waitFor(`!document.querySelector("#app").classList.contains("reader-focus")&&!document.fullscreenElement&&${nativeSidebarWidth}>100`);}
+      catch(error){await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,`test-results/sidebar-views-native-focus-exit-failure-${width}.png`),await page.screenshot());throw Error(error.message+' '+await page.evaluate(`JSON.stringify({focus:document.querySelector("#app").classList.contains("reader-focus"),full:!!document.fullscreenElement,width:${nativeSidebarWidth},inner:innerWidth,compact:${doc}.documentElement.hasAttribute('data-htmlmemo-compact-ui'),open:${doc}.documentElement.hasAttribute('data-htmlmemo-sidebar-open'),tocOpen:${doc}.body.classList.contains('toc-open')})`));}
       await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,`test-results/sidebar-views-native-${width}.png`),await page.screenshot());
     }
     await clickNative('[data-sidebar-view=bookmarks]');await clickNative('#htmlmemo-native-add-bookmark');
