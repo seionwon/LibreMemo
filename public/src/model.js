@@ -1,3 +1,4 @@
+import { validTextStyle } from './text-style.js';
 export const FORMAT_VERSION = 1;
 export const TEXT_TOOLS = ['highlight', 'underline', 'strike'];
 export const DRAW_TOOLS = ['pen', 'rect', 'circle', 'ellipse', 'arrow', 'area', 'area-underline'];
@@ -164,6 +165,7 @@ export function validateAnnotations(value) {
     }
     if (!TEXT_TOOLS.includes(item.type) && item.textAnchor != null && (typeof item.textAnchor?.quote !== 'string' || item.textAnchor.quote.length > 200000)) throw new Error('메모의 대상 문장이 손상되었습니다.');
     if (item.text != null && (typeof item.text !== 'string' || item.text.length > 10000)) throw new Error('메모가 너무 길거나 올바르지 않습니다.');
+    if (item.style != null && (!['note','text'].includes(item.type) || !validTextStyle(item.style))) throw new Error('메모 상자 스타일이 올바르지 않습니다.');
     return structuredClone(item);
   });
 }

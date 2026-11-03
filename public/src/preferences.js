@@ -1,4 +1,5 @@
 import {normalizeDefaults,normalizePresets} from './viewer-presets.js';
+import {validTextStyle,validTextStyles} from './text-style.js';
 import {DEFAULT_AI_SEARCH,normalizeAiSearch} from './ai-search.js';
 import {DEFAULT_READING_LAYOUT,normalizeReadingLayout} from './reading-layout.js';
 export const PREFERENCES_KEY = 'htmlmemo-preferences-v1';
@@ -103,6 +104,16 @@ export function normalizePreferences(value = {}) {
       if (!object(p) || typeof p.id !== 'string' || !/^[\w-]{1,64}$/.test(p.id) || typeof p.name !== 'string' || !p.name.trim() || p.name.length > 60 || !Array.isArray(p.colors) || !p.colors.length || p.colors.length > 32 || p.colors.some(c => typeof c !== 'string' || !/^#[\da-f]{6}$/i.test(c))) throw new Error('사용자 팔레트 형식이 올바르지 않습니다.');
       return {id: p.id, name: p.name.trim(), colors: [...new Set(p.colors.map(c => c.toLowerCase()))]};
     });
+  }
+  // Memo box / free text look for new notes, and the learner's own saved looks.
+  if (input.textStyle != null) {
+    const style = validTextStyle(input.textStyle);
+    if (!style) throw new Error('메모 상자 스타일 설정이 올바르지 않습니다.');
+    annotation.textStyle = style;
+  }
+  if (input.textStyles !== undefined) {
+    if (!Array.isArray(input.textStyles) || input.textStyles.length > 30) throw new Error('내 메모 상자 스타일 목록이 올바르지 않습니다.');
+    annotation.textStyles = validTextStyles(input.textStyles);
   }
   let toolbarPosition=null;
   if(value.toolbarPosition!==null&&value.toolbarPosition!==undefined){const p=value.toolbarPosition;if(!object(p)||![p.x,p.y].every(n=>Number.isFinite(n)&&n>=0&&n<=1))throw new Error('툴바 위치 설정이 올바르지 않습니다.');toolbarPosition={x:p.x,y:p.y};}

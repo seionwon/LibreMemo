@@ -839,3 +839,11 @@ summary:focus-visible{outline:2px solid var(--green);outline-offset:3px}
 .document-grid[data-view=list] .card-thumb{display:none}
 .youtube-chapter-box{margin:10px 0;font-size:13px}.youtube-chapter-box summary{cursor:pointer;color:var(--muted)}.youtube-chapters{display:block;width:100%;margin-top:6px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);font:13px/1.5 ui-monospace,Menlo,monospace;resize:vertical}
 .youtube-guide-buttons{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}.youtube-guide-buttons .secondary-button{display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+/* 펜과 색상 → 텍스트 상자 스타일 */
+.text-style-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;margin:6px 0 8px}
+.text-style-chip{position:relative;display:flex}.text-style-chip>button[data-text-style]{display:flex;flex-direction:column;align-items:stretch;gap:3px;width:100%;padding:5px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font:inherit;font-size:11px;cursor:pointer;text-align:center}
+.text-style-chip>button[data-text-style] i{display:block;padding:4px 0;border-radius:5px;font-style:normal;font-size:13px;line-height:1.2}.text-style-chip>button[data-text-style] span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.text-style-chip.active>button[data-text-style]{border-color:var(--text);box-shadow:0 0 0 1px var(--text)}
+.text-style-remove{position:absolute;top:-6px;right:-6px;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--muted);cursor:pointer}
+.text-style-controls{display:grid;gap:6px}.text-style-row{display:flex;align-items:center;gap:8px;font-size:11px}.text-style-row select{padding:3px 6px}.text-style-row input[type=color]{width:34px;height:24px;padding:0;border:1px solid var(--line);border-radius:5px;background:none}
+.text-style-note{margin:6px 0 0;font-size:11px;color:var(--muted)}

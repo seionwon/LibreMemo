@@ -1,14 +1,16 @@
 import {validateAnnotations,TEXT_TOOLS,validPDFPosition} from './model.js';
+import {textLook,textLines} from './text-style.js';
 const CSS_SCALE=4/3;
 const encodeImage=canvas=>new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?blob.arrayBuffer().then(bytes=>resolve(new Uint8Array(bytes)),reject):reject(Error('메모 그림을 만들지 못했습니다.')),'image/png'));
 async function textImage(a,doc){
-  const lines=a.text.split('\n').flatMap(line=>{const result=[];for(let n=0;n<Math.max(line.length,1);n+=24)result.push(line.slice(n,n+24));return result;}),note=a.type==='note',font=note?14:18,pad=note?12:0;
-  const canvas=doc.createElement('canvas'),ctx=canvas.getContext('2d');if(!ctx)throw Error('메모 그림을 만들 수 없습니다. 원본 포함 보관 파일을 사용해주세요.');ctx.font=font+'px system-ui,sans-serif';
-  const width=Math.ceil(Math.max(note?130:1,...lines.map(t=>ctx.measureText(t).width+pad*2))+4),height=lines.length*22+(note?24:2);
+  const look=textLook(a),lines=textLines(a.text,look.chars),font=(look.weight===700?'bold ':'')+look.size+'px system-ui,sans-serif';
+  const canvas=doc.createElement('canvas'),ctx=canvas.getContext('2d');if(!ctx)throw Error('메모 그림을 만들 수 없습니다. 원본 포함 보관 파일을 사용해주세요.');ctx.font=font;
+  const width=Math.ceil(Math.max(look.boxed?130:1,...lines.map(t=>ctx.measureText(t).width+look.pad*2))+4),height=lines.length*look.lineHeight+(look.boxed?look.pad*2:2);
   if(width*height>8*1024*1024)throw Error('메모가 너무 커서 PDF로 바꿀 수 없습니다. 원본 포함 보관 파일을 사용해주세요.');
-  canvas.width=width*2;canvas.height=height*2;ctx.scale(2,2);ctx.font=font+'px system-ui,sans-serif';
-  if(note){ctx.fillStyle='#fff9df';ctx.fillRect(1,1,width-2,height-2);ctx.strokeStyle=a.color;ctx.lineWidth=1.5;ctx.strokeRect(1,1,width-2,height-2);}
-  ctx.fillStyle=note?'#544a30':a.color;lines.forEach((line,n)=>ctx.fillText(line,pad,(note?25:16)+n*22));
+  canvas.width=width*2;canvas.height=height*2;ctx.scale(2,2);ctx.font=font;
+  if(look.background){ctx.fillStyle=look.background;ctx.fillRect(1,1,width-2,height-2);}
+  if(look.border){ctx.strokeStyle=look.border;ctx.lineWidth=1.5;ctx.strokeRect(1,1,width-2,height-2);}
+  ctx.fillStyle=look.color;lines.forEach((line,n)=>ctx.fillText(line,look.pad,look.pad+look.baseline+n*look.lineHeight));
   return {png:await encodeImage(canvas),width,height};
 }
 export async function pdfExportPlan(reader,{signal,onProgress=()=>{}}={}){

@@ -6,6 +6,7 @@ import { IsolatedRuntime,needsIsolatedRuntime } from './isolated-runtime.js';
 import { clamp, uid, icon, sidebarWidthAction, isSecurityWarning } from './utils.js';
 import { History, TEXT_TOOLS, DRAW_TOOLS, FILL_TOOLS, READING_FONTS, READING_FONT_FAMILIES, MONO_READING_FONTS, normalizeReadingFontFamily } from './model.js';
 import { loadHangulFonts } from './hangul-fonts.js';
+import { textLook, textLines, validTextStyle } from './text-style.js';
 import { DEFAULT_READING_LAYOUT, ReadingPager, normalizeReadingLayout, pageNumbers, readingLayoutCss, PAGE_BOTTOM, PAGE_TOP } from './reading-layout.js';
 import { normalizeSettings, presetFit, SETTING_LABELS } from './viewer-presets.js';
 import { closeReadingLayoutPanel, closeEbookNote, openEbookNote, ebookNoteTarget, toggleReadingLayoutPanel } from './reading-layout-panel.js';
@@ -3132,7 +3133,13 @@ export class Reader {
     }catch(error){this.restoreTextSelection(target);throw error;}
     finally{this.selectionNotePending=false;}
   }
-  annotation(type, properties) { const highlight=type==='highlight'||type==='area';return {id:uid(), type, color:highlight?this.highlightColor:this.color, width:this.width, opacity:highlight?this.opacity:1, created:Date.now(), ...(this.pdf&&/^n\d+$/.test(properties.anchor||'')?{pdfPage:Number(properties.anchor.slice(1))}:{}), ...(FILL_TOOLS.includes(type)?{fill:this.rectFill===true,...(this.rectFill===true?{fillOpacity:this.opacity}:{})}:{}), ...properties}; }
+  annotation(type, properties) { const highlight=type==='highlight'||type==='area';return {id:uid(), type, color:highlight?this.highlightColor:this.color, width:this.width, opacity:highlight?this.opacity:1, created:Date.now(), ...(this.pdf&&/^n\d+$/.test(properties.anchor||'')?{pdfPage:Number(properties.anchor.slice(1))}:{}), ...(FILL_TOOLS.includes(type)?{fill:this.rectFill===true,...(this.rectFill===true?{fillOpacity:this.opacity}:{})}:{}), ...(['note','text'].includes(type)&&validTextStyle(this.textStyle)?{style:validTextStyle(this.textStyle)}:{}), ...properties}; }
+  /** Give the selected memo box or free text a style (one undoable edit). Returns whether one changed. */
+  applyTextStyle(style) {
+    const valid=validTextStyle(style),target=this.metadata.annotations.find(a=>a.id===this.selectedId);
+    if(!valid||!target||!['note','text'].includes(target.type))return false;
+    this.commit(this.metadata.annotations.map(a=>a===target?{...a,style:valid}:a));return true;
+  }
   addText(type, anchor, text) {
     if (!anchor?.quote?.trim()) return false;
     if(this.pdf)return this.pdf.addText(type,anchor,text);
@@ -3896,11 +3903,10 @@ export class Reader {
     }
     if (['note','text'].includes(annotation.type)) {
       const group = svg(this.doc, 'g', {'data-htmlmemo-id':annotation.id, style:'pointer-events:visiblePainted;cursor:pointer'});
-      const lines = (annotation.text || '메모').split('\n').flatMap(line => { const parts = []; for (let i = 0; i < Math.max(line.length,1); i += 24) parts.push(line.slice(i,i+24)); return parts; });
-      const x = first.x; const y = first.y;
-      if (annotation.type === 'note') group.append(svg(this.doc, 'rect', {x,y,width:Math.min(340,Math.max(130,Math.max(...lines.map(l=>l.length))*12+24)),height:lines.length*22+24,rx:5,fill:'#fff9df',stroke:annotation.color,'stroke-width':1.5}));
-      const text = svg(this.doc, 'text', {x:x+(annotation.type==='note'?12:0),y:y+(annotation.type==='note'?25:16),fill:annotation.type==='note'?'#544a30':annotation.color,'font-size':annotation.type==='note'?14:18,'font-family':'system-ui,sans-serif'});
-      lines.forEach((line,i) => { const span = svg(this.doc, 'tspan', {x:x+(annotation.type==='note'?12:0),dy:i===0?0:22}); span.textContent = line || ' '; text.append(span); }); group.append(text); return group;
+      const look=textLook(annotation),lines=textLines(annotation.text,look.chars),x=first.x,y=first.y;
+      if (look.boxed) group.append(svg(this.doc, 'rect', {x,y,width:Math.min(340*look.size/14,Math.max(130,Math.max(...lines.map(l=>l.length))*look.size*.86+look.pad*2)),height:lines.length*look.lineHeight+look.pad*2,rx:5,fill:look.background||'none',stroke:look.border||'none','stroke-width':look.border?1.5:0}));
+      const text = svg(this.doc, 'text', {x:x+look.pad,y:y+look.pad+look.baseline,fill:look.color,'font-size':look.size,'font-weight':look.weight,'font-family':'system-ui,sans-serif'});
+      lines.forEach((line,i) => { const span = svg(this.doc, 'tspan', {x:x+look.pad,dy:i===0?0:look.lineHeight}); span.textContent = line || ' '; text.append(span); }); group.append(text); return group;
     }
     return null;
   }

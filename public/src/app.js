@@ -22,6 +22,7 @@ import { openDeviceSync } from './sync-ui.js';
 import {openHelp} from './help.js';
 import { DataFolder, supportsDataFolder, CHROME_REQUIRED_MESSAGE, createStorageSubfolder, storageFolderName } from './data-folder.js';
 import {validateFolders,folderPath,folderDescendants,editLibraryFolders,LibraryIndex} from './library-folders.js';
+import {TEXT_STYLE_PRESETS,TEXT_SIZE_MIN,TEXT_SIZE_MAX,validTextStyle,stylePreview} from './text-style.js';
 import {parseYouTubeInput,parseChapters,cueTimes,clock,youtubeDocumentHTML,subtitleFormat,decodeSubtitle,matchSubtitleFiles,subtitlesFromZip,playlistFolderName,watchURL,SUBTITLE_EXTENSION,guideHTML,validateYouTube} from './youtube.js';
 
 const PUBLIC_APP_URL = publicAppURL(location);
@@ -1433,7 +1434,8 @@ function renderPalettePopoverContent(r) {
     + `<label class="range-label">굵기 <output id="width-output">${r.width}px</output><input id="pen-width" type="range" min="1" max="18" value="${r.width}"></label><label class="range-label">형광펜/채움 투명도 <output id="opacity-output">${Math.round(r.opacity*100)}%</output><input id="pen-opacity" type="range" min="10" max="90" value="${Math.round(r.opacity*100)}"></label><label class="select-label">펜 표시 시간 <select id="pen-ttl"><option value="0">영구 저장</option><option value="3">3초</option><option value="10">10초</option><option value="30">30초</option></select></label><p class="popover-hint">시간을 정한 펜은 잠깐 표시되고 저장되지 않아요.</p>`
     + `<div class="palette-section"><div class="palette-bar"><span class="palette-label">팔레트 프리셋</span><div class="palette-actions"><select id="palette-preset" aria-label="팔레트 프리셋"><optgroup label="프리셋 팔레트 (20개)">${PRESET_PALETTES.map((p, idx) => `<option value="${esc(p.id)}" ${p.id === activePalette.id ? 'selected' : ''}>${idx + 1}. ${esc(p.name)} (${p.colors.length})</option>`).join('')}</optgroup>${customPalettes.length ? `<optgroup label="사용자 팔레트 (${customPalettes.length}개)">${customPalettes.map(p => `<option value="${esc(p.id)}" ${p.id === activePalette.id ? 'selected' : ''}>★ ${esc(p.name)} (${p.colors.length})</option>`).join('')}</optgroup>` : ''}</select>${isCustomPalette ? `<button type="button" id="delete-custom-palette" class="palette-mini-btn danger" title="선택한 사용자 팔레트 삭제" aria-label="사용자 팔레트 삭제">삭제</button>` : ''}</div></div><div id="preset-swatches" class="swatches preset-swatches">${activePalette.colors.map(c => `<button type="button" data-color="${c}" style="--swatch:${c}" title="${c}" aria-label="색상 ${c}" class="swatch ${currentColor === c ? 'chosen' : ''}"></button>`).join('')}</div></div>`
     + `<div class="palette-section"><div class="palette-bar"><span class="palette-label">사용자 색상 (${customColors.length})</span><div class="palette-actions"><button type="button" id="add-custom-color" class="palette-mini-btn" title="현재 색상을 사용자 색상에 추가">+ 색상 추가</button><button type="button" id="remove-custom-color" class="palette-mini-btn" ${customColors.includes(currentColor) ? '' : 'disabled'} title="선택한 사용자 색상 삭제">− 삭제</button></div></div><div id="custom-swatches" class="swatches custom-swatches">${customColors.length ? customColors.map(c => `<button type="button" data-color="${c}" data-custom-swatch="${c}" style="--swatch:${c}" title="사용자 색상 ${c}" aria-label="사용자 색상 ${c}" class="swatch custom-swatch ${currentColor === c ? 'chosen' : ''}"></button>`).join('') : '<span class="palette-empty">색상을 고른 뒤 「+ 색상 추가」를 눌러 저장하세요.</span>'}</div><div class="custom-palette-creator"><input id="custom-palette-name" type="text" maxlength="40" placeholder="새 팔레트 이름 (예: 내 필기 세트)" aria-label="새 팔레트 이름"><button type="button" id="save-custom-palette" class="palette-mini-btn primary">+ 팔레트 저장</button></div></div>`
-    + `<div class="palette-section color-picker-section"><div class="palette-bar"><span class="palette-label">컬러 피커</span><span class="color-preview-badge"><i id="color-preview-chip" style="background:${currentColor}"></i><code id="color-preview-text">${currentColor.toUpperCase()}</code></span></div><div id="color-picker-sv" class="color-picker-sv" style="--picker-hue:${pickerHsv.h}" role="slider" tabindex="0" aria-label="채도 및 명도 선택"><span id="color-picker-sv-thumb" class="color-picker-sv-thumb" style="left:${pickerHsv.s}%;top:${100 - pickerHsv.v}%"></span></div><div class="color-picker-hue-row"><input id="color-picker-hue" class="color-picker-hue" type="range" min="0" max="360" value="${pickerHsv.h}" aria-label="색상 (Hue)"><input type="color" id="custom-color" value="${currentColor}" title="시스템 색상 선택기" aria-label="사용자 색상"></div><div class="color-picker-inputs"><label class="color-input-field hex-field"><span>HEX</span><input id="color-hex" type="text" maxlength="7" value="${currentColor.toUpperCase()}" aria-label="HEX 색상 코드"></label><label class="color-input-field"><span>R</span><input id="color-r" type="number" min="0" max="255" value="${rgb.r}" aria-label="R (빨강)"></label><label class="color-input-field"><span>G</span><input id="color-g" type="number" min="0" max="255" value="${rgb.g}" aria-label="G (초록)"></label><label class="color-input-field"><span>B</span><input id="color-b" type="number" min="0" max="255" value="${rgb.b}" aria-label="B (파랑)"></label></div></div>`;
+    + `<div class="palette-section color-picker-section"><div class="palette-bar"><span class="palette-label">컬러 피커</span><span class="color-preview-badge"><i id="color-preview-chip" style="background:${currentColor}"></i><code id="color-preview-text">${currentColor.toUpperCase()}</code></span></div><div id="color-picker-sv" class="color-picker-sv" style="--picker-hue:${pickerHsv.h}" role="slider" tabindex="0" aria-label="채도 및 명도 선택"><span id="color-picker-sv-thumb" class="color-picker-sv-thumb" style="left:${pickerHsv.s}%;top:${100 - pickerHsv.v}%"></span></div><div class="color-picker-hue-row"><input id="color-picker-hue" class="color-picker-hue" type="range" min="0" max="360" value="${pickerHsv.h}" aria-label="색상 (Hue)"><input type="color" id="custom-color" value="${currentColor}" title="시스템 색상 선택기" aria-label="사용자 색상"></div><div class="color-picker-inputs"><label class="color-input-field hex-field"><span>HEX</span><input id="color-hex" type="text" maxlength="7" value="${currentColor.toUpperCase()}" aria-label="HEX 색상 코드"></label><label class="color-input-field"><span>R</span><input id="color-r" type="number" min="0" max="255" value="${rgb.r}" aria-label="R (빨강)"></label><label class="color-input-field"><span>G</span><input id="color-g" type="number" min="0" max="255" value="${rgb.g}" aria-label="G (초록)"></label><label class="color-input-field"><span>B</span><input id="color-b" type="number" min="0" max="255" value="${rgb.b}" aria-label="B (파랑)"></label></div></div>`
+    + textStyleSection(r);
   positionPopover();bindPaletteDrag(pop);
   $$('[data-popover-close]', pop).forEach(button => button.onclick = closePopover);
   const applyColor = (rawColor, {fromHsv = false, keepHexInput = false} = {}) => {
@@ -1563,6 +1565,60 @@ function renderPalettePopoverContent(r) {
   $('#pen-opacity', pop).oninput = safely(e => { changePreferences({annotation: {opacity: Number(e.target.value) / 100}}); $('#opacity-output', pop).textContent = e.target.value + '%'; });
   $('#pen-ttl', pop).value = String(r.penTTL);
   $('#pen-ttl', pop).onchange = safely(e => changePreferences({annotation: {penTTL: Number(e.target.value)}}));
+  bindTextStyleSection(r, pop);
+}
+// ── Memo box / free text style, at the bottom of 펜과 색상: presets, the learner's own
+// saved styles and fine controls. The chosen style is used for new memos and is applied
+// at once to a memo box or free text selected with the select tool.
+const sameTextStyle=(a,b)=>JSON.stringify(validTextStyle(a))===JSON.stringify(validTextStyle(b));
+function textStyleSection(r) {
+  const current=validTextStyle(preferences.annotation.textStyle),own=preferences.annotation.textStyles||[],pen=r.color;
+  const chip=(key,name,style,removable=false)=>`<span class="text-style-chip${(style?sameTextStyle(style,current):!current)?' active':''}"><button type="button" data-text-style="${esc(key)}" title="${esc(name)}"><i style="${style?stylePreview(style,pen):'background:#fff9df;color:#544a30;border:1px solid '+pen}">가 Aa</i><span>${esc(name)}</span></button>${removable?`<button type="button" class="text-style-remove" data-text-style-remove="${esc(key)}" aria-label="${esc(name)} 지우기" title="지우기">${icon('close',11)}</button>`:''}</span>`;
+  const s=current||TEXT_STYLE_PRESETS[0].style,mode=v=>v===null?'none':v==='pen'?'pen':'custom',hex=v=>v&&v!=='pen'?v:pen;
+  return `<div class="palette-section text-style-section"><div class="palette-bar"><span class="palette-label">텍스트 상자 스타일</span><div class="palette-actions"><button type="button" id="text-style-save" class="palette-mini-btn" title="지금 스타일을 이름을 붙여 저장">+ 내 스타일로 저장</button></div></div>
+    <div class="text-style-grid">${chip('auto','종류별 기본',null)}${TEXT_STYLE_PRESETS.map(p=>chip('preset:'+p.id,p.name,p.style)).join('')}${own.map(o=>chip('own:'+o.id,o.name,o.style,true)).join('')}</div>
+    <div class="text-style-controls">
+      <label class="range-label">글자 크기 <output id="ts-size-out">${s.size}px</output><input id="ts-size" type="range" min="${TEXT_SIZE_MIN}" max="${TEXT_SIZE_MAX}" value="${s.size}"></label>
+      <label class="text-style-row"><input type="checkbox" id="ts-bold" ${s.bold?'checked':''}> 굵게</label>
+      ${[['color','글자색',s.color,false],['background','배경',s.background,true],['border','테두리',s.border,true]].map(([key,label,value,canNone])=>`<label class="text-style-row">${label}<select id="ts-${key}-mode">${canNone?`<option value="none" ${mode(value)==='none'?'selected':''}>없음</option>`:''}<option value="pen" ${mode(value)==='pen'?'selected':''}>펜 색</option><option value="custom" ${mode(value)==='custom'?'selected':''}>직접 고르기</option></select><input type="color" id="ts-${key}" value="${hex(value)}" ${mode(value)==='custom'?'':'hidden'} aria-label="${label} 색"></label>`).join('')}
+    </div><p class="text-style-note">새로 쓰는 메모 상자·자유 텍스트에 쓰입니다. 선택 도구로 고른 메모가 있으면 그 메모도 바로 바뀝니다.</p></div>`;
+}
+function bindTextStyleSection(r, pop) {
+  const own=()=>preferences.annotation.textStyles||[];
+  const use=style=>{
+    const valid=style?validTextStyle(style):null;
+    changePreferences({annotation:{textStyle:valid}});
+    for(const tab of tabs)if(tab.reader)tab.reader.textStyle=valid;
+    if(valid&&reader()?.applyTextStyle(valid))toast('선택한 메모에 스타일을 적용했습니다.');
+  };
+  const rerender=()=>{const top=pop.scrollTop;renderPalettePopoverContent(r);pop.scrollTop=top;};
+  $$('[data-text-style]',pop).forEach(button=>button.onclick=safely(()=>{
+    const key=button.dataset.textStyle,style=key==='auto'?null:key.startsWith('preset:')?TEXT_STYLE_PRESETS.find(p=>'preset:'+p.id===key)?.style:own().find(o=>'own:'+o.id===key)?.style;
+    use(style||null);rerender();
+  }));
+  $$('[data-text-style-remove]',pop).forEach(button=>button.onclick=safely(()=>{
+    const id=button.dataset.textStyleRemove.slice(4);changePreferences({annotation:{textStyles:own().filter(o=>o.id!==id)}});rerender();
+  }));
+  // Fine controls change the current style in place, without rebuilding the window mid-drag.
+  const fromControls=()=>{
+    const pick=key=>{const mode=$('#ts-'+key+'-mode',pop).value;return mode==='none'?null:mode==='pen'?'pen':$('#ts-'+key,pop).value;};
+    return {size:Number($('#ts-size',pop).value),bold:$('#ts-bold',pop).checked,color:pick('color'),background:pick('background'),border:pick('border')};
+  };
+  const changed=()=>{
+    const style=fromControls();$('#ts-size-out',pop).textContent=style.size+'px';
+    for(const key of ['color','background','border'])$('#ts-'+key,pop).hidden=$('#ts-'+key+'-mode',pop).value!=='custom';
+    use(style);
+    for(const chip of $$('.text-style-chip',pop)){const key=chip.querySelector('[data-text-style]').dataset.textStyle,preset=key.startsWith('preset:')?TEXT_STYLE_PRESETS.find(p=>'preset:'+p.id===key)?.style:key.startsWith('own:')?own().find(o=>'own:'+o.id===key)?.style:null;chip.classList.toggle('active',!!preset&&sameTextStyle(preset,style));}
+  };
+  $('#ts-size',pop).oninput=safely(changed);$('#ts-bold',pop).onchange=safely(changed);
+  for(const key of ['color','background','border']){$('#ts-'+key+'-mode',pop).onchange=safely(changed);$('#ts-'+key,pop).oninput=safely(changed);}
+  $('#text-style-save',pop).onclick=safely(async()=>{
+    const style=validTextStyle(fromControls());if(!style)return;
+    if(own().length>=30)throw Error('내 스타일은 30개까지 저장할 수 있습니다. 쓰지 않는 스타일을 지운 뒤 저장해주세요.');
+    const name=(await promptText('text','내 스타일 '+(own().length+1)))?.trim().slice(0,30);if(!name)return;
+    changePreferences({annotation:{textStyles:[...own(),{id:uid(),name,style}],textStyle:style}});
+    toast(`「${name}」 스타일을 저장했습니다. 펜과 색상의 텍스트 상자 스타일에서 고를 수 있습니다.`);
+  });
 }
 function showSelectionMenu(r) {
   const anchor=r.selection;if(!anchor)return;

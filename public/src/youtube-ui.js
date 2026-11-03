@@ -87,9 +87,9 @@ export class YouTubePane {
       <div class="youtube-zones"><button type="button" data-yt="back" aria-label="${skip}초 뒤로"></button><button type="button" data-yt="play" aria-label="재생"></button><button type="button" data-yt="forward" aria-label="${skip}초 앞으로"></button></div>
       <div class="youtube-flash" aria-hidden="true"></div><p class="youtube-message" hidden></p></div>
       <div class="youtube-bar">
-        <select class="youtube-rate" data-yt="rate" title="재생 속도" aria-label="재생 속도">${RATES.map(r=>`<option value="${r}" ${r===rate?'selected':''}>${r}×</option>`).join('')}</select>
-        <span class="youtube-clock" data-yt="clock">0:00</span>
         <button type="button" class="youtube-button" data-yt="follow" aria-pressed="true" title="재생 중인 자막을 따라 화면을 움직입니다">${icon('list',15)}<span>따라가기</span></button>
+        <span class="youtube-clock" data-yt="clock">0:00</span>
+        <select class="youtube-rate" data-yt="rate" title="재생 속도" aria-label="재생 속도">${RATES.map(r=>`<option value="${r}" ${r===rate?'selected':''}>${r}×</option>`).join('')}</select>
         <button type="button" class="youtube-button" data-yt="mark" title="지금 장면을 북마크">${icon('bookmark',15)}<span>북마크</span></button>
         <button type="button" class="youtube-button" data-yt="chapters" title="영상 설명란의 챕터를 붙여넣어 목차로 쓰기">${icon('list',15)}<span>목차</span></button>
         <button type="button" class="youtube-button" data-yt="attach" title="자막 파일(.srt, .vtt 등) 붙이기">${icon('subtitles',15)}<span>${this.hasCues()?'자막 바꾸기':'자막 붙이기'}</span></button>
