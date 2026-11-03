@@ -6276,8 +6276,10 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
 | --- | --- |
 | ID | hist-20261103-022 |
 | 변경 종류 | 안내 문구(`public/src/youtube.js`, `public/src/help-content.js`), 스타일(`public/design.tailwind.css`), 단위·Chrome 검사 |
-| 상태 | 게시 진행 중 |
+| 상태 | GitHub Pages 게시 완료(1.9.45) |
 
 - **요청:** 「"YouTube Subtitle Downloader"라는 이름을 가진 앱은 여럿이야. 그 가운데 하나만 작동함. 따라서, 내가 제공한 해당 확장의 URL이 사용자에게 제공되어야 함.」
 - **바뀐 동작:** 내 서재 → 유튜브 → 「자막 파일 받는 방법 (Mac · Chrome)」 맨 위에 「같은 이름의 확장 프로그램이 여럿 있습니다. 이 주소의 확장만 작동합니다.」와 설치 주소 https://chromewebstore.google.com/detail/ognjcegpcoafidcfbepkfgnolnnibcjp 를 글자 그대로 보여 줍니다. 주소는 누르면 Chrome 웹 스토어의 그 확장이 새 탭에서 열리고, 한 번 누르면 전체가 선택되어 복사하기 쉽습니다. 「확장 프로그램 설치」 단추는 그대로 같은 주소를 엽니다. 첫 단계 안내에도 웹 스토어에서 이름으로 검색해 다른 것을 설치하지 말라는 말을 넣었고, 도움말의 「유튜브 영상의 자막에 주석 달기」에도 같은 주소와 주의를 적었습니다.
 - **검증:** `npm run check`(238개 파일), `npm test` 970개 통과(유튜브 안내 검사에 주소 글자 노출·같은 이름 주의 확인 추가), `npm run build`, `git diff --check` 통과. 실제 Chrome 검사 「compact library」에 유튜브 창을 열어 안내 칸이 보이고 링크 글자와 주소가 정확히 그 확장 주소인지 확인하는 단계를 추가했습니다. 이 Mac 실행 환경은 `CODEMEMO_BROWSER_AUTOMATION=unavailable`이라 Chrome을 직접 실행하지 않았고, 제한된 검증 서비스(codememo-browser)는 새 프로필에서 「저장 폴더를 먼저 설정하세요」 화면에 막혀 유튜브 창까지 열지 못했습니다(폴더 선택 불가). 실제 Chrome 확인은 게시 후 GitHub Actions 검사에서 받습니다.
+- **게시 (2026-11-03 +09:00):** 커밋 `db18738`의 [Actions 41654099387](https://github.com/seionwon/LibreMemo/actions/runs/41654099387)에서 build·deploy·verify가 모두 성공했습니다(게시 후 실제 Chrome 검사에 새 유튜브 안내 확인 단계 포함). 공개 `version.js` 1.9.45를 확인했습니다.
+- **사용자 후속 의견:** 게시 뒤 사용자가 「이미 들어있구나. 잘못봤음. 고치지 않아도 됨.」이라고 했습니다. 이전 판에도 「확장 프로그램 설치」 단추가 같은 주소로 연결되어 있었고, 이번 판은 그 주소를 글자로 보이게 하고 같은 이름 주의를 덧붙인 보강입니다. 되돌리지 않고 그대로 두었습니다.
