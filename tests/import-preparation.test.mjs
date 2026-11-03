@@ -23,7 +23,7 @@ function setup(t){
     putDocumentRevision:async value=>{writes.push({kind:'baseline',record:structuredClone(value)});return {byteSize:parsed.file.size};},
     putDocumentView:async(id,view)=>{writes.push({kind:'view'});return {...record,sourceIdentity:identity,metadata:{...metadata,view}};},
     saveDocumentHTML:async value=>{writes.push({kind:'edit',record:structuredClone(value)});},
-    mountYouTube:()=>{},
+    mountYouTube:()=>{},scheduleThumbnail:()=>{},
   });
   vm.runInContext('var tabs=[],records=[],trashRecords=[],libraryTrash=false,activeId="library";'+cacheCode+code,context);
   t.after(()=>context.tabs.forEach(tab=>tab.checkpoints?.dispose()));

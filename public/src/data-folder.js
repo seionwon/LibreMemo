@@ -75,7 +75,7 @@ export function applyFolderSettings(storage, settings) {
 }
 export function portableRecord(record) {
   const result={};
-  for(const key of ['id','title','name','source','created','modified','metadata','nativeScroll','byteSize','sourceIdentity','folderId','trashedAt','syncSourceId','syncFingerprint'])if(record[key]!==undefined)result[key]=record[key];
+  for(const key of ['id','title','name','source','created','modified','metadata','nativeScroll','byteSize','sourceIdentity','folderId','trashedAt','syncSourceId','syncFingerprint','bodyVersion'])if(record[key]!==undefined)result[key]=record[key];
   return result;
 }
 export function validateState(value, id) {
@@ -260,6 +260,8 @@ export class DataFolder {
       const historyVersion=summary.historyVersion||0,stamp=(await localFileIdentity(jsonBlob({record,historyVersion}))).digest;
       if(old?.stamp===stamp){documents.push(place(old,record));continue;}
       let source=old?.source,original=old?.original,sourceType=old?.sourceType;
+      // A replaced body (a new subtitle edition) is stored again; otherwise bodies are immutable.
+      if(old&&(old.bodyVersion||0)!==(record.bodyVersion||0))source=original=sourceType=undefined;
       if(!source){
         const content=await this.ops.getDocument(record.id);if(!content)continue;
         sourceType=content.file instanceof Blob?'file':'html';
@@ -283,7 +285,7 @@ export class DataFolder {
       if(versioned)historyVersions.set(record.id,{version:historyVersion,name:history.name});else historyVersions.delete(record.id);
       const stateBlob=jsonBlob({record});if(stateBlob.size>128*1024*1024)throw Error('한 문서의 현재 주석이 폴더 저장 한도(128MB)를 넘었습니다.');
       const state=await storeObject(data,stateBlob,'json');
-      documents.push(place({id:record.id,source,original,sourceType,state,history,stamp,annotationStamp},record));
+      documents.push(place({id:record.id,source,original,sourceType,state,history,stamp,annotationStamp,...(record.bodyVersion?{bodyVersion:record.bodyVersion}:{})},record));
     }
     const settingsBlob=jsonBlob(folderSettings(this.storage));if(settingsBlob.size>16*1024*1024)throw Error('설정의 크기가 폴더 저장 한도(16MB)를 넘었습니다.');
     const settings=await storeObject(data,settingsBlob,'json');

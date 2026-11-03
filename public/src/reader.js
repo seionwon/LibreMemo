@@ -189,6 +189,8 @@ export class Reader {
       [data-htmlmemo-compact-ui]:not([data-htmlmemo-topbar-active]) #reader-nav[data-htmlmemo-native-sidebar]{top:0!important}
       [data-htmlmemo-compact-ui] body.toc-open #reader-nav[data-htmlmemo-native-sidebar],html[data-htmlmemo-compact-ui][data-htmlmemo-sidebar-open] #reader-nav[data-htmlmemo-native-sidebar]{display:block!important}
       [data-htmlmemo-compact-ui] #reader-shade{display:none!important}
+      /* Phones shrink the 1100px page to fit; subtitle text grows back to a readable size and rewraps. */
+      [data-htmlmemo-compact-ui] .office-subtitles{font-size:calc(min(var(--htmlmemo-reader-ui-scale,1),3) * .92em)!important}
       [data-htmlmemo-doc-topbar-item]{height:calc(24px * var(--htmlmemo-reader-ui-scale,1))!important;min-height:calc(24px * var(--htmlmemo-reader-ui-scale,1))!important;max-height:calc(24px * var(--htmlmemo-reader-ui-scale,1))!important}
       [data-htmlmemo-topbar-grid]{grid-template-rows:calc(24px * var(--htmlmemo-reader-ui-scale,1)) minmax(0,1fr)!important}
       [data-htmlmemo-topbar-pad]{padding-top:calc(24px * var(--htmlmemo-reader-ui-scale,1))!important}

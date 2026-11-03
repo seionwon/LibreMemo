@@ -152,6 +152,52 @@ export async function putDocumentView(id, view, expectedSyncEpoch) {
     tx.onabort = () => reject(failure || tx.error || new Error('읽기 위치를 저장하지 못했습니다.'));
   });
 }
+/** A document's card picture (a small JPEG data URL, or '' when it has none). Like the view, it is not an annotation edit. */
+export async function putDocumentThumbnail(id, thumbnail, expectedSyncEpoch) {
+  const connection = await db();
+  return new Promise((resolve, reject) => {
+    const tx = connection.transaction('documents', 'readwrite'), store = tx.objectStore('documents'), request = store.get(id); let saved, failure;
+    request.onsuccess = () => {
+      try {
+        saved = request.result;
+        if (!saved) throw new Error('썸네일을 저장할 문서를 찾지 못했습니다.');
+        if (saved.syncEpoch && saved.syncEpoch !== expectedSyncEpoch) throw Error('다른 기기에서 받은 최신 문서입니다.');
+        saved.metadata = {...saved.metadata, thumbnail};
+        store.put(saved);
+      } catch (error) { failure = error; tx.abort(); }
+    };
+    tx.oncomplete = () => { changed(id); resolve(saved); };
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(failure || tx.error || new Error('썸네일을 저장하지 못했습니다.'));
+  });
+}
+/**
+ * Put a new edition of a document's body in place (e.g. a corrected subtitle): the same
+ * document, folder and history continue. The marks just before and just after are
+ * checkpointed, so the annotation history can return to either. `bodyVersion` tells
+ * the data folder to store the new body.
+ */
+export async function replaceDocumentBody(id, {html, originalFile = null, metadata, name}, expectedSyncEpoch) {
+  const connection = await db();
+  return new Promise((resolve, reject) => {
+    const tx = connection.transaction(['documents','contents','revisions','revisionHeaders'], 'readwrite'), documents = tx.objectStore('documents'), request = documents.get(id); let saved, failure;
+    request.onsuccess = () => {
+      try {
+        const old = request.result;
+        if (!old || old.trashedAt) throw new Error('바꿀 문서를 찾지 못했습니다. 휴지통에 있다면 먼저 복원해주세요.');
+        if (old.syncEpoch && old.syncEpoch !== expectedSyncEpoch) throw Error('다른 기기에서 받은 최신 문서입니다. 문서를 다시 연 뒤 시도해주세요.');
+        tx.objectStore('contents').put({documentId:id, html, ...(originalFile instanceof Blob ? {originalFile} : {})});
+        let historyVersion = Number.isSafeInteger(old.historyVersion) ? old.historyVersion : 0;
+        for (const state of [old.metadata, metadata]) { addRevision(tx, {documentId:id, created:Date.now(), kind:'edit', restoredFrom:null, ...annotationState(state)}); historyVersion++; }
+        saved = {...old, name:name || old.name, metadata, modified:Date.now(), contentKey:crypto.randomUUID(), bodyVersion:(Number(old.bodyVersion) || 0) + 1, byteSize:new Blob([html]).size, historyVersion, diskPending:false, diskError:null};
+        documents.put(saved);
+      } catch (error) { failure = error; tx.abort(); }
+    };
+    tx.oncomplete = () => { forgetContent(id); changed(id); resolve(saved); };
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(failure || tx.error || new Error('본문을 바꾸지 못했습니다. 기존 문서는 그대로입니다.'));
+  });
+}
 /** Trash/restore change headers only; immutable bodies and every history entry stay intact. */
 async function changeTrashState(id, restore) {
   const connection=await db();

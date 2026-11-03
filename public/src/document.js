@@ -1,5 +1,5 @@
 import {normalizeReadingLayout} from './reading-layout.js';
-import { FORMAT_VERSION, validateAnnotations, validateOutlineEdits, cleanSourceStorage,validPDFPosition, normalizeReadingFontFamily } from './model.js';
+import { FORMAT_VERSION, validateAnnotations, validateOutlineEdits, cleanSourceStorage,validPDFPosition, normalizeReadingFontFamily, validThumbnail } from './model.js';
 import {validateYouTube} from './youtube.js';
 
 export const LAYER_ID = 'htmlmemo-annotation-layer';
@@ -294,6 +294,7 @@ function* prepareHTML(html, defaults, {includeMetadata = false, document: loaded
   if(validPDFPosition(view.pdfPosition))metadata.view.pdfPosition={page:view.pdfPosition.page,y:view.pdfPosition.y};
   if(Number.isFinite(view.mediaTime)&&view.mediaTime>=0&&view.mediaTime<360000)metadata.view.mediaTime=Math.round(view.mediaTime*10)/10;
   const youtube=validateYouTube(embedded.youtube);if(youtube)metadata.youtube=youtube;
+  if(embedded.thumbnail&&validThumbnail(embedded.thumbnail))metadata.thumbnail=embedded.thumbnail;
   if(bookmarks.some(mark=>mark.pdfPosition!=null&&!validPDFPosition(mark.pdfPosition)))throw Error('PDF 북마크 위치가 손상되었습니다.');
   if(bookmarks.some(mark=>mark.pdfQuoteOffset!=null&&(!Number.isFinite(mark.pdfQuoteOffset)||Math.abs(mark.pdfQuoteOffset)>1)))throw Error('PDF 북마크의 본문 위치가 손상되었습니다.');
   // Fixed slide canvases can become wider than the viewport at A+; native

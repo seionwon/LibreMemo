@@ -1,5 +1,6 @@
 import { $, $$, icon, escapeHTML as esc, uid, filename, normalizeURL, displayHost, formatDate, formatBytes, download, sidebarWidthAction, readerSidebarCSS, isSecurityWarning, formatOutlineTitle } from './utils.js';
-import { parseHTML, SCRIPT_CSP, serializeBookSource } from './document.js';
+import { parseHTML, SCRIPT_CSP, serializeBookSource, textIndex } from './document.js';
+import { bookmarkTextLocation } from './bookmark-location.js';
 import { SaveQueue, AnnotationCheckpoints, ANNOTATION_LABELS } from './model.js';
 import { openEditionProbe, migrateAnnotations } from './migrate.js';
 import { Reader } from './reader.js';
@@ -9,7 +10,7 @@ import {OFFICE_MIMES,OFFICE_FORMATS} from './office-formats.js';
 import {IMAGE_MIMES,IMAGE_EXTENSIONS,pastedImages,clipboardImageFile,isImagePasteTarget} from './image-formats.js';
 import {canSleep,cancelTabSleep,scheduleTabSleep} from './tab-sleep.js';
 import {AI_TEXT_LIMIT,aiSearchRequest,aiSearchURL} from './ai-search.js';
-import { listDocuments, getDocument, trashDocument, restoreDocument, deleteDocument, deleteTrashedDocuments, getSetting, setSetting, saveDocumentHTML, listRevisionPeriods, listRevisionDay, adjacentRevisionDay, getRevision, putDocumentRevision, checkpointAnnotations, putDocumentView, putDocumentSourceIdentity, writeExternalHTML, updateLibraryFolders, onStorageChange, readLibrary } from './storage.js';
+import { listDocuments, getDocument, trashDocument, restoreDocument, deleteDocument, deleteTrashedDocuments, getSetting, setSetting, saveDocumentHTML, listRevisionPeriods, listRevisionDay, adjacentRevisionDay, getRevision, putDocumentRevision, checkpointAnnotations, putDocumentView, putDocumentThumbnail, replaceDocumentBody, putDocumentSourceIdentity, writeExternalHTML, updateLibraryFolders, onStorageChange, readLibrary } from './storage.js';
 import {readWebPage,pastedPage,PASTE_LIMIT,isWebSearch,BrowserTabs} from './web.js';
 import { readLocalHTML, droppedHTMLFiles, findLocalDuplicates, identifyLocalFile, htmlExportName } from './local-files.js';
 import { normalizePreferences, loadPreferences, storePreferences, serializeSettings, readSettingsFile, PRESET_COLORS, PRESET_PALETTES, normalizeHexColor, hexToRgb, rgbToHex, hexToHsv, hsvToHex } from './preferences.js';
@@ -21,7 +22,7 @@ import { openDeviceSync } from './sync-ui.js';
 import {openHelp} from './help.js';
 import { DataFolder, supportsDataFolder, CHROME_REQUIRED_MESSAGE, createStorageSubfolder, storageFolderName } from './data-folder.js';
 import {validateFolders,folderPath,folderDescendants,editLibraryFolders,LibraryIndex} from './library-folders.js';
-import {parseYouTubeInput,youtubeDocumentHTML,subtitleFormat,decodeSubtitle,matchSubtitleFiles,subtitlesFromZip,playlistFolderName,watchURL,playlistURL,subtitleSiteURL,guideHTML,validateYouTube} from './youtube.js';
+import {parseYouTubeInput,cueTimes,youtubeDocumentHTML,subtitleFormat,decodeSubtitle,matchSubtitleFiles,subtitlesFromZip,playlistFolderName,watchURL,playlistURL,subtitleSiteURL,guideHTML,validateYouTube} from './youtube.js';
 
 const PUBLIC_APP_URL = publicAppURL(location);
 for(const template of $$('#about-content,#export-guide-content'))template.innerHTML=template.innerHTML.replaceAll('https://seionwon.github.io/LibreMemo/',PUBLIC_APP_URL);
@@ -283,8 +284,8 @@ function thumbKind(record){
   return THUMB_KINDS[OFFICE_FORMATS[ext]]?OFFICE_FORMATS[ext]:'web';
 }
 function cardThumb(record){
-  const kind=thumbKind(record),[label,color,glyph]=THUMB_KINDS[kind],picture=record.metadata?.youtube?.thumbnail;
-  if(picture)return `<span class="card-thumb card-thumb-picture" aria-hidden="true"><img src="${esc(picture)}" alt="" loading="lazy" decoding="async"><span class="card-thumb-play">${icon('play',13)}</span></span>`;
+  const kind=thumbKind(record),[label,color,glyph]=THUMB_KINDS[kind],picture=record.metadata?.youtube?.thumbnail||record.metadata?.thumbnail;
+  if(picture)return `<span class="card-thumb card-thumb-picture" aria-hidden="true"><img src="${esc(picture)}" alt="" loading="lazy" decoding="async">${kind==='video'?`<span class="card-thumb-play">${icon('play',13)}</span>`:''}</span>`;
   return `<span class="card-thumb" style="--thumb:${color}" aria-hidden="true">${icon(glyph,26)}<b>${esc(label)}</b></span>`;
 }
 function renderLibrary() {
@@ -606,6 +607,7 @@ async function openRecord(record, prepared = null, {deferReady = false, sourceId
   if(parsed.file){tab.record.file=parsed.file;delete tab.record.html;tab.reader.initialHTML=null;tab.record.metadata=tab.reader.metadata;tab.record.source=tab.reader.metadata.source;tab.title=tab.record.title=tab.reader.metadata.title;}
   if(activeId===tab.id)restoreSidebar();
   mountYouTube(tab);
+  scheduleThumbnail(tab);
   renderToolbar();
   updateChrome();
   // Preserve the imported/current annotation baseline before the first new edit.
@@ -891,15 +893,57 @@ async function saveYouTubeRecord({title,youtube,subtitle=null,folderId=libraryFo
 const youtubeRecords=()=>records.filter(record=>record.metadata?.youtube&&!record.trashedAt);
 /** The documents of one playlist in playlist order. */
 const playlistRecords=playlistId=>youtubeRecords().filter(r=>r.metadata.youtube.playlistId===playlistId).sort((a,b)=>(a.metadata.youtube.index??0)-(b.metadata.youtube.index??0));
-/** Swap a video's subtitle: a new document replaces the old one, which goes to the trash. */
+/** Place scene bookmarks ("1:23 …") that the text match could not move at the cue playing at that time. */
+function sceneBookmarks(doc,marks){
+  const cues=[...doc.querySelectorAll('.subtitle-cue')].map(el=>({el,start:cueTimes(el.querySelector('.subtitle-time')?.textContent)?.start})).filter(c=>Number.isFinite(c.start));
+  if(!cues.length)return {placed:[],left:marks};
+  const index=textIndex(doc),placed=[],left=[];
+  for(const mark of marks){
+    const m=String(mark.title||'').match(/^(?:(\d+):)?(\d{1,2}):(\d{2})(?:\s|$)/),at=m?(+m[1]||0)*3600+(+m[2])*60+(+m[3]):NaN;
+    const cue=Number.isFinite(at)?cues.filter(c=>c.start<=at+.5).at(-1)||cues[0]:null,text=cue?.el.querySelector('.subtitle-text'),node=text&&index.nodes.find(n=>text.contains(n.node));
+    if(!node){left.push(mark);continue;}
+    const next=structuredClone(mark);for(const key of ['heading','anchorTarget','anchorOffset','textAnchor','textPoint','textOffsetY','locationVersion','section'])delete next[key];
+    placed.push({...next,top:0,left:0,editionPosition:'text',...bookmarkTextLocation(index,node.start)});
+  }
+  return {placed,left};
+}
+/**
+ * Swap a video's subtitle in place: the same document, folder and history. Highlights,
+ * notes and bookmarks move to the new text (LibreMemo's edition matching); ones that cannot
+ * be found stay in the lists. When there were marks, the document as it was goes to the
+ * trash as a copy, so the old subtitle and its notes can be restored whole.
+ */
 async function replaceYouTubeSubtitle(old,subtitle){
-  const tab=tabs.find(t=>t.record?.id===old.id),metadata=tab?.reader?.metadata||old.metadata,marks=(metadata.annotations?.length||0)+(metadata.bookmarks?.length||0);
-  if(marks&&!await confirmDialog('자막을 바꿀까요?',`「${old.title}」에 주석·북마크가 ${marks}개 있습니다. 새 자막으로 새 문서를 만들고, 지금 문서는 주석과 함께 휴지통으로 옮깁니다(복원 가능).`,'자막 바꾸기'))return null;
-  const mediaTime=Number(metadata.view?.mediaTime)||0;
-  const record=await saveYouTubeRecord({title:old.title,youtube:metadata.youtube,subtitle,folderId:old.folderId||'',created:old.created,mediaTime});
+  const tab=tabs.find(t=>t.record?.id===old.id);
+  if(tab){await tab.reader?.ready;await tab.queue.flush();await tab.checkpoints.flush({force:true});}
+  const current=await getDocument(old.id);if(!current||current.trashedAt)throw Error(`「${old.title}」 문서를 찾지 못했습니다.`);
+  const metadata=structuredClone(tab?.reader?.metadata||current.metadata),annotations=metadata.annotations||[],bookmarks=metadata.bookmarks||[],marks=annotations.length+bookmarks.length;
+  if(marks&&!await confirmDialog('자막을 바꿀까요?',`「${old.title}」의 주석·북마크 ${marks}개를 새 자막의 같은 문장으로 옮깁니다. 찾지 못한 것은 목록에 남겨 두고, 바꾸기 전 문서는 사본으로 휴지통에 보관합니다(복원 가능).`,'자막 바꾸기'))return null;
+  const warnings=[],parsed=parseHTML(youtubeDocumentHTML(old.title,subtitle,warnings),{title:old.title,source:metadata.source,warnings},{includeMetadata:true,allowScripts:false});
+  let moved={annotations:[],bookmarks:[]},lost={annotations:[],bookmarks:[]};
+  if(marks){
+    const probe=await openEditionProbe({html:parsed.html,allowScripts:false});let oldProbe=null;
+    try{
+      const oldDoc=tab?.reader?.doc||(oldProbe=await openEditionProbe({html:current.html,allowScripts:false})).doc;
+      const result=await migrateAnnotations({annotations,bookmarks,oldDoc,probe});
+      const missing=report=>[...report.deleted,...report.unplaceable,...report.unchecked];
+      const scenes=sceneBookmarks(probe.doc,missing(result.bookmarkReport));
+      moved={annotations:result.annotations,bookmarks:[...result.bookmarks,...scenes.placed]};
+      lost={annotations:missing(result.report),bookmarks:scenes.left};
+    }finally{probe.dispose();oldProbe?.dispose();}
+    // The whole previous document, restorable from the trash.
+    const backup={id:uid(),title:old.title+' (자막 바꾸기 전)',name:current.name,source:current.source,created:Date.now(),modified:Date.now(),folderId:current.folderId||'',fileHandle:null,originalHandle:null,metadata:structuredClone(current.metadata)};
+    if(current.originalFile)backup.originalFile=current.originalFile;
+    await saveDocumentHTML(backup,current.html,{revision:{baseline:true}});await trashDocument(backup.id);
+  }
+  const next={...parsed.metadata,title:old.title,annotations:[...moved.annotations,...lost.annotations],bookmarks:[...moved.bookmarks,...lost.bookmarks],
+    view:{...parsed.metadata.view,...Object.fromEntries(['fontScale','fontFamily','readingTheme','layout','mediaTime'].filter(k=>metadata.view?.[k]!==undefined).map(k=>[k,metadata.view[k]]))},
+    youtube:validateYouTube({...metadata.youtube,subtitle:{name:subtitle.name}})};
+  if(metadata.thumbnail!==undefined)next.thumbnail=metadata.thumbnail;
   if(tab)await closeTab(tab.id);
-  await trashDocument(old.id);
-  return record;
+  const saved=await replaceDocumentBody(old.id,{html:parsed.html,originalFile:new File([subtitle.text],subtitle.name,{type:'text/plain'}),metadata:next,name:subtitle.name},current.syncEpoch);
+  const {html,file,originalFile,...summary}=saved;cacheLibraryDocument(summary);
+  return {record:summary,reopen:!!tab,marks,lostAnnotations:lost.annotations.length,lostBookmarks:lost.bookmarks.length};
 }
 /** Attach subtitle files to the given video documents (matched by name), or to `only` when it is one file for one video. */
 async function attachYouTubeSubtitles(files,candidates,{only=null}={}){
@@ -908,17 +952,32 @@ async function attachYouTubeSubtitles(files,candidates,{only=null}={}){
   const videos=candidates.map(r=>({videoId:r.metadata.youtube.videoId,title:r.title,record:r}));
   let {matches,unmatched}=matchSubtitleFiles(subtitles,videos);
   if(only&&subtitles.length===1&&!matches.size){matches=new Map([[only.metadata.youtube.videoId,subtitles[0]]]);unmatched=[];}
-  let attached=0,opened=null;
+  let attached=0,lostAnnotations=0,lostBookmarks=0;const reopen=[];
   for(const video of videos){
     const subtitle=matches.get(video.videoId);if(!subtitle)continue;
-    const record=await replaceYouTubeSubtitle(video.record,subtitle);if(!record)continue;
-    attached++;if(only&&video.record.id===only.id)opened=record;
+    const result=await replaceYouTubeSubtitle(video.record,subtitle);if(!result)continue;
+    attached++;lostAnnotations+=result.lostAnnotations;lostBookmarks+=result.lostBookmarks;
+    if(result.reopen||only&&video.record.id===only.id)reopen.push(result.record);
   }
   await refreshLibrary();try{await dataFolder?.flush();}catch(error){showError(error);}
-  if(opened)await openRecord(opened);
-  const notes=[unmatched.length?`영상을 찾지 못한 자막 ${unmatched.length}개: ${unmatched.slice(0,3).map(s=>s.name).join(', ')}${unmatched.length>3?' …':''}`:'',skipped.length?`자막이 아닌 파일 ${skipped.length}개는 건너뛰었습니다.`:''].filter(Boolean);
+  for(const record of reopen)await openRecord(record);
+  const notes=[lostAnnotations||lostBookmarks?`새 자막에서 찾지 못한 주석 ${lostAnnotations}개·북마크 ${lostBookmarks}개는 목록에 남겨 두었습니다.`:'',unmatched.length?`영상을 찾지 못한 자막 ${unmatched.length}개: ${unmatched.slice(0,3).map(s=>s.name).join(', ')}${unmatched.length>3?' …':''}`:'',skipped.length?`자막이 아닌 파일 ${skipped.length}개는 건너뛰었습니다.`:''].filter(Boolean);
   toast((attached?`자막 ${attached}개를 붙였습니다.`:'붙인 자막이 없습니다.')+(notes.length?' '+notes.join(' '):''),!attached);
   return attached;
+}
+/** Make a card picture once per document, from what its reader shows (see thumbnails.js). */
+function scheduleThumbnail(tab){
+  // Only a found picture is saved, once; opening a text-only document never writes.
+  const metadata=tab.reader?.metadata;if(!metadata||metadata.youtube||typeof metadata.thumbnail==='string'||tab.thumbnailChecked)return;tab.thumbnailChecked=true;
+  setTimeout(()=>{
+    if(!tabs.includes(tab)||tab.closing||!tab.reader)return;
+    void import('./thumbnails.js').then(({documentThumbnail})=>documentThumbnail(tab.reader)).then(async thumbnail=>{
+      if(!thumbnail||!tabs.includes(tab)||tab.closing||!tab.reader||typeof tab.reader.metadata.thumbnail==='string')return;
+      tab.reader.metadata.thumbnail=thumbnail;
+      const saved=await putDocumentThumbnail(tab.record.id,thumbnail,tab.record.syncEpoch);
+      const {html,file,originalFile,...summary}=saved;cacheLibraryDocument(summary);if(activeId==='library')renderLibrary();
+    }).catch(()=>{/* the card keeps its format tile */});
+  },1500);
 }
 function mountYouTube(tab){
   tab.youtube?.dispose();tab.youtube=null;

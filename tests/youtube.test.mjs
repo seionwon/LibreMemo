@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { installDOM } from './dom.mjs';
 import { zipFiles } from '../public/src/zip.js';
 import { parseHTML, serializeHTML } from '../public/src/document.js';
+import { validThumbnail } from '../public/src/model.js';
 import { parseYouTubeInput, parseStart, validateYouTube, youtubeDocumentHTML, cueTimes, cueAt, clock, playlistFolderName, matchSubtitleFiles, subtitlesFromZip, decodeSubtitle, subtitleFormat, subtitleSiteURL, DOWNLOAD_GUIDES, guideHTML } from '../public/src/youtube.js';
 installDOM();
 
@@ -81,4 +82,14 @@ test('the download guide covers every platform and opens the site with the link 
   for(const guide of DOWNLOAD_GUIDES)assert.ok(guide.steps.length>=3);
   assert.match(guideHTML(),/data-guide="iphone" hidden/);
   assert.equal(subtitleSiteURL('https://www.youtube.com/watch?v=dQw4w9WgXcQ'),'https://downsub.com/?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ');
+});
+
+test('a card picture is kept on export only when it is a small inline image',()=>{
+  assert.equal(validThumbnail(''),true);assert.equal(validThumbnail('data:image/jpeg;base64,AAAA'),true);
+  for(const bad of ['https://x.test/a.jpg','data:image/svg+xml;base64,AAAA','data:image/jpeg;base64,'+'A'.repeat(400001),null])assert.equal(validThumbnail(bad),false);
+  const parsed=parseHTML('<html><body><p>x</p></body></html>',{title:'T'},{includeMetadata:true});
+  for(const [thumbnail,kept] of [['data:image/jpeg;base64,AAAA',true],['https://x.test/a.jpg',false]]){
+    const doc=new DOMParser().parseFromString(parsed.html,'text/html'),again=parseHTML(serializeHTML(doc,{...parsed.metadata,thumbnail}),{},{includeMetadata:true});
+    assert.equal(again.metadata.thumbnail,kept?thumbnail:undefined);
+  }
 });

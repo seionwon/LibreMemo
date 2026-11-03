@@ -101,6 +101,14 @@ test('annotation and view edits reuse original and prepared HTML without loading
   lib.records.get('doc').metadata.annotations[0].text='Updated note';lib.records.get('doc').metadata.view.scrollTop=3000;backup.schedule();await backup.flush();const next=await manifest(disk);
   assert.equal(lib.reads,reads);assert.deepEqual(next.documents[0].source,first.documents[0].source);assert.deepEqual(next.documents[0].original,first.documents[0].original);assert.notEqual(next.documents[0].state.name,first.documents[0].state.name);assert.ok(!control.writes.some(name=>name.endsWith('.html')));assert.equal(JSON.parse(await readObject(disk,next.documents[0].state)).record.metadata.view.scrollTop,3000);
 });
+test('a replaced body (new bodyVersion) is stored again; later edits reuse it',async t=>{
+  const lib=library(),disk=memoryFolder('LibreMemo'),backup=manager(t,lib);await backup.connect(disk);const first=await manifest(disk);
+  lib.contents.set('doc',{html:'<!doctype html><body>New subtitle edition</body>',originalFile:new File(['1\n00:00:01,000 --> 00:00:02,000\nNew\n'],'new.srt')});
+  lib.records.get('doc').bodyVersion=1;backup.schedule();await backup.flush();const next=await manifest(disk);
+  assert.notDeepEqual(next.documents[0].source,first.documents[0].source);assert.equal(next.documents[0].bodyVersion,1);
+  assert.match(await readObject(disk,next.documents[0].source),/New subtitle edition/);assert.match(await readObject(disk,next.documents[0].original),/00:00:01,000/);
+  lib.records.get('doc').metadata.view.scrollTop=10;backup.schedule();await backup.flush();assert.deepEqual((await manifest(disk)).documents[0].source,next.documents[0].source);
+});
 test('permission loss and disk errors remain pending and keep the last complete manifest until an explicit reconnect',async t=>{
   const lib=library(),control={},disk=memoryFolder('LibreMemo',control),backup=manager(t,lib);await backup.connect(disk);const old=await manifest(disk);lib.records.get('doc').metadata.annotations[0].text='Not yet on disk';
   control.permission='denied';backup.schedule();await assert.rejects(backup.flush(),{name:'NotAllowedError'});assert.equal(backup.state,'error');assert.equal(backup.pending,true);assert.deepEqual(await manifest(disk),old);

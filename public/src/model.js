@@ -116,6 +116,8 @@ export function normalizeReadingFontFamily(value) {
   if (!trimmed) return null;
   return READING_FONT_LOOKUP.get(trimmed) || READING_FONT_LOOKUP.get(trimmed.toLowerCase()) || null;
 }
+/** A card picture: a small inline JPEG/PNG/WebP, or '' (looked, nothing suitable). */
+export function validThumbnail(value){return value===''||typeof value==='string'&&value.length<=400000&&/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(value);}
 export function validPDFPosition(value){return value&&Number.isInteger(value.page)&&value.page>=1&&value.page<=100000&&Number.isFinite(value.y)&&value.y>=0&&value.y<=1;}
 export function validateAnnotations(value) {
   if (!Array.isArray(value)) throw new Error('주석 데이터 형식이 올바르지 않습니다.');

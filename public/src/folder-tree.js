@@ -33,13 +33,16 @@ export async function syncFolderTree(root,manifest,previous,{readOriginal,write}
     directories.set(folder.id,directory);
   }
   const oldCopies=new Set((previous?.documents||[]).filter(e=>e.copy).map(e=>pathKey([...(old.paths.get(e.copy.folderId)||[]),e.copy.name,e.original?.name||e.source.name])));
+  const previousRefs=new Map((previous?.documents||[]).filter(e=>e.copy).map(e=>[pathKey([...(old.paths.get(e.copy.folderId)||[]),e.copy.name]),e.original||e.source]));
   for(const entry of manifest.documents){
     const directory=directories.get(entry.copy.folderId),ref=entry.original||entry.source,name=entry.copy.name,key=pathKey([...paths.get(entry.copy.folderId),name,ref.name]);
     let file;try{file=await(await directory.getFileHandle(name)).getFile();}catch(error){if(error.name!=='NotFoundError')throw error;}
     if(file){
       // A previously published copy only needs a cheap existence/size check on edits.
       if(file.size===ref.size&&(oldCopies.has(key)||(await localFileIdentity(file)).digest===ref.name.slice(0,64)))continue;
-      throw Error(`“${name}” 원본 복사본이 앱 밖에서 변경되었습니다. 덮어쓰지 않습니다. 해당 파일을 다른 이름으로 보관한 뒤 저장 위치를 다시 연결하세요.`);
+      // The app's own previous copy at this path, for a document whose body was replaced, is updated.
+      const prior=previousRefs.get(pathKey([...paths.get(entry.copy.folderId),name]));
+      if(!(prior&&file.size===prior.size&&(await localFileIdentity(file)).digest===prior.name.slice(0,64)))throw Error(`“${name}” 원본 복사본이 앱 밖에서 변경되었습니다. 덮어쓰지 않습니다. 해당 파일을 다른 이름으로 보관한 뒤 저장 위치를 다시 연결하세요.`);
     }
     await write(directory,name,await readOriginal(ref));
   }
