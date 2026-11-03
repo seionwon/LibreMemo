@@ -131,3 +131,32 @@ test('the player shows each cue compactly: start time to the second beside the t
   const css=doc.getElementById('htmlmemo-youtube-style').textContent;
   assert.match(css,/\.subtitle-cue\{display:flex;align-items:baseline/);assert.match(css,/content:attr\(data-clock\)/);assert.match(css,/\.subtitle-time\{[^}]*color:transparent/);
 });
+
+test('dragging the strip under the video bar sets the video height, remembered as a share of the window',async()=>{
+  const {YouTubePane,VIDEO_SHARE_MAX,clampShare}=await import('../public/src/youtube-ui.js');
+  const store=new Map(),listeners=[];
+  const saved={window:globalThis.window,localStorage:globalThis.localStorage};
+  globalThis.localStorage={getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,String(v))};
+  globalThis.window={innerHeight:1000,addEventListener:(t,f)=>listeners.push(t),removeEventListener(){}};
+  try{
+    const doc=new DOMParser().parseFromString('<section class="youtube-pane"><div class="youtube-video"></div><div class="youtube-bar"></div><div class="youtube-resize"></div></section>','text/html');
+    const pane=doc.querySelector('.youtube-pane'),video=pane.querySelector('.youtube-video'),handle=pane.querySelector('.youtube-resize');
+    Object.defineProperty(pane,'clientWidth',{value:1600});
+    video.getBoundingClientRect=()=>({height:pane.hasAttribute('data-yt-sized')?parseFloat(pane.style.getPropertyValue('--yt-video-h')):400});
+    const self={pane,video,tab:{host:{clientHeight:950}}};Object.setPrototypeOf(self,YouTubePane.prototype);self.bindResize();
+    assert.equal(pane.hasAttribute('data-yt-sized'),false,'default size until dragged');assert.deepEqual(listeners,['resize']);
+    handle.onpointerdown({button:0,pointerId:3,clientY:500,preventDefault(){}});assert.equal(pane.classList.contains('youtube-resizing'),true);
+    handle.onpointermove({pointerId:3,clientY:650});assert.equal(pane.style.getPropertyValue('--yt-video-h'),'550px');
+    handle.onpointerup({pointerId:3});assert.equal(pane.classList.contains('youtube-resizing'),false);assert.equal(store.get('librememo-youtube-height'),'0.55');
+    handle.onpointerdown({button:0,pointerId:4,clientY:500,preventDefault(){}});handle.onpointermove({pointerId:4,clientY:2000});handle.onpointerup({pointerId:4});
+    assert.equal(pane.style.getPropertyValue('--yt-video-h'),'830px','leaves the video bar and some subtitle room below');
+    handle.onpointerdown({button:0,pointerId:5,clientY:500,preventDefault(){}});handle.onpointermove({pointerId:5,clientY:-2000});handle.onpointerup({pointerId:5});
+    assert.equal(pane.style.getPropertyValue('--yt-video-h'),'120px');
+    handle.onkeydown({key:'ArrowDown',preventDefault(){}});assert.equal(pane.style.getPropertyValue('--yt-video-h'),'170px');
+    handle.ondblclick();assert.equal(pane.hasAttribute('data-yt-sized'),false);assert.equal(store.get('librememo-youtube-height'),'0');
+    store.set('librememo-youtube-height','0.3');const again={pane,video,tab:{host:{clientHeight:950}}};Object.setPrototypeOf(again,YouTubePane.prototype);again.bindResize();
+    assert.equal(pane.style.getPropertyValue('--yt-video-h'),'300px','a later video opens at the remembered size');
+    assert.equal(clampShare(5),VIDEO_SHARE_MAX);
+    pane.classList.add('youtube-collapsed');handle.onpointerdown({button:0,pointerId:6,clientY:0,preventDefault(){}});assert.equal(pane.classList.contains('youtube-resizing'),false,'no drag while folded');
+  }finally{globalThis.window=saved.window;globalThis.localStorage=saved.localStorage;}
+});

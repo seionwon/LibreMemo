@@ -64,6 +64,9 @@ export async function mapLimit(items,limit,task){
 const RATES=[.5,.75,1,1.25,1.5,1.75,2];
 const pref=(key,fallback,valid)=>{try{const v=Number(localStorage.getItem('librememo-youtube-'+key));return valid(v)?v:fallback;}catch{return fallback;}};
 const savePref=(key,value)=>{try{localStorage.setItem('librememo-youtube-'+key,String(value));}catch{}};
+// Video height as a share of the window height (0 = default 40%).
+export const VIDEO_SHARE_MIN=.12,VIDEO_SHARE_MAX=.85,VIDEO_MIN_PX=90;
+export const clampShare=v=>Math.max(VIDEO_SHARE_MIN,Math.min(VIDEO_SHARE_MAX,Number(v)||VIDEO_SHARE_MIN));
 export const skipSeconds=()=>pref('skip',5,v=>[5,10,15].includes(v));
 export const setSkipSeconds=value=>savePref('skip',value);
 // Compact cue rows: the start time (h:mm:ss / m:ss) beside the text on one row.
@@ -105,7 +108,8 @@ export class YouTubePane {
         <button type="button" class="youtube-button" data-yt="size" aria-pressed="false" title="영상 접기">${icon('chevron-down',15)}</button>
         <a class="youtube-button youtube-open" data-yt="open" href="${esc(watchURL(this.youtube.videoId,this.youtube.playlistId))}" target="_blank" rel="noopener noreferrer" title="YouTube에서 열기">${icon('external',15)}</a>
         <p class="youtube-now" data-yt="now" aria-live="off"></p>
-      </div>`;
+      </div>
+      <div class="youtube-resize" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="영상 크기 조절" title="위아래로 끌어 영상 크기 조절 · 두 번 누르면 기본 크기"></div>`;
     const viewport=this.reader.viewport;viewport.before(pane);tab.host.classList.add('has-youtube');
     const $=name=>pane.querySelector(`[data-yt="${name}"]`);this.$=$;this.video=pane.querySelector('.youtube-video');
     // One tap acts after a short wait; a second tap in that time toggles full screen instead.
@@ -120,6 +124,7 @@ export class YouTubePane {
     $('mark').onclick=()=>this.bookmark();
     $('chapters').onclick=()=>callbacks.onChapters();$('attach').onclick=()=>callbacks.onAttach();
     $('prev').onclick=()=>callbacks.onNavigate(-1);$('next').onclick=()=>callbacks.onNavigate(1);
+    this.bindResize();
     $('size').onclick=()=>{const small=pane.classList.toggle('youtube-collapsed');$('size').setAttribute('aria-pressed',String(small));$('size').title=small?'영상 펼치기':'영상 접기';};
     // Scrolling by hand pauses "follow" briefly instead of fighting the reader.
     this.onUserScroll=()=>{this.quietUntil=Date.now()+8000;};
@@ -222,8 +227,43 @@ export class YouTubePane {
     // Let the scroll settle so the bookmark records this cue's place.
     requestAnimationFrame(()=>requestAnimationFrame(()=>this.callbacks.onBookmark(title)));
   }
+  // Video height: a share of the window height, chosen by dragging the strip under the
+  // video bar (double-click resets, arrow keys step). Width follows at 16:9.
+  bindResize(){
+    const handle=this.pane.querySelector('.youtube-resize');this.videoShare=pref('height',0,v=>v>=VIDEO_SHARE_MIN&&v<=VIDEO_SHARE_MAX)||null;
+    this.applyVideoHeight();
+    this.onWindowResize=()=>this.applyVideoHeight();window.addEventListener('resize',this.onWindowResize);
+    const height=()=>this.video.getBoundingClientRect().height;
+    const set=(px,save)=>{this.videoShare=clampShare(px/window.innerHeight);this.applyVideoHeight();if(save)savePref('height',this.videoShare);};
+    let drag=null;
+    handle.onpointerdown=event=>{
+      if(event.button!==0||this.pane.classList.contains('youtube-collapsed'))return;event.preventDefault();
+      drag={id:event.pointerId,y:event.clientY,start:height()};handle.setPointerCapture?.(event.pointerId);this.pane.classList.add('youtube-resizing');
+    };
+    handle.onpointermove=event=>{if(drag&&event.pointerId===drag.id)set(drag.start+event.clientY-drag.y,false);};
+    const end=event=>{if(!drag||event.pointerId!==drag.id)return;drag=null;handle.releasePointerCapture?.(event.pointerId);this.pane.classList.remove('youtube-resizing');if(this.videoShare)savePref('height',this.videoShare);};
+    handle.onpointerup=end;handle.onpointercancel=end;handle.onlostpointercapture=end;
+    handle.ondblclick=()=>{this.videoShare=null;savePref('height',0);this.applyVideoHeight();};
+    handle.onkeydown=event=>{
+      const step=event.key==='ArrowUp'?-1:event.key==='ArrowDown'?1:0;
+      if(event.key==='Home'||event.key==='Enter'){event.preventDefault();handle.ondblclick();return;}
+      if(!step)return;event.preventDefault();set(height()+step*window.innerHeight*.05,true);
+    };
+  }
+  applyVideoHeight(){
+    const pane=this.pane,handle=pane.querySelector('.youtube-resize');
+    if(!this.videoShare){pane.removeAttribute('data-yt-sized');pane.style.removeProperty('--yt-video-h');}
+    else{
+      // Never wider than the pane, and leave the video bar and a few subtitle lines below it.
+      const bar=pane.querySelector('.youtube-bar')?.offsetHeight||0,room=(this.tab.host.clientHeight||window.innerHeight)-bar-120;
+      const px=Math.round(Math.max(VIDEO_MIN_PX,Math.min(this.videoShare*window.innerHeight,(pane.clientWidth||Infinity)*9/16,Math.max(VIDEO_MIN_PX,room))));
+      pane.setAttribute('data-yt-sized','');pane.style.setProperty('--yt-video-h',px+'px');
+    }
+    const now=Math.round(this.video.getBoundingClientRect?.().height||0);
+    handle?.setAttribute('aria-valuenow',String(now));handle?.setAttribute('aria-valuetext',this.videoShare?'영상 높이 '+now+'px':'기본 크기');
+  }
   dispose(){
-    if(this.disposed)return;this.disposed=true;clearInterval(this.timer);clearTimeout(this.tapTimer);document.removeEventListener('keydown',this.onFullscreenKey);this.visibility.disconnect();document.removeEventListener('click',this.onOutlineClick,true);
+    if(this.disposed)return;this.disposed=true;window.removeEventListener('resize',this.onWindowResize);clearInterval(this.timer);clearTimeout(this.tapTimer);document.removeEventListener('keydown',this.onFullscreenKey);this.visibility.disconnect();document.removeEventListener('click',this.onOutlineClick,true);
     if(this.ready)this.remember(true);
     try{this.player?.destroy?.();}catch{}
     for(const type of ['wheel','touchmove','keydown'])this.reader.viewport?.removeEventListener(type,this.onUserScroll);
