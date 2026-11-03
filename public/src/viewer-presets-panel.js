@@ -63,13 +63,15 @@ export function locationTab(reader,doc){
   range.oninput=()=>{value.textContent=range.value+'%';};range.onchange=()=>{reader.goToReadingPercent(Number(range.value));requestAnimationFrame(sync);};
   const seek=make(doc,'span','reading-layout-range');seek.append(range,value);
   const label=make(doc,'label'),name=make(doc,'span','','위치');label.append(name,seek);
-  const auto=make(doc,'label','reading-layout-check'),check=make(doc,'input'),speed=make(doc,'select');check.type='checkbox';speed.setAttribute('aria-label','자동 스크롤 속도');
+  const speed=make(doc,'select'),start=make(doc,'button','viewer-location-start');speed.setAttribute('aria-label','자동 스크롤 속도');start.type='button';
   for(const [number,text] of [[20,'느리게'],[40,'보통'],[80,'빠르게']]){const option=make(doc,'option','',text);option.value=number;speed.append(option);}speed.value=40;
-  const paged=reader.readingLayout().flow==='paged';check.disabled=speed.disabled=paged;check.checked=!!reader.pager?.autoSpeed;
-  const run=()=>{if(check.checked)reader.pager?.startAuto(Number(speed.value));else reader.pager?.stopAuto();};check.onchange=run;speed.onchange=()=>{if(check.checked)run();};
-  reader.onAutoScrollEnd=()=>{check.checked=false;};auto.append(check,make(doc,'span','',paged?'자동 스크롤 (연속 스크롤에서 사용)':'자동 스크롤'));
-  const speedRow=make(doc,'div','viewer-location-auto');speedRow.append(auto,speed);
+  const paged=reader.readingLayout().flow==='paged',running=!!reader.pager?.autoSpeed;start.disabled=speed.disabled=paged;
+  start.textContent=paged?'자동 스크롤 (연속 스크롤에서 사용)':running?'자동 스크롤 다시 시작':'자동 스크롤 시작';
+  // Starting closes this panel: the floating bar takes over pause, speed and stop.
+  start.onclick=()=>{if(reader.pager?.startAuto(Number(speed.value)))reader.layoutPanelClose?.();};
+  const speedRow=make(doc,'div','viewer-location-auto');speedRow.append(start,speed);
+  const hint=make(doc,'p','viewer-location-left',paged?'자동 스크롤은 읽기 방식이 연속 스크롤일 때 쓸 수 있습니다.':'시작하면 이 창이 닫히고 화면 아래에 일시정지·속도·끝내기 막대가 나옵니다. 스크롤하거나 본문을 누르면 잠시 멈춥니다.');
   const info=make(doc,'dl','viewer-book-info');for(const [term,text] of reader.bookInfo())info.append(make(doc,'dt','',term),make(doc,'dd','',text));
-  root.append(label,left,speedRow);if(info.children.length)root.append(make(doc,'h3','','책 정보'),info);
+  root.append(label,left,speedRow,hint);if(info.children.length)root.append(make(doc,'h3','','책 정보'),info);
   sync();return root;
 }

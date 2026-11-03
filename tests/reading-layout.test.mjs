@@ -47,3 +47,28 @@ test('only short note links open as a note; chapters and ordinary links navigate
   assert.deepEqual(ebookNoteTarget(doc,doc.getElementById('a')),{hash:'#n1',text:'각주 본문'});
   for(const id of ['b','c','d'])assert.equal(ebookNoteTarget(doc,doc.getElementById(id)),null);
 });
+
+test('auto-scroll pauses on reading input, resumes, changes speed and stops; the bar follows',async()=>{
+  const {ReadingPager,AUTO_SCROLL_SPEEDS,autoScrollSpeed,stepAutoScrollSpeed,autoScrollLabel}=await import('../public/src/reading-layout.js');
+  assert.equal(autoScrollSpeed(41),40);assert.equal(stepAutoScrollSpeed(40,1),60);assert.equal(stepAutoScrollSpeed(10,-1),10);assert.equal(stepAutoScrollSpeed(160,1),160);assert.equal(autoScrollLabel(40),'5 / '+AUTO_SCROLL_SPEEDS.length);
+  let frame=null,scrolled=0,bottom=5000,now=0;const realNow=performance.now;performance.now=()=>now;
+  const win={innerHeight:800,innerWidth:1000,requestAnimationFrame:f=>{frame=f;return 1;},cancelAnimationFrame:()=>{frame=null;},scrollBy:(x,y)=>{scrolled+=y;}};
+  const article={getBoundingClientRect:()=>({bottom})};
+  const doc={defaultView:win,querySelector:()=>article,getSelection:()=>''};
+  const changes=[];const reader={doc,host:{hidden:false},tool:'select',readingLayout:()=>({flow:'continuous'}),supportsReadingLayout:()=>true,onAutoScrollChange:()=>changes.push(pager.autoPaused?'paused':pager.autoSpeed?'running':'stopped')};
+  const pager=new ReadingPager(reader);pager.article=()=>article;
+  const tick=ms=>{for(let left=ms;left>0;left-=100){now+=Math.min(100,left);const f=frame;frame=null;f?.(now);}};
+  try{
+    assert.equal(pager.startAuto(40),true);tick(1000);assert.equal(scrolled,40);
+    pager.wheel({deltaY:10,preventDefault(){}});assert.equal(pager.autoPaused,true);assert.equal(pager.autoSpeed,40,'a wheel pauses, it does not end');
+    tick(1000);assert.equal(scrolled,40,'nothing moves while paused');
+    pager.toggleAuto();assert.equal(pager.autoPaused,false);tick(16);tick(500);assert.equal(scrolled,60);
+    pager.setAutoSpeed(stepAutoScrollSpeed(pager.autoSpeed,1));assert.equal(pager.autoSpeed,60);tick(1000);assert.equal(scrolled,120);
+    pager.click({target:null,clientX:500});assert.equal(pager.autoPaused,true,'a click on the page pauses');
+    pager.touchStart({touches:[{clientX:1,clientY:1}]});assert.equal(pager.autoPaused,true);
+    pager.resumeAuto();reader.host.hidden=true;tick(16);assert.equal(pager.autoPaused,true,'a hidden tab pauses');reader.host.hidden=false;
+    pager.stopAuto();assert.equal(pager.autoSpeed,0);assert.equal(pager.resumeAuto(),false);
+    assert.deepEqual(changes,['running','paused','running','running','paused','running','paused','stopped']);
+    pager.startAuto(40);bottom=700;tick(16);assert.equal(pager.autoSpeed,0,'reaching the end stops');
+  }finally{performance.now=realNow;}
+});

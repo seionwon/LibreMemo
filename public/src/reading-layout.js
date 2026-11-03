@@ -47,6 +47,12 @@ export function pageNumbers({top,contentHeight,pageHeight}){
   return {page,pages,percent:Math.min(100,Math.max(0,Math.round(contentHeight>0?(top+size)/contentHeight*100:100)))};
 }
 
+// Auto-scroll speeds in CSS pixels per second, slowest first.
+export const AUTO_SCROLL_SPEEDS=Object.freeze([10,15,20,30,40,60,80,120,160]);
+export function autoScrollSpeed(value){const n=Number(value);return AUTO_SCROLL_SPEEDS.reduce((best,s)=>Math.abs(s-n)<Math.abs(best-n)?s:best,AUTO_SCROLL_SPEEDS[4]);}
+export function stepAutoScrollSpeed(value,direction){const at=AUTO_SCROLL_SPEEDS.indexOf(autoScrollSpeed(value));return AUTO_SCROLL_SPEEDS[Math.max(0,Math.min(AUTO_SCROLL_SPEEDS.length-1,at+Math.sign(direction)))];}
+export function autoScrollLabel(value){const at=AUTO_SCROLL_SPEEDS.indexOf(autoScrollSpeed(value));return (at+1)+' / '+AUTO_SCROLL_SPEEDS.length;}
+
 export class ReadingPager {
   constructor(reader){this.reader=reader;this.history=[];this.frame=0;this.end=0;this.turning=false;this.lastWheel=0;this.touch=null;}
   get doc(){return this.reader.doc;}
@@ -122,7 +128,7 @@ export class ReadingPager {
     return true;
   }
   wheel(event){
-    this.stopAuto();
+    this.pauseAuto();
     if(!this.active||event.ctrlKey)return false;
     event.preventDefault();
     const now=performance.now(),delta=Math.abs(event.deltaY)>=Math.abs(event.deltaX)?event.deltaY:event.deltaX;
@@ -131,28 +137,48 @@ export class ReadingPager {
   }
   free(){return this.reader.tool==='select'&&!this.reader.annotationDrag&&!String(this.doc.getSelection?.()||'').trim();}
   click(event){
-    this.stopAuto();
+    this.pauseAuto();
     if(!this.active||event.defaultPrevented||!this.free())return;
     const target=event.target?.nodeType===1?event.target:event.target?.parentElement;
     if(target?.closest?.('a[href],button,summary,[data-htmlmemo-mark],[data-htmlmemo-id],[data-htmlmemo-ui]'))return;
     const width=this.win.innerWidth;
     if(event.clientX<width*.25)this.previous();else if(event.clientX>width*.75)this.next();
   }
-  // Continuous reading only; any deliberate input hands control back at once.
+  // Continuous reading only. Deliberate reading input (wheel, touch, click,
+  // page keys) pauses rather than ends it, so the reader can resume from the bar.
   startAuto(speed){
     this.stopAuto();if(this.active||!this.reader.supportsReadingLayout?.())return false;
-    let last=performance.now(),carry=0;this.autoSpeed=speed;
+    this.autoSpeed=autoScrollSpeed(speed);this.autoPaused=false;this.runAuto();this.reader.onAutoScrollChange?.();return true;
+  }
+  runAuto(){
+    let last=performance.now(),carry=0;
     const step=now=>{
-      if(!this.autoSpeed||this.reader.disposed||this.reader.host?.hidden){this.stopAuto();return;}
-      carry+=(now-last)/1000*this.autoSpeed;last=now;
+      if(!this.autoSpeed||this.autoPaused)return;
+      if(this.reader.disposed||this.active){this.stopAuto();return;}
+      if(this.reader.host?.hidden){this.pauseAuto();return;}
+      carry+=Math.min(now-last,250)/1000*this.autoSpeed;last=now;
       const whole=Math.floor(carry);if(whole){carry-=whole;this.win.scrollBy(0,whole);}
       if(this.contentBottom()<=this.win.innerHeight){this.stopAuto();return;}
       this.autoFrame=this.win.requestAnimationFrame(step);
     };
-    this.autoFrame=this.win.requestAnimationFrame(step);return true;
+    this.autoFrame=this.win.requestAnimationFrame(step);
   }
-  stopAuto(){const was=!!this.autoSpeed;this.autoSpeed=0;if(this.autoFrame)this.win?.cancelAnimationFrame(this.autoFrame);this.autoFrame=0;if(was)this.reader.onAutoScrollEnd?.();}
-  touchStart(event){this.stopAuto();this.touch=this.active&&event.touches.length===1&&this.free()?{x:event.touches[0].clientX,y:event.touches[0].clientY}:null;}
+  pauseAuto(){
+    if(!this.autoSpeed||this.autoPaused)return false;
+    this.autoPaused=true;if(this.autoFrame)this.win?.cancelAnimationFrame(this.autoFrame);this.autoFrame=0;this.reader.onAutoScrollChange?.();return true;
+  }
+  resumeAuto(){
+    if(!this.autoSpeed||!this.autoPaused)return false;
+    if(this.reader.disposed||this.reader.host?.hidden){this.stopAuto();return false;}
+    this.autoPaused=false;this.runAuto();this.reader.onAutoScrollChange?.();return true;
+  }
+  toggleAuto(){return this.autoPaused?this.resumeAuto():this.pauseAuto();}
+  setAutoSpeed(speed){if(!this.autoSpeed)return false;this.autoSpeed=autoScrollSpeed(speed);this.reader.onAutoScrollChange?.();return true;}
+  stopAuto(){
+    const was=!!this.autoSpeed;this.autoSpeed=0;this.autoPaused=false;if(this.autoFrame)this.win?.cancelAnimationFrame(this.autoFrame);this.autoFrame=0;
+    if(was)this.reader.onAutoScrollChange?.();
+  }
+  touchStart(event){this.pauseAuto();this.touch=this.active&&event.touches.length===1&&this.free()?{x:event.touches[0].clientX,y:event.touches[0].clientY}:null;}
   touchEnd(event){
     const start=this.touch;this.touch=null;const end=event.changedTouches?.[0];
     if(!start||!end||!this.active)return;

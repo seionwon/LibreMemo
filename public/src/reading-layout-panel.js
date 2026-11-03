@@ -1,4 +1,4 @@
-import {DEFAULT_READING_LAYOUT} from './reading-layout.js';
+import {DEFAULT_READING_LAYOUT,autoScrollLabel,stepAutoScrollSpeed} from './reading-layout.js';
 import {locationTab,presetTab} from './viewer-presets-panel.js';
 // The panel and the footnote card live in the app document: book content is
 // shown as plain text only, and no book style can reach these controls.
@@ -59,6 +59,35 @@ export function toggleReadingLayoutPanel(reader,button){
   doc.addEventListener('pointerdown',outside,true);reader.doc?.addEventListener('pointerdown',outside,true);doc.addEventListener('keydown',key,true);
   reader.layoutPanelClose=()=>{doc.removeEventListener('pointerdown',outside,true);reader.doc?.removeEventListener('pointerdown',outside,true);doc.removeEventListener('keydown',key,true);panel.remove();reader.layoutPanel=null;reader.layoutPanelClose=null;button.setAttribute('aria-expanded','false');};
   (panel.querySelector('[aria-checked="true"]')||tabs.firstChild)?.focus();
+}
+const AUTO_ICONS={pause:'<path d="M9 6v12M15 6v12"/>',play:'<path d="M8 5.5v13l10.5-6.5z"/>',stop:'<rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/>',slower:'<path d="M6 12h12"/>',faster:'<path d="M6 12h12M12 6v12"/>'};
+const autoIcon=name=>'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+AUTO_ICONS[name]+'</svg>';
+/** Small floating controls shown while auto-scroll is running or paused.
+ *  It sits at the bottom of the reading area so the text stays visible. */
+export function syncAutoScrollBar(reader){
+  const pager=reader.pager,running=!!pager?.autoSpeed&&!reader.disposed;
+  if(!running){reader.autoScrollBar?.remove();reader.autoScrollBar=null;return null;}
+  let bar=reader.autoScrollBar;const doc=reader.host.ownerDocument;
+  if(!bar||!bar.isConnected){
+    bar=doc.createElement('div');bar.className='auto-scroll-bar';bar.setAttribute('role','toolbar');bar.setAttribute('aria-label','자동 스크롤');bar.setAttribute('data-htmlmemo-ui','');
+    const button=(action,label)=>{const node=doc.createElement('button');node.type='button';node.dataset.auto=action;node.setAttribute('aria-label',label);node.title=label;return node;};
+    const toggle=button('toggle','일시정지'),slower=button('slower','느리게'),faster=button('faster','빠르게'),stop=button('stop','자동 스크롤 끝내기'),state=doc.createElement('span'),speed=doc.createElement('output');
+    state.className='auto-scroll-state';speed.className='auto-scroll-speed';speed.setAttribute('aria-label','자동 스크롤 속도');
+    slower.innerHTML=autoIcon('slower');faster.innerHTML=autoIcon('faster');stop.innerHTML=autoIcon('stop')+'<span>끝내기</span>';
+    toggle.onclick=()=>reader.pager?.toggleAuto();
+    slower.onclick=()=>reader.pager?.setAutoSpeed(stepAutoScrollSpeed(reader.pager.autoSpeed,-1));
+    faster.onclick=()=>reader.pager?.setAutoSpeed(stepAutoScrollSpeed(reader.pager.autoSpeed,1));
+    stop.onclick=()=>reader.pager?.stopAuto();
+    const group=doc.createElement('span');group.className='auto-scroll-speed-group';group.append(slower,speed,faster);
+    bar.append(toggle,state,group,stop);reader.host.append(bar);reader.autoScrollBar=bar;
+  }
+  const paused=!!pager.autoPaused,toggle=bar.querySelector('[data-auto=toggle]');
+  bar.toggleAttribute('data-paused',paused);
+  toggle.innerHTML=autoIcon(paused?'play':'pause')+'<span>'+(paused?'계속':'일시정지')+'</span>';
+  toggle.setAttribute('aria-label',paused?'자동 스크롤 계속':'자동 스크롤 일시정지');toggle.title=toggle.getAttribute('aria-label');
+  bar.querySelector('.auto-scroll-state').textContent=paused?'일시정지됨':'자동 스크롤 중';
+  bar.querySelector('.auto-scroll-speed').textContent='속도 '+autoScrollLabel(pager.autoSpeed);
+  return bar;
 }
 /** A short in-book note reached from a superscript or number-only link. */
 export function ebookNoteTarget(doc,eventTarget){

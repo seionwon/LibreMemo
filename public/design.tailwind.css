@@ -847,3 +847,14 @@ summary:focus-visible{outline:2px solid var(--green);outline-offset:3px}
 .text-style-remove{position:absolute;top:-6px;right:-6px;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--muted);cursor:pointer}
 .text-style-controls{display:grid;gap:6px}.text-style-row{display:flex;align-items:center;gap:8px;font-size:11px}.text-style-row select{padding:3px 6px}.text-style-row input[type=color]{width:34px;height:24px;padding:0;border:1px solid var(--line);border-radius:5px;background:none}
 .text-style-note{margin:6px 0 0;font-size:11px;color:var(--muted)}
+/* Auto-scroll controls: a small bar at the bottom of the reading area. */
+.auto-scroll-bar{position:absolute;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:31;transform:translateX(-50%);display:flex;align-items:center;gap:4px;max-width:calc(100% - 24px);padding:4px;border:1px solid var(--color-line);border-radius:999px;background:color-mix(in srgb,var(--color-surface,#fff) 94%,transparent);color:var(--color-ink);box-shadow:0 6px 20px rgba(0,0,0,.18);font-size:13px;transition:opacity .2s;backdrop-filter:blur(6px)}
+.auto-scroll-bar:not([data-paused]):not(:hover):not(:focus-within){opacity:.55}
+.auto-scroll-bar button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-width:36px;min-height:36px;padding:0 10px;border:0;border-radius:999px;background:transparent;color:inherit;cursor:pointer;white-space:nowrap}
+.auto-scroll-bar button:hover{background:var(--green-light)}
+.auto-scroll-bar [data-auto=toggle]{background:var(--green);color:#fff}.auto-scroll-bar [data-auto=toggle]:hover{background:var(--green);filter:brightness(1.1)}
+.auto-scroll-state{padding:0 6px;color:var(--color-muted);font-size:12px;white-space:nowrap}
+.auto-scroll-speed-group{display:inline-flex;align-items:center;border-inline:1px solid var(--color-line);padding-inline:2px}.auto-scroll-speed-group button{padding:0;min-width:32px}
+.auto-scroll-speed{min-width:58px;text-align:center;font-variant-numeric:tabular-nums;font-size:12px}
+@media (max-width:520px){.auto-scroll-state,.auto-scroll-bar [data-auto=stop] span{display:none}.auto-scroll-speed{min-width:44px}}
+.viewer-location-start{min-height:32px;padding:0 12px;border:1px solid var(--green);border-radius:6px;background:var(--green);color:#fff;cursor:pointer}.viewer-location-start:disabled{opacity:.5;cursor:default}

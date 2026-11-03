@@ -9,7 +9,7 @@ import { loadHangulFonts } from './hangul-fonts.js';
 import { textLook, textLines, validTextStyle } from './text-style.js';
 import { DEFAULT_READING_LAYOUT, ReadingPager, normalizeReadingLayout, pageNumbers, readingLayoutCss, PAGE_BOTTOM, PAGE_TOP } from './reading-layout.js';
 import { normalizeSettings, presetFit, SETTING_LABELS } from './viewer-presets.js';
-import { closeReadingLayoutPanel, closeEbookNote, openEbookNote, ebookNoteTarget, toggleReadingLayoutPanel } from './reading-layout-panel.js';
+import { closeReadingLayoutPanel, closeEbookNote, openEbookNote, ebookNoteTarget, syncAutoScrollBar, toggleReadingLayoutPanel } from './reading-layout-panel.js';
 import { LAYER_ID, LOCAL_CSP, parseHTML, savedMainFrame, prepareLoadedHTML, cleanAnnotations, textIndex, selectionAnchor, resolveTextAnchor, wrapOffsets, rangeFromOffsets, sentenceOffsets, serializeHTML, inspectBookDocument, drawingTargetQuote, describeDrawingTarget, currentSection, bookmarkAnchorTarget } from './document.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -1015,7 +1015,7 @@ export class Reader {
   readingLayout() { return normalizeReadingLayout(this.metadata?.view?.layout,normalizeReadingLayout(this.callbacks?.readingLayoutDefault?.(),DEFAULT_READING_LAYOUT)); }
   applyReadingLayout() {
     if(!this.supportsReadingLayout())return;
-    this.pager||=new ReadingPager(this);this.fitReadingWidth();
+    this.pager||=new ReadingPager(this);this.onAutoScrollChange||=()=>syncAutoScrollBar(this);this.fitReadingWidth();
     let style=this.doc.getElementById('htmlmemo-reading-layout-style');
     if(!style){style=this.doc.createElement('style');style.id='htmlmemo-reading-layout-style';style.setAttribute('data-htmlmemo-ui','');this.doc.head.append(style);}
     const layout=this.readingLayout(),css=readingLayoutCss(layout);if(style.textContent!==css)style.textContent=css;
@@ -1115,7 +1115,7 @@ export class Reader {
     const paged=this.readingLayout().flow==='paged',key=event.key,forward=key==='PageDown'||key===' '&&!event.shiftKey||paged&&(key==='ArrowRight'||key==='ArrowDown'),backward=key==='PageUp'||key===' '&&event.shiftKey||paged&&(key==='ArrowLeft'||key==='ArrowUp');
     if(key==='Home'||key==='End'){const win=this.doc.defaultView;if(paged)this.pager.history=[];win.scrollTo(win.scrollX,key==='Home'?0:Math.max(0,(this.pager?.contentBottom()??0)+win.scrollY-win.innerHeight));return true;}
     if(!forward&&!backward)return false;
-    this.pager?.stopAuto();
+    this.pager?.pauseAuto();
     if(paged){if(forward)this.pager.next();else this.pager.previous();return true;}
     const win=this.doc.defaultView;win.scrollBy(win.scrollX*0,(forward?1:-1)*win.innerHeight*.9);return true;
   }
@@ -4647,7 +4647,7 @@ export class Reader {
     this.clearTocLongPress();this.cancelDrawingGesture();this.touchScroll=null;this.touchErase=null;
     this.searchGeneration=(this.searchGeneration||0)+1;this.searchIndexCache?.dispose();
     this.cancelBookSearchJump?.();this.documentBookSearchObserver?.disconnect();if(this.documentBookSearchResults)this.clearDocumentBookSearchHighlight();
-    closeReadingLayoutPanel(this);closeEbookNote(this);this.pager?.clear();
+    closeReadingLayoutPanel(this);closeEbookNote(this);this.pager?.clear();this.autoScrollBar?.remove();this.autoScrollBar=null;
     this.stopMiddleScroll();this.readAloud?.dispose();this.readAloud=null;this.stopSpeech(); this.disposed=true;this.cancelOpeningWait?.();this.cancelAnnotationJump?.();this.cancelFrameOpen?.();this.runtime?.dispose(); clearTimeout(this.positionTimer);clearTimeout(this.dynamicTimer);clearTimeout(this.sourceFontTimer);clearTimeout(this.documentSidebarUI?.sidebarSearchTimer);this.dynamicObserver?.disconnect();this.fontObserver?.disconnect();if(this.fontFrame)this.doc.defaultView?.cancelAnimationFrame(this.fontFrame); this.resizeObserver?.disconnect(); this.hostObserver?.disconnect(); this.frame.srcdoc=''; if(this.documentURL){URL.revokeObjectURL(this.documentURL);this.documentURL=null;} this.host.remove();
   }
 }
