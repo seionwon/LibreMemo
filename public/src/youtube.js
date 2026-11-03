@@ -96,6 +96,25 @@ export function outlineSections(duration,chapters=[]){
   return starts.map(start=>({start:start*1000,title:clock(start)}));
 }
 /**
+ * A timestamp heading followed by the start of what is said there: "1:40 Then what…".
+ * Auto-generated captions break mid-sentence, so the heading starts at the first new
+ * sentence near the beginning of the section when the section itself starts mid-sentence.
+ */
+export function withFirstWords(sections,cues,limit=36){
+  if(!sections)return sections;
+  const clean=text=>String(text||'').replace(/(?:>>|&gt;&gt;)\s*|\[[^\]]{1,20}\]/g,'').replace(/\s+/g,' ').trim();
+  const ended=text=>/[.?!…。？！]["'”’)\]]?$/.test(clean(text));
+  return sections.map((section,i)=>{
+    const end=sections[i+1]?.start??Infinity,inside=cues.filter(c=>c.start>=section.start&&c.start<end&&clean(c.text));
+    if(!inside.length)return section;
+    const before=cues[cues.indexOf(inside[0])-1],text=clean(inside.slice(0,10).map(c=>c.text).join(' '));
+    let from=0;
+    if(before&&!ended(before.text)){const m=/[.?!…。？！]["'”’)\]]?\s+(?=\S)/.exec(text.slice(0,200));if(m)from=m.index+m[0].length;}
+    const words=text.slice(from);
+    return {...section,title:section.title+' '+(words.length>limit?words.slice(0,limit).replace(/\s+\S*$/,'')+'…':words)};
+  });
+}
+/**
  * The reading document of one video: its subtitle grouped by the outline above,
  * or (until one is attached) a short note with no time cues.
  */
@@ -104,7 +123,7 @@ export function youtubeDocumentHTML(title,subtitle=null,warnings=[],{chapters=[]
   if(subtitle){
     // Without a known length, the subtitle's last cue gives it.
     const cues=parseSubtitles(subtitle.text,subtitle.format),length=duration||Math.max(0,...cues.map(c=>(c.end??c.start)/1000));
-    body=renderSubtitles(subtitle.text,subtitle.format,warnings,{sections:outlineSections(length,chapters)});
+    body=renderSubtitles(subtitle.text,subtitle.format,warnings,{sections:chapters.length?outlineSections(length,chapters):withFirstWords(outlineSections(length),cues)});
   }else body=STYLE+'<article class="office-subtitles youtube-empty" data-youtube-empty><strong>아직 자막이 없습니다.</strong><p>위쪽 영상 막대의 「자막 붙이기」로 이 영상의 자막 파일(.srt)을 고르면, 영상과 함께 움직이는 자막에 형광펜·메모·북마크를 달 수 있습니다. 받는 방법은 내 서재 → 유튜브의 「자막 파일 받는 방법」에 있습니다.</p></article>';
   return officeHTML(title,body,warnings);
 }

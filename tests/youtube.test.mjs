@@ -4,7 +4,7 @@ import { installDOM } from './dom.mjs';
 import { zipFiles } from '../public/src/zip.js';
 import { parseHTML, serializeHTML } from '../public/src/document.js';
 import { validThumbnail } from '../public/src/model.js';
-import { parseYouTubeInput, parseStart, validateYouTube, youtubeDocumentHTML, cueTimes, cueAt, clock, playlistFolderName, matchSubtitleFiles, subtitlesFromZip, decodeSubtitle, subtitleFormat, parseChapters, outlineSections, MAC_GUIDE, SUBTITLE_EXTENSION, guideHTML } from '../public/src/youtube.js';
+import { parseYouTubeInput, parseStart, validateYouTube, youtubeDocumentHTML, cueTimes, cueAt, clock, playlistFolderName, matchSubtitleFiles, subtitlesFromZip, decodeSubtitle, subtitleFormat, parseChapters, outlineSections, withFirstWords, MAC_GUIDE, SUBTITLE_EXTENSION, guideHTML } from '../public/src/youtube.js';
 installDOM();
 
 test('YouTube links of every common shape give the video, playlist and start time',()=>{
@@ -96,7 +96,12 @@ test('chapters pasted from a description become the outline; otherwise timestamp
   assert.deepEqual(outlineSections(1080,[{t:0,title:'Intro'},{t:83,title:'Setup'}]),[{start:0,title:'0:00 Intro'},{start:83000,title:'1:23 Setup'}]);
   const srt=Array.from({length:6},(_,i)=>`${i+1}\n00:0${i}:10,000 --> 00:0${i}:20,000\nLine ${i}\n`).join('\n');
   const timed=new DOMParser().parseFromString(youtubeDocumentHTML('V',{text:srt,format:'srt'}),'text/html');
-  assert.deepEqual([...timed.querySelectorAll('h2')].map(h=>h.textContent),['0:00','1:00','2:00','3:00','4:00','5:00']);
+  assert.deepEqual([...timed.querySelectorAll('h2')].map(h=>h.textContent),['0:00 Line 0','1:00 Line 1','2:00 Line 2','3:00 Line 3','4:00 Line 4','5:00 Line 5']);
+  assert.deepEqual(withFirstWords([{start:0,title:'0:00'},{start:60000,title:'1:00'}],[{start:5000,text:'So we did Code in Place before Cursor and Cloud Code'},{start:61000,text:'Hi'}]).map(s=>s.title),['0:00 So we did Code in Place before…','1:00 Hi']);
+  // Mid-sentence fragments give way to the next sentence; short cues are joined.
+  const fragments=[{start:0,text:'Hi there'},{start:60000,text:'suppose, if I start'},{start:62000,text:'outsourcing my thinking.'},{start:64000,text:'Then what'},{start:66000,text:'happens to us?'}];
+  assert.deepEqual(withFirstWords([{start:0,title:'0:00'},{start:60000,title:'1:00'}],fragments).map(s=>s.title),['0:00 Hi there','1:00 Then what happens to us?']);
+  assert.equal(withFirstWords([{start:0,title:'0:00'}],[{start:0,text:'>> So, Karel [music] speaks'}])[0].title,'0:00 So, Karel speaks');
   const chaptered=new DOMParser().parseFromString(youtubeDocumentHTML('V',{text:srt,format:'srt'},[],{chapters:[{t:0,title:'Intro'},{t:150,title:'Main'}]}),'text/html');
   assert.deepEqual([...chaptered.querySelectorAll('section')].map(s=>[s.querySelector('h2').textContent,s.querySelectorAll('.subtitle-cue').length]),[['0:00 Intro',3],['2:30 Main',3]]);
 });
