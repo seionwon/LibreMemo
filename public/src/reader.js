@@ -478,6 +478,13 @@ export class Reader {
     this.doc.addEventListener('keydown', event => {if(event.target?.closest?.('[data-outline-edit-input]'))return;if(event.key==='Escape'&&this.textMarkGesture){this.cancelTextMarkGesture();event.preventDefault();event.stopPropagation();return;}if(event.key==='Escape'&&this.annotationDrag){this.cancelAnnotationDrag();event.preventDefault();event.stopPropagation();return;}if(this.handleTocKeydown(event))return; if(event.key==='Escape'&&this.middleScroll){this.stopMiddleScroll();event.preventDefault();return;}this.callbacks.onKey?.(event);}, true);
     this.doc.addEventListener('dblclick', event => {if(this.handleTocDblClick(event))return; this.focusDocument(event);}, true);
     this.viewport.addEventListener('dblclick', event => this.focusDocument(event));
+    // Touch browsers do not reliably turn a double tap into dblclick.
+    for (const root of [this.doc, this.viewport]) {
+      root.addEventListener('touchstart', event => this.trackFocusTap(event, 'start'), {capture:true,passive:true});
+      root.addEventListener('touchmove', event => this.trackFocusTap(event, 'move'), {capture:true,passive:true});
+      root.addEventListener('touchend', event => this.trackFocusTap(event, 'end'), {capture:true,passive:false});
+      root.addEventListener('touchcancel', () => {this.focusTap = null; this.lastFocusTap = null;}, {capture:true,passive:true});
+    }
     this.viewport.addEventListener('scroll',()=>this.updateReadingControls(),{passive:true});
     this.doc.addEventListener('click', event => {
       if(this.showEbookNote(event))return;
@@ -2242,15 +2249,18 @@ export class Reader {
     if (el.closest?.('#reader-menu,[data-action="toggle-sidebar"],[aria-controls="reader-nav"],[aria-controls="sidebar"],.reader-head,.topbar,#topbar,.top-bar,#top-bar,[data-htmlmemo-ui],[data-htmlmemo-reading-controls]')) return false;
     return true;
   }
+  documentSidebarOpen() {
+    if (!this.documentSidebarUI?.isConnected) return false;
+    const compact = this.doc?.documentElement?.hasAttribute?.('data-htmlmemo-compact-ui');
+    const drawerOpen = this.doc?.documentElement?.hasAttribute?.('data-htmlmemo-sidebar-open') || this.doc?.body?.classList?.contains?.('toc-open');
+    return compact ? (this.tocResize?.sidebar?.id === 'reader-nav' ? drawerOpen : !this.tocStrip || drawerOpen) : !this.tocStrip;
+  }
   dismissMobileSidebar(event, target = event?.target) {
     if (!this.isMobileSidebarInteraction(event) || !this.isBodyTouchTarget(target, event)) return false;
     let dismissed = false;
     if (this.callbacks.onDismissSidebar?.()) dismissed = true;
     if (this.documentSidebarUI?.isConnected) {
-      const compact = this.doc?.documentElement?.hasAttribute?.('data-htmlmemo-compact-ui');
-      const drawerOpen = this.doc?.documentElement?.hasAttribute?.('data-htmlmemo-sidebar-open') || this.doc?.body?.classList?.contains?.('toc-open');
-      const sidebarOpen = compact ? (this.tocResize?.sidebar?.id === 'reader-nav' ? drawerOpen : !this.tocStrip || drawerOpen) : !this.tocStrip;
-      if (sidebarOpen) {
+      if (this.documentSidebarOpen()) {
         this.toggleDocumentSidebar(false);
         dismissed = true;
       }
@@ -2818,13 +2828,40 @@ export class Reader {
     const range=rangeFromOffsets(this.doc,bounds.start,bounds.end,index),selection=this.doc.getSelection();if(!range||!selection)return false;
     event.preventDefault();selection.removeAllRanges();selection.addRange(range);return true;
   }
+  trackFocusTap(event, phase) {
+    if (this.disposed) return;
+    if (phase === 'start') {
+      const touch = event.touches?.[0];
+      if (event.touches?.length !== 1 || !touch) {this.focusTap = null; this.lastFocusTap = null; return;}
+      this.focusTap = {x:touch.clientX, y:touch.clientY, at:performance.now(), target:event.target, root:event.currentTarget};
+      return;
+    }
+    const tap = this.focusTap, touch = event.changedTouches?.[0];
+    if (!tap || !touch) return;
+    if (Math.hypot(touch.clientX - tap.x, touch.clientY - tap.y) > 12) {this.focusTap = null; this.lastFocusTap = null; return;}
+    if (phase !== 'end') return;
+    this.focusTap = null;
+    const now = performance.now(), last = this.lastFocusTap;
+    if (now - tap.at > 400) {this.lastFocusTap = null; return;}
+    if (!last || last.root !== tap.root || now - last.at > 350 || Math.hypot(touch.clientX - last.x, touch.clientY - last.y) > 30) {
+      this.lastFocusTap = {x:touch.clientX, y:touch.clientY, at:now, root:tap.root};
+      return;
+    }
+    this.lastFocusTap = null;
+    if (this.tool !== 'select') return;
+    const toggled = this.focusDocument({type:'doubletap', target:tap.target, clientX:touch.clientX, clientY:touch.clientY, button:0, preventDefault:() => {if (event.cancelable) event.preventDefault();}});
+    if (toggled) this.focusTapToggledAt = now;
+  }
   focusDocument(event) {
+    // A double tap already toggled; ignore the browser's own dblclick for it.
+    if(event.type==='dblclick'&&performance.now()-(this.focusTapToggledAt||-Infinity)<700)return false;
     if(this.annotationDrag||performance.now()-(this.annotationDragEndedAt||-Infinity)<500)return;
     if (this.disposed || event.button != null && event.button !== 0) return;
     if (this.isInsideTocSidebar(event.target)) return;
     if (event.target.closest?.('a,button,input,textarea,select,img,svg,canvas,video,audio,object,embed,iframe,[role="img"],[contenteditable],[data-htmlmemo-id],[role="separator"],[data-htmlmemo-toc-resizer],[data-htmlmemo-toc-resizer-bound],[data-htmlmemo-toc-strip]')||this.textAtClick(event)) return;
     event.preventDefault();
     this.callbacks.onDocumentFocus?.();
+    return true;
   }
   measure() {
     if (this.host?.hidden || !this.doc) return;
@@ -2846,10 +2883,15 @@ export class Reader {
   setFocusLayout(focused) {
     if (this.disposed) return;
     if (focused) {
-      if (!this.focusLayout) this.focusLayout = {zoom:this.zoom,autoFit:this.autoFit};
+      if (!this.focusLayout) {
+        // Full screen shows only the document; a book's own sidebar returns on exit.
+        this.focusLayout = {zoom:this.zoom,autoFit:this.autoFit,sidebar:this.documentSidebarOpen()};
+        if (this.focusLayout.sidebar) this.toggleDocumentSidebar(false);
+      }
       this.setZoom(this.fitZoom(),true);
     } else if (this.focusLayout) {
       const previous=this.focusLayout;this.focusLayout=null;
+      if (previous.sidebar && !this.documentSidebarOpen()) this.toggleDocumentSidebar(true);
       this.setZoom(previous.zoom,previous.autoFit);
     }
     this.measure();

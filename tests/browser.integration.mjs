@@ -1186,7 +1186,7 @@ test('real Chrome: browsing, capture, local annotation, file writes, reopen and 
     await t.test('document fullscreen retains every compact toolbar button and saves annotations',async()=>{
       const buttons=await page.evaluate('[...document.querySelectorAll("#toolbar [data-action]")].map(button=>button.dataset.action)');
       await page.evaluate(`document.querySelector('.document-host:not([hidden]) iframe').contentDocument.body.dispatchEvent(new MouseEvent('dblclick',{bubbles:true,button:0,cancelable:true}));`);await page.waitFor('document.querySelector("#app").classList.contains("reader-focus")');
-      assert.equal(await page.evaluate('getComputedStyle(document.querySelector(".chrome")).display'), 'none');
+      assert.equal(await page.evaluate('document.querySelector(".chrome").getBoundingClientRect().height'),25);assert.equal(await page.evaluate('["#tabs","#library-tab","#settings-button"].every(selector=>document.querySelector(selector).getBoundingClientRect().height>0)'),true);
       await page.waitFor(`(()=>{const viewport=document.querySelector('.document-host:not([hidden]) .reader-viewport'),frame=viewport.querySelector('iframe');const v=viewport.getBoundingClientRect(),f=frame.getBoundingClientRect();return Math.abs(f.left-v.left)<1 && Math.abs(f.width-viewport.clientWidth)<1;})()`);
       assert.deepEqual(await page.evaluate('[...document.querySelectorAll("#toolbar [data-action]")].map(button=>button.dataset.action)'),buttons);
       assert.equal(await page.evaluate('getComputedStyle(document.querySelector("#toolbar")).paddingTop'),'0px');
@@ -2454,13 +2454,14 @@ test('real Chrome: native sidebar view choices are visible on open and preserve 
       assert.equal(await page.evaluate(`${doc}.defaultView.getComputedStyle(${doc}.querySelector('[data-htmlmemo-redundant-toc-title]')).display`),'none');
       assert.equal(await page.evaluate(`${doc}.querySelectorAll('[data-htmlmemo-doc-sidebar-ui]').length`),1);
       const groupOpen=await page.evaluate(`${doc}.querySelector('#reader-tree details').open`);
-      for(const focused of [false,true]){
-        if(focused){await doubleClickNative('#reader-main',true);await page.waitFor('document.querySelector("#app").classList.contains("reader-focus")');}
-        await doubleClickNative('#reader-nav',true);assert.equal(await page.evaluate('document.querySelector("#app").classList.contains("reader-focus")'),focused);
-        await doubleClickNative('#reader-tree details:first-child summary');assert.equal(await page.evaluate('document.querySelector("#app").classList.contains("reader-focus")'),focused);
-        assert.equal(await page.evaluate(`${doc}.querySelector('#reader-tree details').open`),groupOpen,'native TOC disclosure still handles both clicks');
-      }
-      await doubleClickNative('#reader-main',true);await page.waitFor('!document.querySelector("#app").classList.contains("reader-focus")&&!document.fullscreenElement');
+      await doubleClickNative('#reader-nav',true);assert.equal(await page.evaluate('document.querySelector("#app").classList.contains("reader-focus")'),false);
+      await doubleClickNative('#reader-tree details:first-child summary');assert.equal(await page.evaluate('document.querySelector("#app").classList.contains("reader-focus")'),false);
+      assert.equal(await page.evaluate(`${doc}.querySelector('#reader-tree details').open`),groupOpen,'native TOC disclosure still handles both clicks');
+      // Full screen leaves only the document: the open book sidebar closes and returns on exit.
+      const nativeSidebarWidth=`(()=>{const d=${doc},s=d.querySelector('[data-htmlmemo-native-sidebar]'),r=s.getBoundingClientRect(),w=d.defaultView.innerWidth;return d.defaultView.getComputedStyle(s).display==='none'?0:Math.max(0,Math.min(r.right,w)-Math.max(r.left,0));})()`;
+      assert.ok(await page.evaluate(nativeSidebarWidth)>100);
+      await doubleClickNative('#reader-main',true);await page.waitFor(`document.querySelector("#app").classList.contains("reader-focus")&&${nativeSidebarWidth}<=16&&document.querySelector(".chrome").getBoundingClientRect().height>0`);
+      await doubleClickNative('#reader-main',true);await page.waitFor(`!document.querySelector("#app").classList.contains("reader-focus")&&!document.fullscreenElement&&${nativeSidebarWidth}>100`);
       await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,`test-results/sidebar-views-native-${width}.png`),await page.screenshot());
     }
     await clickNative('[data-sidebar-view=bookmarks]');await clickNative('#htmlmemo-native-add-bookmark');
@@ -2683,7 +2684,9 @@ test('real Chrome: sidebar view choices preserve word and sentence selection wit
         await clickAt('#korean em',3,{word:'번째'});await page.waitFor(`${doc}.getSelection().toString().trim()===${JSON.stringify(korean)}`);assert.equal(await focused(),fullscreen);
         await clickAt('#wrapped em',3,{word:'wrapping'});await page.waitFor(`${doc}.getSelection().toString().trim()===${JSON.stringify(wrapped)}`);assert.equal(await focused(),fullscreen);
         await writeFile(join(root,`test-results/sidebar-views-text-clicks-${width}-${fullscreen?'focused':'normal'}.png`),await page.screenshot());
-        await clickAt('#reader-tree p',2,{word:'Sidebar'});assert.equal(await focused(),fullscreen);await clickAt('#source-control',2);assert.equal(await focused(),fullscreen);
+        // Full screen closes the book sidebar, so its double-click guard is checked in the normal view.
+        if(!fullscreen){await clickAt('#reader-tree p',2,{word:'Sidebar'});assert.equal(await focused(),false);}
+        await clickAt('#source-control',2);assert.equal(await focused(),fullscreen);
       }
       await clickAt('#blank',2);await page.waitFor('!document.querySelector("#app").classList.contains("reader-focus")&&!document.fullscreenElement');
     }

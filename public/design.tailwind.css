@@ -92,12 +92,13 @@ body[data-codememo-design]{margin:0;font-family:var(--app-font);background:var(-
 .floating-toolbar{height:auto;min-height:0;padding:0 1px;gap:0;border-radius:8px}
 .floating-toolbar .tool-group{gap:0}
 #app.reader-focus{position:fixed;inset:0;width:100%;height:100dvh;z-index:100;background:var(--surface)}
-#app.reader-focus>.chrome,#app.reader-focus>.statusbar{display:none}
+/* Full screen keeps the compact menu row (tabs, library, save, settings). */
+#app.reader-focus>.statusbar{display:none}
 #app.reader-focus .desk-shell,#app.reader-focus #main,#app.reader-focus #workspace{height:100%;min-height:0}
 #app.reader-focus .reader-viewport{padding:0}
 #app.reader-focus .reader-sizer{box-shadow:none;margin:0}
 #app.reader-focus .floating-toolbar{bottom:max(8px,env(safe-area-inset-bottom))}
-#app.reader-focus .sidebar{top:0;bottom:0}
+#app.reader-focus .sidebar{bottom:0}
 @media(max-width:450px){.floating-toolbar{overflow-x:auto;scrollbar-width:none}.floating-toolbar::-webkit-scrollbar{display:none}}
 
 /* Keep every toolbar button and icon; compact the vertical button boxes. */
@@ -115,7 +116,6 @@ body[data-codememo-design]{margin:0;font-family:var(--app-font);background:var(-
 .reader-controls-row>.reader-viewport{flex:1;min-height:0;height:auto}
 .reader-controls-row{padding-top:24px}
 .reader-controls-row>.htmlmemo-source-toolbar{position:fixed!important;left:0;right:0;top:var(--chrome-height,25px);width:100%;z-index:32!important}
-#app.reader-focus .reader-controls-row>.htmlmemo-source-toolbar{top:0}
 #sidebar.sidebar{top:calc(var(--chrome-height,25px) + 24px)}
 /* The imported book's reader-head, with the same 24px reader compaction. */
 .reader-controls-row>.htmlmemo-source-toolbar{--reader-paper:#fff;--reader-panel:#f6f8fa;--reader-ink:#1f2328;--reader-muted:#57606a;--reader-line:#e5e7eb;--reader-back-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231f2328' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 14.5a8 8 0 0 1 15 0'/%3E%3Cpath d='M4.5 9.5v5h5'/%3E%3C/svg%3E");--reader-theme-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231f2328' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41'/%3E%3C/svg%3E");display:flex;align-items:center;gap:4.8px;height:24px;min-height:24px;max-height:24px;flex:0 0 24px;min-width:0;overflow-x:auto;scrollbar-width:none;padding:0 9.6px;border-bottom:1px solid var(--reader-line);background:var(--reader-panel);color:var(--reader-ink);color-scheme:light;font:400 16px/normal 'Apple SD Gothic Neo',-apple-system,BlinkMacSystemFont,'Noto Sans KR','Malgun Gothic',sans-serif;letter-spacing:normal}

@@ -78,7 +78,7 @@ test('floating toolbar stays compact without duplicate TTS or relocated zoom con
  }
  const css=await readFile(new URL('../public/design.tailwind.css',import.meta.url),'utf8');
  assert.match(css,/\.floating-toolbar\{height:auto;min-height:0;padding:0 1px;gap:0/);
- assert.match(css,/#app\.reader-focus>\.chrome/);
+ assert.doesNotMatch(css,/#app\.reader-focus>\.chrome/);assert.match(css,/#app\.reader-focus>\.statusbar\{display:none\}/);
  assert.doesNotMatch(html,/chrome-topline/);
  assert.match(css,/\.addressbar\{height:24px;min-height:0;padding:0;margin:0\}/);
 });
@@ -426,4 +426,29 @@ test('statusbar slides up only on status changes and auto-hides after settling w
  context.setStatusLeft('주석이 앱에 자동 저장됨');
  scheduledFn?.();
  assert.equal(bar.hasAttribute('data-statusbar-visible'),false,'slides down once save settles');
+});
+test('a touch double tap on empty space toggles full screen once, while drags, slow taps and other tools do not',()=>{
+ let now=1000;const realNow=performance.now;performance.now=()=>now;
+ try{
+  const root={},target={closest:()=>null};let focused=0;
+  const r={tool:'select',focusDocument:Reader.prototype.focusDocument,textAtClick:()=>null,isInsideTocSidebar:()=>false,callbacks:{onDocumentFocus:()=>focused++}};
+  const touch=(x,y)=>({clientX:x,clientY:y});let prevented=0;
+  const tap=(x,y,{move=0,hold=40}={})=>{Reader.prototype.trackFocusTap.call(r,{touches:[touch(x,y)],target,currentTarget:root},'start');if(move)Reader.prototype.trackFocusTap.call(r,{changedTouches:[touch(x+move,y)]},'move');now+=hold;Reader.prototype.trackFocusTap.call(r,{changedTouches:[touch(x+move,y)],cancelable:true,preventDefault(){prevented++;}},'end');};
+  tap(100,100);now+=150;tap(104,102);assert.equal(focused,1);assert.equal(prevented,1);
+  assert.equal(r.focusDocument({type:'dblclick',target,clientX:104,clientY:102,button:0,preventDefault(){}}),false);assert.equal(focused,1);
+  now+=1000;tap(100,100);now+=150;tap(100,100,{move:40});assert.equal(focused,1);
+  now+=1000;tap(100,100);now+=500;tap(100,100);assert.equal(focused,1);
+  now+=1000;tap(100,100);now+=100;tap(200,100);assert.equal(focused,1);
+  now+=1000;r.tool='pen';tap(100,100);now+=100;tap(100,100);assert.equal(focused,1);
+  r.tool='select';now+=1000;r.textAtClick=()=>({node:{}});tap(100,100);now+=100;tap(100,100);assert.equal(focused,1);
+  r.textAtClick=()=>null;now+=1000;tap(100,100);now+=100;tap(100,100);assert.equal(focused,2);
+ }finally{performance.now=realNow;}
+});
+test('full screen closes an open book sidebar and restores it on exit, leaving a closed one closed',()=>{
+ for(const initiallyOpen of [true,false]){
+  const toggles=[];const r={zoom:1,autoFit:false,open:initiallyOpen,documentSidebarOpen(){return this.open;},toggleDocumentSidebar(open){toggles.push(open);this.open=open;},fitZoom:()=>1.5,setZoom(zoom,autoFit){this.zoom=zoom;this.autoFit=autoFit;},measure(){}};
+  Reader.prototype.setFocusLayout.call(r,true);assert.equal(r.open,false);assert.equal(r.zoom,1.5);
+  Reader.prototype.setFocusLayout.call(r,false);assert.equal(r.open,initiallyOpen);assert.equal(r.zoom,1);
+  assert.deepEqual(toggles,initiallyOpen?[false,true]:[]);
+ }
 });
