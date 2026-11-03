@@ -70,8 +70,8 @@ export const setSkipSeconds=value=>savePref('skip',value);
 // The saved label ("00:01:02.345 → …") stays in the document for annotations and
 // time parsing; it is clipped and the short clock is drawn from data-clock.
 const DOC_STYLE='.subtitle-cue{display:flex;align-items:baseline;gap:.55em;padding:.12em .35em;border-bottom:0}'
-  +'.subtitle-time{position:relative;flex:none;width:3em;height:1.5em;margin:0;overflow:hidden;white-space:nowrap;color:transparent;cursor:pointer;border-radius:4px;user-select:none}'
-  +'[data-htmlmemo-yt-long] .subtitle-time{width:4.2em}'
+  +'.subtitle-time{position:relative;flex:none;width:5.2ch;height:1.5em;margin:0;overflow:hidden;white-space:nowrap;color:transparent;cursor:pointer;border-radius:4px;user-select:none}'
+  +'[data-htmlmemo-yt-long] .subtitle-time{width:7.2ch}'
   +'.subtitle-time::before{content:attr(data-clock);position:absolute;inset:0;color:var(--htmlmemo-reader-muted,#667085);line-height:1.5em;text-align:right}'
   +'.subtitle-time:hover::before{text-decoration:underline}'
   +'.subtitle-text{flex:1;min-width:0;margin:0}'
