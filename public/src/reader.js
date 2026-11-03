@@ -3133,7 +3133,7 @@ export class Reader {
     }catch(error){this.restoreTextSelection(target);throw error;}
     finally{this.selectionNotePending=false;}
   }
-  annotation(type, properties) { const highlight=type==='highlight'||type==='area';return {id:uid(), type, color:highlight?this.highlightColor:this.color, width:this.width, opacity:highlight?this.opacity:1, created:Date.now(), ...(this.pdf&&/^n\d+$/.test(properties.anchor||'')?{pdfPage:Number(properties.anchor.slice(1))}:{}), ...(FILL_TOOLS.includes(type)?{fill:this.rectFill===true,...(this.rectFill===true?{fillOpacity:this.opacity}:{})}:{}), ...(['note','text'].includes(type)&&validTextStyle(this.textStyle)?{style:validTextStyle(this.textStyle)}:{}), ...properties}; }
+  annotation(type, properties) { const highlight=type==='highlight'||type==='area';return {id:uid(), type, color:highlight?this.highlightColor:this.color, width:this.width, opacity:highlight?this.opacity:1, created:Date.now(), ...(this.pdf&&/^n\d+$/.test(properties.anchor||'')?{pdfPage:Number(properties.anchor.slice(1))}:{}), ...(FILL_TOOLS.includes(type)?{fill:this.rectFill===true,...(this.rectFill===true?{fillOpacity:this.opacity}:{})}:{}), ...(['note','text'].includes(type)&&validTextStyle(this.textStyle)?{style:validTextStyle(this.textStyle)}:{}), ...(['note','text'].includes(type)&&!this.pdf&&this.readingFontScale()!==1?{textScale:this.readingFontScale()}:{}), ...properties}; }
   /** Give the selected memo box or free text a style (one undoable edit). Returns whether one changed. */
   applyTextStyle(style) {
     const valid=validTextStyle(style),target=this.metadata.annotations.find(a=>a.id===this.selectedId);
@@ -3903,8 +3903,11 @@ export class Reader {
     }
     if (['note','text'].includes(annotation.type)) {
       const group = svg(this.doc, 'g', {'data-htmlmemo-id':annotation.id, style:'pointer-events:visiblePainted;cursor:pointer'});
-      const look=textLook(annotation),lines=textLines(annotation.text,look.chars),x=first.x,y=first.y;
-      if (look.boxed) group.append(svg(this.doc, 'rect', {x,y,width:Math.min(340*look.size/14,Math.max(130,Math.max(...lines.map(l=>l.length))*look.size*.86+look.pad*2)),height:lines.length*look.lineHeight+look.pad*2,rx:5,fill:look.background||'none',stroke:look.border||'none','stroke-width':look.border?1.5:0}));
+      // A− / A+ resize memo text with the document text; a memo written at another size keeps its proportion.
+      // PDF pages already scale as a whole. The line breaks stay, so the memo simply grows or shrinks.
+      const k=this.pdf?1:this.readingFontScale()/(annotation.textScale||1),base=textLook(annotation);
+      const look={...base,size:base.size*k,lineHeight:base.lineHeight*k,pad:base.pad*k,baseline:base.baseline*k},lines=textLines(annotation.text,look.chars),x=first.x,y=first.y;
+      if (look.boxed) group.append(svg(this.doc, 'rect', {x,y,width:Math.min(340*look.size/14,Math.max(130*k,Math.max(...lines.map(l=>l.length))*look.size*.86+look.pad*2)),height:lines.length*look.lineHeight+look.pad*2,rx:5*k,fill:look.background||'none',stroke:look.border||'none','stroke-width':look.border?1.5:0}));
       const text = svg(this.doc, 'text', {x:x+look.pad,y:y+look.pad+look.baseline,fill:look.color,'font-size':look.size,'font-weight':look.weight,'font-family':'system-ui,sans-serif'});
       lines.forEach((line,i) => { const span = svg(this.doc, 'tspan', {x:x+look.pad,dy:i===0?0:look.lineHeight}); span.textContent = line || ' '; text.append(span); }); group.append(text); return group;
     }
@@ -3930,7 +3933,7 @@ export class Reader {
       if(a.type==='pen' && geometry[i].basis && ((!a.penBasis && Math.abs(geometry[i].scale-1)>1e-6) || (!a.penBasis?.textAnchor && geometry[i].basis.textAnchor && geometry[i].textChanged))){a.penBasis={...geometry[i].basis};upgraded=true;}
     });
     const contentKey=JSON.stringify(drawings);
-    const layoutKey=JSON.stringify(geometry.map(({points,scale})=>({points,scale})));
+    const layoutKey=JSON.stringify([this.readingFontScale(),geometry.map(({points,scale})=>({points,scale}))]);
     if(!layer){
       layer=svg(this.doc,'svg',{id:LAYER_ID,'aria-label':'LibreMemo 주석',style:'position:absolute;top:0;left:0;z-index:2147483000;pointer-events:none;overflow:visible;'});
       layer.dataset.htmlmemoUi='';hostParent.append(layer);

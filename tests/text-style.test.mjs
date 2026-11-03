@@ -30,3 +30,19 @@ test('a style is kept only on memo boxes and free text, in documents and setting
   assert.equal(normalizePreferences({annotation:{textStyle:null}}).annotation.textStyle,undefined);
   assert.throws(()=>normalizePreferences({annotation:{textStyle:{size:5}}}),/스타일/);
 });
+test('A− / A+ resize memo text in proportion to the size it was written at',async()=>{
+  const {installDOM,documentFor}=await import('./dom.mjs');installDOM();
+  const {Reader}=await import('../public/src/reader.js');
+  const doc=documentFor('<html><body><p>x</p></body></html>');
+  const draw=(annotation,scale,pdf=null)=>Reader.prototype.drawAnnotation.call({doc,pdf,readingFontScale:()=>scale},{...base,...annotation,points:[{x:10,y:20}]},true);
+  const size=g=>Number(g.querySelector('text').getAttribute('font-size'));
+  assert.equal(size(draw({type:'note'},1)),14);
+  assert.equal(size(draw({type:'note'},1.21)),14*1.21);
+  assert.equal(size(draw({type:'text',textScale:1.21},1.21)),18,'written at 1.21, shown at 1.21');
+  assert.equal(size(draw({type:'text',textScale:1.21},1)),18/1.21);
+  assert.equal(size(draw({type:'note'},1.5,{})),14,'PDF pages scale as a whole');
+  const small=draw({type:'note'},1),big=draw({type:'note'},2);
+  assert.equal(Number(big.querySelector('rect').getAttribute('height')),2*Number(small.querySelector('rect').getAttribute('height')));
+  assert.equal(big.querySelector('rect').getAttribute('x'),small.querySelector('rect').getAttribute('x'),'the anchor point stays');
+  assert.throws(()=>validateAnnotations([{...base,type:'pen',textScale:1.2}]),/배율/);
+});
