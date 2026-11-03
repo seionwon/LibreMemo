@@ -74,14 +74,14 @@ test('real Chrome: Pages-only foliate annotations, hierarchical TOC, cross-links
         const host='.document-host:not([hidden])',bar=host+' .auto-scroll-bar',y=doc+'.defaultView.scrollY',before=await page.evaluate(y);
         await page.evaluate(doc+'.defaultView.scrollTo(0,0)');await page.click(host+' [data-action=reading-layout]');await page.waitFor('document.querySelector("'+host+' .reading-layout-panel")');
         await page.evaluate(`[...document.querySelectorAll('${host} .reading-panel-tabs button')].find(n=>n.textContent==='이동').click()`);
-        await page.evaluate(`(()=>{const s=document.querySelector('${host} .viewer-location-auto select');s.value='160';})()`);await page.click(host+' .viewer-location-start');
+        await page.evaluate(`(()=>{const s=document.querySelector('${host} .viewer-location-auto select');s.value='80';})()`);await page.click(host+' .viewer-location-start');
         await page.waitFor('!document.querySelector("'+host+' .reading-layout-panel")&&document.querySelector("'+bar+'")');await page.waitFor(y+'>40',8000);
         const barBox=await page.evaluate(`(()=>{const b=document.querySelector('${bar}').getBoundingClientRect(),h=document.querySelector('${host}').getBoundingClientRect();return {bottomGap:h.bottom-b.bottom,height:b.height,inside:b.left>=h.left&&b.right<=h.right};})()`);
         assert.ok(barBox.inside&&barBox.height<=60&&barBox.bottomGap>=0&&barBox.bottomGap<=40,JSON.stringify(barBox));
         await page.click(bar+' [data-auto=toggle]');await page.waitFor('document.querySelector("'+bar+'").hasAttribute("data-paused")');
         const pausedAt=await page.evaluate(y);await new Promise(r=>setTimeout(r,500));assert.equal(await page.evaluate(y),pausedAt,'paused stays put');
         assert.equal(await page.evaluate(`document.querySelector('${bar} [data-auto=toggle]').textContent`),'계속');
-        await page.click(bar+' [data-auto=slower]');assert.match(await page.evaluate(`document.querySelector('${bar} .auto-scroll-speed').textContent`),/^속도 8 \/ 9$/);
+        await page.click(bar+' [data-auto=slower]');assert.match(await page.evaluate(`document.querySelector('${bar} .auto-scroll-speed').textContent`),/^속도 6 \/ 9$/);
         await page.click(bar+' [data-auto=toggle]');await page.waitFor(y+'>'+(pausedAt+10),8000);
         await page.evaluate(doc+'.dispatchEvent(new WheelEvent("wheel",{deltaY:5,bubbles:true,cancelable:true}))');await page.waitFor('document.querySelector("'+bar+'")?.hasAttribute("data-paused")');
         await page.click(bar+' [data-auto=stop]');await page.waitFor('!document.querySelector("'+bar+'")');await page.evaluate(doc+'.defaultView.scrollTo(0,'+before+')');
