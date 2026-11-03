@@ -27,6 +27,9 @@ test('only the documented YouTube metadata survives',()=>{
   const kept=validateYouTube({videoId:'dQw4w9WgXcQ',playlistId:'PLUl4u3cNGP61Oq3tWYp6V_F-5jb5L2iHb',index:3,channel:'C',playlistTitle:'P',thumbnail:'data:image/jpeg;base64,AAAA',subtitle:{name:'a.srt',evil:1},script:'<x>'});
   assert.deepEqual(kept,{videoId:'dQw4w9WgXcQ',playlistId:'PLUl4u3cNGP61Oq3tWYp6V_F-5jb5L2iHb',index:3,playlistTitle:'P',channel:'C',thumbnail:'data:image/jpeg;base64,AAAA',subtitle:{name:'a.srt'}});
   assert.equal(validateYouTube({videoId:'dQw4w9WgXcQ',thumbnail:'https://evil.test/x.jpg'}).thumbnail,undefined);
+  const translated=validateYouTube({videoId:'dQw4w9WgXcQ',lang:'ko',translation:{from:'en',to:'ko',engine:'mymemory',done:120,total:520,extra:1}});
+  assert.deepEqual([translated.lang,translated.translation],['ko',{from:'en',to:'ko',engine:'mymemory',done:120,total:520}]);
+  assert.equal(validateYouTube({videoId:'dQw4w9WgXcQ',lang:'<x>',translation:{from:'en',to:'ko',engine:'evil',done:1,total:2}}).translation,undefined);
 });
 
 const SRT='1\n00:00:01,000 --> 00:00:03,500\nHello there\n\n2\n00:01:02,250 --> 00:01:04,000\nSecond line\n';

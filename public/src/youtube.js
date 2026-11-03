@@ -51,6 +51,11 @@ export function validateYouTube(value){
   // A small JPEG kept inline so card thumbnails also work offline.
   if(typeof value.thumbnail==='string'&&value.thumbnail.length<=400000&&/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(value.thumbnail))out.thumbnail=value.thumbnail;
   if(value.subtitle&&typeof value.subtitle==='object'&&text(value.subtitle.name,300))out.subtitle={name:text(value.subtitle.name,300)};
+  const code=v=>typeof v==='string'&&/^[a-z]{2,3}(?:-[A-Za-z]{2,4})?$/.test(v);
+  if(code(value.lang))out.lang=value.lang;
+  // How a translated subtitle was made, and how far the free daily amount got.
+  const t=value.translation;
+  if(t&&typeof t==='object'&&code(t.from)&&code(t.to)&&['browser','mymemory'].includes(t.engine)&&Number.isInteger(t.total)&&t.total>0&&t.total<=1000000&&Number.isInteger(t.done)&&t.done>=0&&t.done<=t.total)out.translation={from:t.from,to:t.to,engine:t.engine,done:t.done,total:t.total};
   return out;
 }
 
@@ -153,7 +158,7 @@ export async function subtitlesFromZip(bytes){
 // one video at a time. It cannot take the link in its address, so LibreMemo copies the
 // link to the clipboard and opens the page; the learner pastes it.
 export const SUBTITLE_SITE='https://www.collabpals.com/tools/youtube-subtitle-downloader';
-const PICK='「Language」에서 원하는 언어(한국어는 <b>Korean</b>, 자동 생성 자막은 「… (automatic)」)를 고르고, 「Format」은 <b>.srt</b> 그대로 둔 채 <b>Download .srt</b>를 누릅니다.';
+const PICK='「Language」에 원하는 언어(한국어는 <b>Korean</b>)가 있으면 그것을, 없으면 <b>English</b>(자동 생성이면 「English (automatic)」)를 고르고 <b>Download .srt</b>를 누릅니다. 다른 언어로 받은 자막은 LibreMemo가 위에서 고른 「원하는 자막 언어」로 번역해서 붙입니다.';
 
 // Shown in the YouTube dialog. Kept as data so tests can check every platform is covered.
 export const DOWNLOAD_GUIDES=[
