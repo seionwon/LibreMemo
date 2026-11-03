@@ -870,3 +870,14 @@ test('office page documents do not render synthetic page headings in the main pa
   assert.equal(a.r.scrollTop,1788);
   assert.equal(a.r.readingHeadingState().current,2);
 });
+
+test('YouTube outline timestamps take the subtitle time colour when the reader and app themes agree',()=>{
+  const a=sidebar();const yt={...a.r,metadata:{...a.r.metadata,youtube:{videoId:'dQw4w9WgXcQ'}},outline:()=>[{node:'h',level:1,title:'1:40 Then what'}],doc:{documentElement:{}},resolvedReadingTheme:()=>'dark',readingTheme:()=>'dark'};
+  a.context.getComputedStyle=()=>({getPropertyValue:name=>name==='--htmlmemo-reader-muted'?' #a5adbc':''});
+  a.doc.documentElement.dataset.theme='dark';a.setReader(yt);a.open('outline');
+  const panel=a.doc.querySelector('#sidebar');
+  assert.equal(panel.hasAttribute('data-youtube-outline'),true);assert.equal(panel.style.getPropertyValue('--youtube-time'),'#a5adbc');
+  assert.equal(panel.querySelector('.outline-time')?.textContent,'1:40');assert.equal(panel.querySelector('.outline-item').textContent,'1:40 Then what');
+  a.doc.documentElement.dataset.theme='light';a.context.youtubeOutlineStyle(panel,yt);assert.equal(panel.style.getPropertyValue('--youtube-time')||'','','a dark reader beside a light sidebar falls back to the sidebar grey');
+  a.setReader(a.r);a.open('outline');assert.equal(panel.hasAttribute('data-youtube-outline'),false,'ordinary documents keep the outline prefix colour');
+});

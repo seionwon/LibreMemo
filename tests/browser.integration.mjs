@@ -1592,6 +1592,9 @@ test('real Chrome: compact library shares titles and sources, keeps dense views 
         return {clock:getComputedStyle(t,'::before').content,sameRow:Math.abs(rt.top-rx.top)<6,beside:rx.left>=rt.right-1,fits:need<=rt.width+.5,need:Math.round(need*10)/10,width:Math.round(rt.width*10)/10,wrappedBeside:rx.height<=rt.height*1.2||rx.left>=rt.right-1};});
       f.remove();return rows;})()`);
     assert.deepEqual(ytRows.map(r=>r.clock),['"0:01"','"1:02:03"']);assert.ok(ytRows.every(r=>r.sameRow&&r.beside&&r.fits&&r.wrappedBeside),JSON.stringify(ytRows));
+    // Sidebar timestamps of a YouTube outline use the subtitle time colour; the current one is red like the playing cue.
+    const ytOutline=await page.evaluate(`(()=>{const box=document.createElement('section');box.setAttribute('data-htmlmemo-native-sidebar','');box.setAttribute('data-youtube-outline','');box.style.setProperty('--youtube-time','#57606a');box.innerHTML='<button class="outline-item"><span class="outline-time">1:40</span> Then</button><button class="outline-item" aria-current="true"><span class="outline-time">2:00</span> Now</button>';document.body.append(box);const c=[...box.querySelectorAll('.outline-time')].map(n=>getComputedStyle(n).color);box.remove();return c;})()`);
+    assert.deepEqual(ytOutline,['rgb(87, 96, 106)','rgb(211, 47, 47)']);
     assert.equal(await page.evaluate('!!document.querySelector("#data-folder-card,#library-data-folder,#data-folder-summary,#data-folder-description")'),false);
     const filenameMetrics=[];
     for(const width of [1280,800,600,390,320]){

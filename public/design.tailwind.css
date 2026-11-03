@@ -858,3 +858,5 @@ summary:focus-visible{outline:2px solid var(--green);outline-offset:3px}
 .auto-scroll-speed{min-width:58px;text-align:center;font-variant-numeric:tabular-nums;font-size:12px}
 @media (max-width:520px){.auto-scroll-state,.auto-scroll-bar [data-auto=stop] span{display:none}.auto-scroll-speed{min-width:44px}}
 .viewer-location-start{min-height:32px;padding:0 12px;border:1px solid var(--green);border-radius:6px;background:var(--green);color:var(--on-green);cursor:pointer}.viewer-location-start:disabled{opacity:.5;cursor:default}
+:is(#sidebar,[data-htmlmemo-doc-sidebar-ui],[data-htmlmemo-native-sidebar])[data-youtube-outline] .outline-time{color:var(--youtube-time,var(--muted));font-variant-numeric:tabular-nums}
+:is(#sidebar,[data-htmlmemo-doc-sidebar-ui],[data-htmlmemo-native-sidebar])[data-youtube-outline] [aria-current] .outline-time{color:#d32f2f}

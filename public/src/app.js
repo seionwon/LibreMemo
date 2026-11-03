@@ -242,7 +242,7 @@ function settingsDialog() {
     $('#settings-save').onclick=safely(saveSettingsBackup);$('#settings-load').onclick=safely(importSettingsBackup);$('#settings-reload').onclick=safely(async()=>{await restoreSettings(settingsFileHandle);settingsDialog();});
   });
 }
-function applyTheme(theme) { document.documentElement.dataset.theme=theme==='system'?(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):theme;stopAppSidebarResize();applyAppSidebarWidth();for(const tab of tabs){if(tab.reader?.documentSidebarUI)styleNativeSidebar(tab.reader.documentSidebarUI);tab.reader?.syncSourceThemeControls?.();tab.reader?.updateReadingControls?.();} }
+function applyTheme(theme) { document.documentElement.dataset.theme=theme==='system'?(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):theme;stopAppSidebarResize();applyAppSidebarWidth();for(const tab of tabs){if(tab.reader?.documentSidebarUI)styleNativeSidebar(tab.reader.documentSidebarUI);if(tab.reader&&$('#sidebar').annotationReader===tab.reader)youtubeOutlineStyle($('#sidebar'),tab.reader);tab.reader?.syncSourceThemeControls?.();tab.reader?.updateReadingControls?.();} }
 function applyToolbarPosition(){const bar=$('#toolbar'),p=preferences.toolbarPosition;if(!p){bar.style.left='50%';bar.style.top='';bar.style.bottom='';bar.style.transform='';return;}bar.style.transform='none';bar.style.bottom='auto';bar.style.left=(8+p.x*Math.max(0,innerWidth-bar.offsetWidth-16))+'px';bar.style.top=(8+p.y*Math.max(0,innerHeight-bar.offsetHeight-42))+'px';}
 function changePreferences(patch){preferences=storePreferences({...preferences,...patch,annotation:{...preferences.annotation,...patch.annotation}},localStorage);dataFolder?.schedule({settingsOnly:true});applyTheme(preferences.theme);$('#library-sort').value=preferences.librarySort+':'+preferences.librarySortDirection;for(const tab of tabs)if(tab.reader)Object.assign(tab.reader,preferences.annotation);applyToolbarPosition();renderLibrary();if(reader())updateToolbarState();}
 async function restoreSettings(input){
@@ -576,7 +576,7 @@ async function openRecord(record, prepared = null, {deferReady = false, sourceId
     sourceKey:record.contentKey||record.sourceIdentity?.digest||record.id,
     onChange:()=>{tab.queue.schedule();tab.checkpoints.schedule();if(activeId===tab.id){renderToolbar();if(['annotations','bookmarks','outline'].includes(sidebarMode))renderSidebar(sidebarMode);else updateSidebarCounts($('#sidebar'),tab.reader);tab.reader?.refreshDocumentSidebar();}},
     onAnnotationInput:()=>tab.checkpoints.activity(),
-    onPosition:()=>{tab.queue.schedule({background:true});renderFolderState();},onSourceSettings:()=>{tab.queue.schedule({background:true});void tab.queue.flush().catch(showError);},onView:()=>{if(activeId===tab.id){updateChrome();updateToolbarState();updateOutlineLocation($('#sidebar'),tab.reader);}},
+    onPosition:()=>{tab.queue.schedule({background:true});renderFolderState();},onSourceSettings:()=>{tab.queue.schedule({background:true});void tab.queue.flush().catch(showError);},onView:()=>{for(const panel of [$('#sidebar'),tab.reader?.doc?.querySelector?.('[data-htmlmemo-doc-sidebar-ui]')])if(panel&&panel.annotationReader===tab.reader)youtubeOutlineStyle(panel,tab.reader);if(activeId===tab.id){updateChrome();updateToolbarState();updateOutlineLocation($('#sidebar'),tab.reader);}},
     onPreferenceChange:()=>dataFolder?.schedule({settingsOnly:true}),
     onTextSelection:()=>{if(activeId===tab.id)showSelectionMenu(tab.reader);},
     onSelectionDismiss:()=>{if(popoverName==='selection'||popoverName.startsWith('tool-mode-'))closePopover();},
@@ -1795,7 +1795,10 @@ function renderOutlineTree(outline,r){
     while(stack.length&&stack.at(-1).level>=node.level)stack.pop();
     (stack.at(-1)?.children||roots).push(node);stack.push(node);
   });
-  const row=item=>`<button class="outline-item" data-heading="${item.index}"${isSecurityWarning(item.title)?' data-htmlmemo-security-warning':''} title="${esc(item.title)}">${isSecurityWarning(item.title)?esc(item.title):formatOutlineTitle(item.title)}</button>`;
+  const yt=!!r?.metadata?.youtube;
+  // A YouTube outline title starts with its timestamp ("1:40 Then what…").
+  const label=title=>{if(isSecurityWarning(title))return esc(title);const m=yt&&/^((?:\d+:)?\d{1,2}:\d{2})(\s+[\s\S]*)?$/.exec(title);return m?`<span class="outline-time">${esc(m[1])}</span>${esc(m[2]||'')}`:formatOutlineTitle(title);};
+  const row=item=>`<button class="outline-item" data-heading="${item.index}"${isSecurityWarning(item.title)?' data-htmlmemo-security-warning':''} title="${esc(item.title)}">${label(item.title)}</button>`;
   const branch=item=>item.children.length?`<details class="outline-group" data-outline-group="${item.index}"${r.outlineTreeOpen.get(String(item.index))?' open':''}><summary>${row(item)}</summary><div class="outline-group-body">${item.children.map(branch).join('')}</div></details>`:row(item);
   return `<div class="sidebar-outline-tree">${roots.map(branch).join('')}</div>`;
 }
@@ -1836,9 +1839,22 @@ function styleNativeSidebar(panel) {
   for(const name of names)panel.style.setProperty(name,theme.getPropertyValue(name));
   const style=doc.getElementById('htmlmemo-doc-sidebar-style');style.sidebarRules??=style.textContent;
   style.textContent=style.sidebarRules+'\n[data-htmlmemo-native-sidebar],[data-htmlmemo-toc-resizer],[data-htmlmemo-toc-resizer-bound]{'+names.map(name=>name+':'+theme.getPropertyValue(name)).join(';')+'}';
+  if(panel.annotationReader)youtubeOutlineStyle(panel,panel.annotationReader);
+}
+// YouTube outline timestamps ("1:40 …") take the colour of the subtitle times
+// beside the text: the reader's muted ink when its light/dark matches the
+// sidebar's, otherwise the sidebar's own muted ink so it stays legible.
+function youtubeOutlineStyle(panel,r){
+  const yt=!!r?.metadata?.youtube;
+  panel.toggleAttribute('data-youtube-outline',yt);
+  if(!yt){panel.style.removeProperty('--youtube-time');return;}
+  const readerDark=r.resolvedReadingTheme?.()==='dark'&&r.readingTheme?.()!=='sepia',appDark=document.documentElement.dataset.theme==='dark';
+  const muted=r.doc?.documentElement?getComputedStyle(r.doc.documentElement).getPropertyValue('--htmlmemo-reader-muted').trim():'';
+  if(muted&&readerDark===appDark)panel.style.setProperty('--youtube-time',muted);else panel.style.removeProperty('--youtube-time');
 }
 function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=reader(),focusSearch=true}={}) {
   const r=documentReader;if(!r)return;
+  youtubeOutlineStyle(panel,r);
   if(!embedded)stopAppSidebarResize();
   const outline=embedded?[]:r.outline();
   if(embedded&&$('#sidebar').annotationReader===r)closeSidebar({remember:false,clearSearch:false});
