@@ -80,8 +80,23 @@ export function parseSubtitles(text,format,warnings=[]){
  * Cues grouped into outline sections: 5-minute spans, or the given `sections`
  * ({start in ms, title}, sorted) such as a video's chapters.
  */
-export function renderSubtitles(text,format,warnings=[],{sections=null}={}){
-  const cues=parseSubtitles(text,format,warnings),parts=['<article class="office-subtitles" data-subtitles>'];let group=-1;
+/**
+ * Machine-translated captions often start a cue with the previous sentence's
+ * punctuation (". 저는…"). Move it back to the end of the cue before; a cue
+ * left with nothing else is dropped.
+ */
+export function mendCuePunctuation(cues){
+  const out=[];
+  for(const cue of cues){
+    const m=out.length?/^\s*([.,!?…。，、？！;:]+)(?=\s|$)\s*/.exec(cue.text):null;
+    if(!m){out.push({...cue});continue;}
+    const prev=out.at(-1);prev.text=prev.text.replace(/\s+$/,'')+m[1];
+    const rest=cue.text.slice(m[0].length);if(rest.trim())out.push({...cue,text:rest});
+  }
+  return out;
+}
+export function renderSubtitles(text,format,warnings=[],{sections=null,mend=false}={}){
+  const parsed=parseSubtitles(text,format,warnings),cues=mend?mendCuePunctuation(parsed):parsed,parts=['<article class="office-subtitles" data-subtitles>'];let group=-1;
   const sectionOf=start=>{if(!sections?.length)return Math.floor(start/300000);let at=0;while(at+1<sections.length&&sections[at+1].start<=start)at++;return at;};
   const titleOf=group=>sections?.length?esc(sections[group].title):subtitleTime(group*300000)+' – '+subtitleTime((group+1)*300000);
   for(const cue of cues){

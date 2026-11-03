@@ -6,7 +6,7 @@
 // the subtitle file. The video plays from YouTube; the subtitle becomes an ordinary
 // LibreMemo subtitle document, so highlights, notes, bookmarks, search and export
 // all work exactly as for any other document.
-import {renderSubtitles,parseSubtitles} from './office-subtitles.js';
+import {renderSubtitles,parseSubtitles,mendCuePunctuation} from './office-subtitles.js';
 import {officeHTML,esc} from './office-common.js';
 
 export const SUBTITLE_FORMATS=['srt','vtt','smi','sami','ass','ssa'];
@@ -122,8 +122,8 @@ export function youtubeDocumentHTML(title,subtitle=null,warnings=[],{chapters=[]
   let body;
   if(subtitle){
     // Without a known length, the subtitle's last cue gives it.
-    const cues=parseSubtitles(subtitle.text,subtitle.format),length=duration||Math.max(0,...cues.map(c=>(c.end??c.start)/1000));
-    body=renderSubtitles(subtitle.text,subtitle.format,warnings,{sections:chapters.length?outlineSections(length,chapters):withFirstWords(outlineSections(length),cues)});
+    const cues=mendCuePunctuation(parseSubtitles(subtitle.text,subtitle.format)),length=duration||Math.max(0,...cues.map(c=>(c.end??c.start)/1000));
+    body=renderSubtitles(subtitle.text,subtitle.format,warnings,{mend:true,sections:chapters.length?outlineSections(length,chapters):withFirstWords(outlineSections(length),cues)});
   }else body=STYLE+'<article class="office-subtitles youtube-empty" data-youtube-empty><strong>아직 자막이 없습니다.</strong><p>위쪽 영상 막대의 「자막 붙이기」로 이 영상의 자막 파일(.srt)을 고르면, 영상과 함께 움직이는 자막에 형광펜·메모·북마크를 달 수 있습니다. 받는 방법은 내 서재 → 유튜브의 「자막 파일 받는 방법」에 있습니다.</p></article>';
   return officeHTML(title,body,warnings);
 }

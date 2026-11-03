@@ -160,3 +160,14 @@ test('dragging the strip under the video bar sets the video height, remembered a
     pane.classList.add('youtube-collapsed');handle.onpointerdown({button:0,pointerId:6,clientY:0,preventDefault(){}});assert.equal(pane.classList.contains('youtube-resizing'),false,'no drag while folded');
   }finally{globalThis.window=saved.window;globalThis.localStorage=saved.localStorage;}
 });
+
+test('punctuation that machine translation pushes to the next cue goes back to the end of the cue before',async()=>{
+  const {mendCuePunctuation}=await import('../public/src/office-subtitles.js');
+  const cue=(start,text)=>({start,end:start+1000,text});
+  assert.deepEqual(mendCuePunctuation([cue(0,'미국에 오게 되었습니다'),cue(2000,'. 저는 그저 호기심 많은 사람이었을 뿐입니다. 저는 처음부터'),cue(5000,'교수가 되려고 마음먹은 건 아니었어요'),cue(8000,'. 저는 배우는 걸 좋아하고'),cue(9000,' ?'),cue(9500,'...그래서')]).map(c=>c.text),
+    ['미국에 오게 되었습니다.','저는 그저 호기심 많은 사람이었을 뿐입니다. 저는 처음부터','교수가 되려고 마음먹은 건 아니었어요.','저는 배우는 걸 좋아하고?','...그래서']);
+  assert.deepEqual(mendCuePunctuation([cue(0,'. 처음')]).map(c=>c.text),['. 처음'],'the first cue has nothing before it');
+  const srt='1\n00:02:30,000 --> 00:02:32,000\n결국 미국에 오게 되었습니다\n\n2\n00:02:32,000 --> 00:02:35,000\n. 저는 그저 호기심 많은 사람이었을 뿐입니다\n';
+  const doc=new DOMParser().parseFromString(youtubeDocumentHTML('Video',{text:srt,format:'srt'}),'text/html');
+  assert.deepEqual([...doc.querySelectorAll('.subtitle-text')].map(n=>n.textContent),['결국 미국에 오게 되었습니다.','저는 그저 호기심 많은 사람이었을 뿐입니다']);
+});
