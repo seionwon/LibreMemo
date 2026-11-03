@@ -76,11 +76,17 @@ export function parseSubtitles(text,format,warnings=[]){
   if(invalid)warnings.push('시간이나 형식이 맞지 않는 자막 '+invalid+'개를 생략했습니다. 원본 파일에서 확인해주세요.');
   return cues.map((cue,index)=>({...cue,index})).sort((a,b)=>a.start-b.start||a.index-b.index);
 }
-export function renderSubtitles(text,format,warnings=[]){
+/**
+ * Cues grouped into outline sections: 5-minute spans, or the given `sections`
+ * ({start in ms, title}, sorted) such as a video's chapters.
+ */
+export function renderSubtitles(text,format,warnings=[],{sections=null}={}){
   const cues=parseSubtitles(text,format,warnings),parts=['<article class="office-subtitles" data-subtitles>'];let group=-1;
+  const sectionOf=start=>{if(!sections?.length)return Math.floor(start/300000);let at=0;while(at+1<sections.length&&sections[at+1].start<=start)at++;return at;};
+  const titleOf=group=>sections?.length?esc(sections[group].title):subtitleTime(group*300000)+' – '+subtitleTime((group+1)*300000);
   for(const cue of cues){
-    const next=Math.floor(cue.start/300000);
-    if(next!==group){if(group>=0)parts.push('</section>');group=next;parts.push('<section id="subtitle-section-'+group+'"><h2 data-tts-skip>'+subtitleTime(group*300000)+' – '+subtitleTime((group+1)*300000)+'</h2>');}
+    const next=sectionOf(cue.start);
+    if(next!==group){if(group>=0)parts.push('</section>');group=next;parts.push('<section id="subtitle-section-'+group+'"><h2 data-tts-skip>'+titleOf(group)+'</h2>');}
     parts.push('<div class="subtitle-cue" id="subtitle-cue-'+cue.index+'"><p class="subtitle-time" data-tts-skip>'+subtitleTime(cue.start,true)+(cue.end!=null?' → '+subtitleTime(cue.end,true):'')+'</p><p class="subtitle-text">'+(cue.speaker?'<strong>'+esc(cue.speaker)+'</strong> · ':'')+esc(cue.text).replace(/\n/g,'<br>')+'</p></div>');
   }
   parts.push('</section></article>');return parts.join('');

@@ -90,8 +90,7 @@ export class YouTubePane {
         <span class="youtube-clock" data-yt="clock">0:00</span>
         <button type="button" class="youtube-button" data-yt="follow" aria-pressed="true" title="재생 중인 자막을 따라 화면을 움직입니다">${icon('list',15)}<span>따라가기</span></button>
         <button type="button" class="youtube-button" data-yt="mark" title="지금 장면을 북마크">${icon('bookmark',15)}<span>이 장면 북마크</span></button>
-        <button type="button" class="youtube-button" data-yt="fetch" title="이 영상의 주소를 복사하고 무료 자막 사이트를 엽니다">${icon('download',15)}<span>자막 받기</span></button>
-        <button type="button" class="youtube-button" data-yt="continue" title="무료 번역의 하루 양이 차서 남은 대사를 이어서 번역합니다" hidden>${icon('reload',15)}<span>번역 이어 하기</span></button>
+        <button type="button" class="youtube-button" data-yt="chapters" title="영상 설명란의 챕터를 붙여넣어 목차로 쓰기">${icon('list',15)}<span>목차</span></button>
         <button type="button" class="youtube-button" data-yt="attach" title="자막 파일(.srt, .vtt 등) 붙이기">${icon('subtitles',15)}<span>${this.hasCues()?'자막 바꾸기':'자막 붙이기'}</span></button>
         <span class="youtube-nav"><button type="button" class="youtube-button" data-yt="prev" title="재생목록의 이전 영상" aria-label="이전 영상" hidden>${icon('back',15)}</button><button type="button" class="youtube-button" data-yt="next" title="재생목록의 다음 영상" aria-label="다음 영상" hidden>${icon('forward',15)}</button></span>
         <button type="button" class="youtube-button" data-yt="size" aria-pressed="false" title="영상 접기">${icon('chevron-down',15)}</button>
@@ -105,8 +104,7 @@ export class YouTubePane {
     $('rate').onchange=event=>{const value=Number(event.target.value);savePref('rate',value);this.player?.setPlaybackRate?.(value);};
     $('follow').onclick=()=>{this.follow=!this.follow;$('follow').setAttribute('aria-pressed',String(this.follow));this.quietUntil=0;if(this.follow)this.reveal(true);};
     $('mark').onclick=()=>this.bookmark();
-    $('fetch').onclick=()=>callbacks.onFetch();$('continue').onclick=()=>callbacks.onContinue();
-    const t=this.youtube.translation;if(t&&t.done<t.total){$('continue').hidden=false;$('continue').title=`${t.total}줄 중 ${t.done}줄까지 번역했습니다. 남은 대사를 이어서 번역합니다.`;}$('attach').onclick=()=>callbacks.onAttach();
+    $('chapters').onclick=()=>callbacks.onChapters();$('attach').onclick=()=>callbacks.onAttach();
     $('prev').onclick=()=>callbacks.onNavigate(-1);$('next').onclick=()=>callbacks.onNavigate(1);
     $('size').onclick=()=>{const small=pane.classList.toggle('youtube-collapsed');$('size').setAttribute('aria-pressed',String(small));$('size').title=small?'영상 펼치기':'영상 접기';};
     // Scrolling by hand pauses "follow" briefly instead of fighting the reader.

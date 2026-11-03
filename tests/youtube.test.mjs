@@ -4,7 +4,7 @@ import { installDOM } from './dom.mjs';
 import { zipFiles } from '../public/src/zip.js';
 import { parseHTML, serializeHTML } from '../public/src/document.js';
 import { validThumbnail } from '../public/src/model.js';
-import { parseYouTubeInput, parseStart, validateYouTube, youtubeDocumentHTML, cueTimes, cueAt, clock, playlistFolderName, matchSubtitleFiles, subtitlesFromZip, decodeSubtitle, subtitleFormat, SUBTITLE_SITE, DOWNLOAD_GUIDES, guideHTML } from '../public/src/youtube.js';
+import { parseYouTubeInput, parseStart, validateYouTube, youtubeDocumentHTML, cueTimes, cueAt, clock, playlistFolderName, matchSubtitleFiles, subtitlesFromZip, decodeSubtitle, subtitleFormat, parseChapters, outlineSections, MAC_GUIDE, SUBTITLE_EXTENSION, guideHTML } from '../public/src/youtube.js';
 installDOM();
 
 test('YouTube links of every common shape give the video, playlist and start time',()=>{
@@ -27,9 +27,7 @@ test('only the documented YouTube metadata survives',()=>{
   const kept=validateYouTube({videoId:'dQw4w9WgXcQ',playlistId:'PLUl4u3cNGP61Oq3tWYp6V_F-5jb5L2iHb',index:3,channel:'C',playlistTitle:'P',thumbnail:'data:image/jpeg;base64,AAAA',subtitle:{name:'a.srt',evil:1},script:'<x>'});
   assert.deepEqual(kept,{videoId:'dQw4w9WgXcQ',playlistId:'PLUl4u3cNGP61Oq3tWYp6V_F-5jb5L2iHb',index:3,playlistTitle:'P',channel:'C',thumbnail:'data:image/jpeg;base64,AAAA',subtitle:{name:'a.srt'}});
   assert.equal(validateYouTube({videoId:'dQw4w9WgXcQ',thumbnail:'https://evil.test/x.jpg'}).thumbnail,undefined);
-  const translated=validateYouTube({videoId:'dQw4w9WgXcQ',lang:'ko',translation:{from:'en',to:'ko',engine:'mymemory',done:120,total:520,extra:1}});
-  assert.deepEqual([translated.lang,translated.translation],['ko',{from:'en',to:'ko',engine:'mymemory',done:120,total:520}]);
-  assert.equal(validateYouTube({videoId:'dQw4w9WgXcQ',lang:'<x>',translation:{from:'en',to:'ko',engine:'evil',done:1,total:2}}).translation,undefined);
+  assert.deepEqual(validateYouTube({videoId:'dQw4w9WgXcQ',chapters:[{t:83.4,title:' Setup '},{t:0,title:'Intro'},{t:5,title:''},{t:-1,title:'x'}]}).chapters,[{t:0,title:'Intro'},{t:83,title:'Setup'}]);
 });
 
 const SRT='1\n00:00:01,000 --> 00:00:03,500\nHello there\n\n2\n00:01:02,250 --> 00:01:04,000\nSecond line\n';
@@ -80,15 +78,27 @@ test('subtitle files inside a zip are read; other entries are ignored',async()=>
   assert.equal(decodeSubtitle(new Uint8Array([0xc7,0xd1])),'한');
 });
 
-test('the download guide covers every platform and opens the site with the link filled in',()=>{
-  assert.deepEqual(DOWNLOAD_GUIDES.map(g=>g.id),['mac','pc','android','iphone']);
-  for(const guide of DOWNLOAD_GUIDES)assert.ok(guide.steps.length>=3);
-  assert.match(guideHTML(),/data-guide="iphone" hidden/);
-  assert.equal(SUBTITLE_SITE,'https://www.collabpals.com/tools/youtube-subtitle-downloader');
-  for(const guide of DOWNLOAD_GUIDES)assert.match(guide.steps.join(' '),/Korean[\s\S]*Download \.srt/);
-  // CollabPals names files after the title, with the language last.
-  const {matches}=matchSubtitleFiles([{name:'inside-the-mind-of-a-master-procrastinator-tim-urban-ted-ko.srt'}],[{videoId:'arj7oStGLkU',title:'Inside the Mind of a Master Procrastinator | Tim Urban | TED'}]);
-  assert.equal(matches.get('arj7oStGLkU')?.name,'inside-the-mind-of-a-master-procrastinator-tim-urban-ted-ko.srt');
+test('the Mac guide uses the subtitle extension and the automatic translation YouTube shows',()=>{
+  assert.equal(SUBTITLE_EXTENSION,'https://chromewebstore.google.com/detail/ognjcegpcoafidcfbepkfgnolnnibcjp');
+  const text=MAC_GUIDE.join(' ');
+  for(const words of ['YouTube Subtitle Downloader','자동 번역','한국어','SRT','챕터','자막 파일 고르기'])assert.ok(text.includes(words),words);
+  assert.doesNotMatch(guideHTML(),/collabpals|data-guide-tab/i);
+});
+
+test('chapters pasted from a description become the outline; otherwise timestamps by length',()=>{
+  assert.deepEqual(parseChapters('Today we learn.\n0:00 Intro\n1:23 - Setup part\n(12:05) Loops\nFunctions 1:02:03\n9:99 bad\nno time'),
+    [{t:0,title:'Intro'},{t:83,title:'Setup part'},{t:725,title:'Loops'},{t:3723,title:'Functions'}]);
+  assert.deepEqual(parseChapters('0:30 only one'),[]);
+  assert.equal(parseChapters('0:15 A\n2:00 B')[0].t,0,'the first chapter starts the video');
+  assert.deepEqual(outlineSections(1080).map(s=>s.title),['0:00','1:48','3:36','5:24','7:12','9:00','10:48','12:36','14:24','16:12']);
+  assert.deepEqual(outlineSections(185).map(s=>s.title),['0:00','1:00','2:00','3:00']);
+  assert.deepEqual(outlineSections(600).map(s=>s.start/1000),[0,60,120,180,240,300,360,420,480,540]);
+  assert.deepEqual(outlineSections(1080,[{t:0,title:'Intro'},{t:83,title:'Setup'}]),[{start:0,title:'0:00 Intro'},{start:83000,title:'1:23 Setup'}]);
+  const srt=Array.from({length:6},(_,i)=>`${i+1}\n00:0${i}:10,000 --> 00:0${i}:20,000\nLine ${i}\n`).join('\n');
+  const timed=new DOMParser().parseFromString(youtubeDocumentHTML('V',{text:srt,format:'srt'}),'text/html');
+  assert.deepEqual([...timed.querySelectorAll('h2')].map(h=>h.textContent),['0:00','1:00','2:00','3:00','4:00','5:00']);
+  const chaptered=new DOMParser().parseFromString(youtubeDocumentHTML('V',{text:srt,format:'srt'},[],{chapters:[{t:0,title:'Intro'},{t:150,title:'Main'}]}),'text/html');
+  assert.deepEqual([...chaptered.querySelectorAll('section')].map(s=>[s.querySelector('h2').textContent,s.querySelectorAll('.subtitle-cue').length]),[['0:00 Intro',3],['2:30 Main',3]]);
 });
 
 test('a card picture is kept on export only when it is a small inline image',()=>{

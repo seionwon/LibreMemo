@@ -22,8 +22,7 @@ import { openDeviceSync } from './sync-ui.js';
 import {openHelp} from './help.js';
 import { DataFolder, supportsDataFolder, CHROME_REQUIRED_MESSAGE, createStorageSubfolder, storageFolderName } from './data-folder.js';
 import {validateFolders,folderPath,folderDescendants,editLibraryFolders,LibraryIndex} from './library-folders.js';
-import {LANGUAGES,languageName,toLanguage,defaultLanguage,guessLanguage,needsTranslation,cuesOf,sentenceCues,toSRT,browserTranslator,detectLatin,translateTexts} from './translate.js';
-import {parseYouTubeInput,cueTimes,youtubeDocumentHTML,subtitleFormat,decodeSubtitle,matchSubtitleFiles,subtitlesFromZip,playlistFolderName,watchURL,playlistURL,SUBTITLE_SITE,guideHTML,validateYouTube} from './youtube.js';
+import {parseYouTubeInput,parseChapters,cueTimes,clock,youtubeDocumentHTML,subtitleFormat,decodeSubtitle,matchSubtitleFiles,subtitlesFromZip,playlistFolderName,watchURL,SUBTITLE_EXTENSION,guideHTML,validateYouTube} from './youtube.js';
 
 const PUBLIC_APP_URL = publicAppURL(location);
 for(const template of $$('#about-content,#export-guide-content'))template.innerHTML=template.innerHTML.replaceAll('https://seionwon.github.io/LibreMemo/',PUBLIC_APP_URL);
@@ -857,7 +856,6 @@ function imagePasteDialog(){
 // with the player above it. The learner brings the subtitle file; see youtube.js.
 const youtubeUI=()=>import('./youtube-ui.js');
 const SUBTITLE_ACCEPT='.srt,.vtt,.smi,.sami,.ass,.ssa,.zip';
-function guidePlatform(){const ua=navigator.userAgent;return /iPhone|iPad|iPod/.test(ua)||/Macintosh/.test(ua)&&navigator.maxTouchPoints>1?'iphone':/Android/.test(ua)?'android':/Macintosh|Mac OS X/.test(ua)?'mac':'pc';}
 async function pickSubtitleFiles(multiple=true){
   if(openPicker()){
     try{const handles=await window.showOpenFilePicker({multiple,types:[{description:'자막 파일',accept:{'text/plain':['.srt','.vtt','.smi','.sami','.ass','.ssa'],'application/zip':['.zip']}}]});return await Promise.all(handles.map(handle=>handle.getFile()));}
@@ -880,35 +878,8 @@ async function readSubtitleFiles(files){
   }
   return {subtitles:out,skipped};
 }
-const youtubeLanguage=()=>{try{const saved=localStorage.getItem('librememo-youtube-lang');if(LANGUAGES.some(([code])=>code===saved))return saved;}catch{}return defaultLanguage(navigator.languages||[navigator.language]);};
-/** On-device translators by language pair, made once (creating one may download a model and needs the click that started the work). */
-function subtitleTranslators(say=()=>{}){
-  const made=new Map();
-  const get=(from,to)=>{const key=from+'>'+to;if(!made.has(key))made.set(key,browserTranslator(from,to,loaded=>say(`${languageName(to)} 번역 모델을 받는 중… ${Math.round(loaded*100)}%`)));return made.get(key);};
-  return {get,
-    /** Start every translator these subtitles will need now, while the click still counts. */
-    prewarm:(subtitles,to)=>Promise.all(subtitles.map(s=>{const from=guessLanguage(s.name,s.text);return needsTranslation(from,to)===false||!from?null:get(from==='latin'?'en':from,to);}))};
-}
-/**
- * The subtitle in the learner's language: unchanged when it already is, otherwise its cue
- * texts translated with the same timings. `translation` records how far it got (the free
- * service has a daily limit) so the rest can be continued later.
- */
-async function localizeSubtitle(subtitle,target,translators,say=()=>{},{start=0,from=null}={}){
-  from||=guessLanguage(subtitle.name,subtitle.text);
-  // Continuing a translation keeps the cues as they are; a new one translates whole sentences.
-  const cues=start?cuesOf(subtitle):sentenceCues(cuesOf(subtitle));
-  let need=needsTranslation(from,target);
-  if(from==='latin'){from=await detectLatin(cues.slice(0,80).map(c=>c.text).join('\n'));need=need??needsTranslation(from,target);}
-  if(!need||!cues.length)return {subtitle,translation:null};
-  const translator=await translators.get(from,target);
-  const result=await translateTexts(cues.map(c=>c.text),{from,to:target,translator,start,onProgress:(done,total)=>say(`자막을 ${toLanguage(languageName(target))} 번역하는 중… ${done}/${total}`)});
-  const name=subtitle.name.replace(/\.[a-z0-9]+$/i,'').replace(/[.\-_](?:[a-z]{2,3}(?:-[a-z]{2,4})?)$/i,'')+'.'+target+'.srt';
-  return {subtitle:{name,text:toSRT(cues.map((c,i)=>({...c,text:result.texts[i]}))),format:'srt'},translation:{from,to:target,engine:translator?'browser':'mymemory',done:result.done,total:cues.length},quota:!!result.quota};
-}
-const translationNote=translation=>!translation?'':translation.done<translation.total?` 무료 번역은 하루에 쓸 수 있는 양이 정해져 있어 ${translation.total}줄 중 ${translation.done}줄까지 번역했습니다. 나머지는 영상 막대의 「번역 이어 하기」로 이어서 번역하세요.`:` 자막을 ${toLanguage(languageName(translation.to))} 번역했습니다.`;
 async function saveYouTubeRecord({title,youtube,subtitle=null,folderId=libraryFolderId,created=Date.now(),mediaTime=0}){
-  const warnings=[],html=youtubeDocumentHTML(title,subtitle,warnings);
+  const warnings=[],html=youtubeDocumentHTML(title,subtitle,warnings,{chapters:youtube.chapters||[]});
   const parsed=parseHTML(html,{title,source:watchURL(youtube.videoId,youtube.playlistId),warnings},{includeMetadata:true,allowScripts:false});
   parsed.metadata.youtube=validateYouTube({...youtube,...(subtitle?{subtitle:{name:subtitle.name}}:{})});
   if(mediaTime>0)parsed.metadata.view.mediaTime=mediaTime;
@@ -936,18 +907,21 @@ function sceneBookmarks(doc,marks){
   return {placed,left};
 }
 /**
- * Swap a video's subtitle in place: the same document, folder and history. Highlights,
- * notes and bookmarks move to the new text (LibreMemo's edition matching); ones that cannot
- * be found stay in the lists. When there were marks, the document as it was goes to the
- * trash as a copy, so the old subtitle and its notes can be restored whole.
+ * Rebuild a video's document in place: a new subtitle, or the same subtitle with new
+ * chapters. The same document, folder and history continue. Highlights, notes and
+ * bookmarks move to the new text (LibreMemo's edition matching); ones that cannot be
+ * found stay in the lists. When a new subtitle replaces one that had marks, the document
+ * as it was goes to the trash as a copy, so the old subtitle and its notes can be restored.
  */
-async function replaceYouTubeSubtitle(old,subtitle,{lang,translation=null}={}){
-  const tab=tabs.find(t=>t.record?.id===old.id);
+async function rebuildYouTubeDocument(old,{subtitle,chapters}={}){
+  const tab=tabs.find(t=>t.record?.id===old.id),newSubtitle=!!subtitle;
   if(tab){await tab.reader?.ready;await tab.queue.flush();await tab.checkpoints.flush({force:true});}
   const current=await getDocument(old.id);if(!current||current.trashedAt)throw Error(`「${old.title}」 문서를 찾지 못했습니다.`);
   const metadata=structuredClone(tab?.reader?.metadata||current.metadata),annotations=metadata.annotations||[],bookmarks=metadata.bookmarks||[],marks=annotations.length+bookmarks.length;
-  if(marks&&!await confirmDialog('자막을 바꿀까요?',`「${old.title}」의 주석·북마크 ${marks}개를 새 자막의 같은 문장으로 옮깁니다. 찾지 못한 것은 목록에 남겨 두고, 바꾸기 전 문서는 사본으로 휴지통에 보관합니다(복원 가능).`,'자막 바꾸기'))return null;
-  const warnings=[],parsed=parseHTML(youtubeDocumentHTML(old.title,subtitle,warnings),{title:old.title,source:metadata.source,warnings},{includeMetadata:true,allowScripts:false});
+  if(marks&&newSubtitle&&!await confirmDialog('자막을 바꿀까요?',`「${old.title}」의 주석·북마크 ${marks}개를 새 자막의 같은 문장으로 옮깁니다. 찾지 못한 것은 목록에 남겨 두고, 바꾸기 전 문서는 사본으로 휴지통에 보관합니다(복원 가능).`,'자막 바꾸기'))return null;
+  if(!subtitle&&current.originalFile&&metadata.youtube?.subtitle)subtitle={name:current.originalFile.name||current.name,text:await current.originalFile.text(),format:subtitleFormat(current.originalFile.name||current.name)||'srt'};
+  chapters??=metadata.youtube?.chapters||[];
+  const warnings=[],parsed=parseHTML(youtubeDocumentHTML(old.title,subtitle||null,warnings,{chapters}),{title:old.title,source:metadata.source,warnings},{includeMetadata:true,allowScripts:false});
   let moved={annotations:[],bookmarks:[]},lost={annotations:[],bookmarks:[]};
   if(marks){
     const probe=await openEditionProbe({html:parsed.html,allowScripts:false});let oldProbe=null;
@@ -959,47 +933,40 @@ async function replaceYouTubeSubtitle(old,subtitle,{lang,translation=null}={}){
       moved={annotations:result.annotations,bookmarks:[...result.bookmarks,...scenes.placed]};
       lost={annotations:missing(result.report),bookmarks:scenes.left};
     }finally{probe.dispose();oldProbe?.dispose();}
-    // The whole previous document, restorable from the trash.
-    const backup={id:uid(),title:old.title+' (자막 바꾸기 전)',name:current.name,source:current.source,created:Date.now(),modified:Date.now(),folderId:current.folderId||'',fileHandle:null,originalHandle:null,metadata:structuredClone(current.metadata)};
-    if(current.originalFile)backup.originalFile=current.originalFile;
-    await saveDocumentHTML(backup,current.html,{revision:{baseline:true}});await trashDocument(backup.id);
+    if(newSubtitle){
+      // The whole previous document, restorable from the trash.
+      const backup={id:uid(),title:old.title+' (자막 바꾸기 전)',name:current.name,source:current.source,created:Date.now(),modified:Date.now(),folderId:current.folderId||'',fileHandle:null,originalHandle:null,metadata:structuredClone(current.metadata)};
+      if(current.originalFile)backup.originalFile=current.originalFile;
+      await saveDocumentHTML(backup,current.html,{revision:{baseline:true}});await trashDocument(backup.id);
+    }
   }
   const next={...parsed.metadata,title:old.title,annotations:[...moved.annotations,...lost.annotations],bookmarks:[...moved.bookmarks,...lost.bookmarks],
     view:{...parsed.metadata.view,...Object.fromEntries(['fontScale','fontFamily','readingTheme','layout','mediaTime'].filter(k=>metadata.view?.[k]!==undefined).map(k=>[k,metadata.view[k]]))},
-    youtube:validateYouTube({...metadata.youtube,subtitle:{name:subtitle.name},...(lang?{lang}:{}),translation})};
+    youtube:validateYouTube({...metadata.youtube,...(subtitle?{subtitle:{name:subtitle.name}}:{}),chapters})};
   if(metadata.thumbnail!==undefined)next.thumbnail=metadata.thumbnail;
   if(tab)await closeTab(tab.id);
-  const saved=await replaceDocumentBody(old.id,{html:parsed.html,originalFile:new File([subtitle.text],subtitle.name,{type:'text/plain'}),metadata:next,name:subtitle.name},current.syncEpoch);
+  const saved=await replaceDocumentBody(old.id,{html:parsed.html,...(subtitle?{originalFile:new File([subtitle.text],subtitle.name,{type:'text/plain'}),name:subtitle.name}:{}),metadata:next},current.syncEpoch);
   const {html,file,originalFile,...summary}=saved;cacheLibraryDocument(summary);
   return {record:summary,reopen:!!tab,marks,lostAnnotations:lost.annotations.length,lostBookmarks:lost.bookmarks.length};
 }
 /** Attach subtitle files to the given video documents (matched by name), or to `only` when it is one file for one video. */
-async function attachYouTubeSubtitles(files,candidates,{only=null,target=null,translators=null,say=()=>{}}={}){
+async function attachYouTubeSubtitles(files,candidates,{only=null,chapters}={}){
   const {subtitles,skipped}=await readSubtitleFiles(files);
   if(!subtitles.length)throw Error(skipped.length?'자막 파일(.srt, .vtt, .smi, .ass, .ssa 또는 그것을 담은 .zip)을 골라주세요.':'고른 파일에 자막이 없습니다.');
   const videos=candidates.map(r=>({videoId:r.metadata.youtube.videoId,title:r.title,record:r}));
   let {matches,unmatched}=matchSubtitleFiles(subtitles,videos);
   if(only&&subtitles.length===1&&!matches.size){matches=new Map([[only.metadata.youtube.videoId,subtitles[0]]]);unmatched=[];}
-  let attached=0,lostAnnotations=0,lostBookmarks=0,partial=null;const reopen=[];
-  // Every video keeps the language chosen for it; a new one uses the current choice.
-  const languageOf=record=>target||record.metadata.youtube.lang||youtubeLanguage(),pending=videos.filter(v=>matches.has(v.videoId));
-  const foreign=pending.filter(v=>{const s=matches.get(v.videoId);return needsTranslation(guessLanguage(s.name,s.text),languageOf(v.record))!==false;});
-  if(foreign.length&&!translators){
-    const to=languageName(languageOf(foreign[0].record));
-    if(!await confirmDialog(`자막을 ${toLanguage(to)} 번역할까요?`,`고른 자막 ${foreign.length}개가 ${to}가 아니거나 언어를 알 수 없습니다. 시각은 그대로 두고 대사를 ${toLanguage(to)} 번역해서 붙입니다. 「취소」를 누르면 번역하지 않고 받은 그대로 붙입니다.`,'번역해서 붙이기'))translators={get:async()=>null,skip:true};
-    else{translators=subtitleTranslators(say);await translators.prewarm(foreign.map(v=>matches.get(v.videoId)),languageOf(foreign[0].record));}
-  }
+  let attached=0,lostAnnotations=0,lostBookmarks=0;const reopen=[];
   for(const video of videos){
-    let subtitle=matches.get(video.videoId),translation=null;if(!subtitle)continue;
-    if(!translators?.skip){const localized=await localizeSubtitle(subtitle,languageOf(video.record),translators||subtitleTranslators(say),say);subtitle=localized.subtitle;translation=localized.translation;if(translation&&translation.done<translation.total)partial=translation;}
-    const result=await replaceYouTubeSubtitle(video.record,subtitle,{lang:languageOf(video.record),translation});if(!result)continue;
+    const subtitle=matches.get(video.videoId);if(!subtitle)continue;
+    const result=await rebuildYouTubeDocument(video.record,{subtitle,...(only&&video.record.id===only.id&&chapters?{chapters}:{})});if(!result)continue;
     attached++;lostAnnotations+=result.lostAnnotations;lostBookmarks+=result.lostBookmarks;
     if(result.reopen||only&&video.record.id===only.id)reopen.push(result.record);
   }
   await refreshLibrary();try{await dataFolder?.flush();}catch(error){showError(error);}
   for(const record of reopen)await openRecord(record);
   const notes=[lostAnnotations||lostBookmarks?`새 자막에서 찾지 못한 주석 ${lostAnnotations}개·북마크 ${lostBookmarks}개는 목록에 남겨 두었습니다.`:'',unmatched.length?`영상을 찾지 못한 자막 ${unmatched.length}개: ${unmatched.slice(0,3).map(s=>s.name).join(', ')}${unmatched.length>3?' …':''}`:'',skipped.length?`자막이 아닌 파일 ${skipped.length}개는 건너뛰었습니다.`:''].filter(Boolean);
-  toast((attached?`자막 ${attached}개를 붙였습니다.`:'붙인 자막이 없습니다.')+translationNote(partial)+(notes.length?' '+notes.join(' '):''),!attached);
+  toast((attached?`자막 ${attached}개를 붙였습니다.`:'붙인 자막이 없습니다.')+(notes.length?' '+notes.join(' '):''),!attached);
   return attached;
 }
 /** Make a card picture once per document, from what its reader shows (see thumbnails.js). */
@@ -1016,11 +983,24 @@ function scheduleThumbnail(tab){
     }).catch(()=>{/* the card keeps its format tile */});
   },1500);
 }
-/** The subtitle site cannot be opened with a link filled in: copy the link, then open it. */
-function openSubtitleSite(link){
-  const copied=navigator.clipboard?.writeText?navigator.clipboard.writeText(link):Promise.reject(Error('clipboard'));
-  window.open(SUBTITLE_SITE,'_blank','noopener');
-  copied.then(()=>toast('영상 주소를 복사했습니다. 자막 사이트의 「Paste a YouTube link」 칸에 붙여넣으세요.'),()=>toast('영상 주소를 복사하지 못했습니다. 자막 사이트에 YouTube 주소를 직접 붙여넣어 주세요.',true));
+const chaptersText=chapters=>(chapters||[]).map(c=>clock(c.t)+' '+c.title).join('\n');
+/** Paste or edit a video's chapters; the sidebar outline is rebuilt from them. */
+function chaptersDialog(record){
+  modal(`<section class="youtube-dialog"><div class="dialog-heading"><h2>목차(챕터)</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>
+    <p class="dialog-description">YouTube 영상 설명란의 챕터 줄(예: <code>0:00 소개</code>)을 붙여넣으면 사이드바 목차가 챕터로 바뀝니다. 비우고 저장하면 영상 길이에 맞춘 시각 목차로 돌아갑니다.</p>
+    <textarea class="youtube-chapters" data-chapters rows="9" spellcheck="false" placeholder="0:00 소개&#10;1:23 첫 번째 주제&#10;12:05 두 번째 주제">${esc(chaptersText(record.metadata.youtube.chapters))}</textarea>
+    <p class="dialog-status" data-chapters-status role="status"></p>
+    <div class="dialog-actions"><button class="secondary-button" data-dialog-close>취소</button><button class="primary-button" data-chapters-save>저장</button></div></section>`,dialog=>{
+    const area=$('[data-chapters]',dialog),status=$('[data-chapters-status]',dialog),save=$('[data-chapters-save]',dialog);
+    const check=()=>{const found=parseChapters(area.value);status.textContent=!area.value.trim()?'영상 길이에 맞춘 시각 목차를 씁니다.':found.length?`챕터 ${found.length}개를 찾았습니다.`:'시간이 적힌 줄을 두 개 이상 찾지 못했습니다.';save.disabled=!!area.value.trim()&&!found.length;};
+    area.oninput=check;check();
+    save.onclick=safely(async()=>{
+      save.disabled=true;
+      try{const result=await rebuildYouTubeDocument(record,{chapters:parseChapters(area.value)});if(!result)return;dialog.close();await refreshLibrary();try{await dataFolder?.flush();}catch(error){showError(error);}if(result.reopen)await openRecord(result.record);toast('목차를 바꿨습니다.');}
+      finally{if(save.isConnected)save.disabled=false;}
+    });
+    requestAnimationFrame(()=>area.focus());
+  });
 }
 function mountYouTube(tab){
   tab.youtube?.dispose();tab.youtube=null;
@@ -1032,21 +1012,7 @@ function mountYouTube(tab){
       // Playback position is a reading position: saved quietly, never as an annotation edit.
       onTime:now=>{tab.queue.schedule({background:true});if(now)void tab.queue.flush().catch(()=>{});},
       onBookmark:title=>{tab.reader.addBookmark(title);if(reader()===tab.reader){if(tab.reader.documentSidebarUI?.isConnected&&tab.reader.documentSidebarMode==='bookmarks')tab.reader.showDocumentSidebarView('bookmarks');else if(sidebarMode==='bookmarks')renderSidebar('bookmarks');}toast('이 장면을 북마크했습니다.');},
-      onFetch:()=>{const youtube=record().metadata.youtube;openSubtitleSite(watchURL(youtube.videoId));},
-      // Continue a translation the free daily amount cut short: the untranslated cues keep their source text.
-      onContinue:safely(async()=>{
-        const self=record(),youtube=self.metadata.youtube,t=youtube.translation;if(!t||t.done>=t.total)return;
-        const current=await getDocument(self.id);if(!current?.originalFile)throw Error('번역할 자막 원본을 찾지 못했습니다.');
-        const say=text=>toast(text);const translators=subtitleTranslators(say);await translators.get(t.from,t.to);
-        const source={name:current.originalFile.name||self.name,text:await current.originalFile.text(),format:'srt'};
-        const localized=await localizeSubtitle(source,t.to,translators,say,{start:t.done,from:t.from});
-        if(!localized.translation||localized.translation.done===t.done){toast('오늘 무료 번역량을 모두 썼습니다. 내일 다시 「번역 이어 하기」를 눌러 주세요.',true);return;}
-        localized.subtitle.name=source.name;
-        const result=await replaceYouTubeSubtitle(self,localized.subtitle,{lang:t.to,translation:localized.translation});
-        if(!result)return;await refreshLibrary();try{await dataFolder?.flush();}catch(error){showError(error);}
-        if(result.reopen)await openRecord(result.record);
-        toast('남은 대사를 이어서 번역했습니다.'+translationNote(localized.translation));
-      }),
+      onChapters:()=>chaptersDialog(record()),
       onAttach:safely(async()=>{
         const files=await pickSubtitleFiles(true);if(!files.length)return;
         const self=record(),list=self.metadata.youtube.playlistId&&files.length>1?playlistRecords(self.metadata.youtube.playlistId):[self];
@@ -1070,56 +1036,44 @@ function youtubeDialog(){
     <label class="youtube-field"><span>YouTube 주소</span><input type="url" data-youtube-url inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=… 또는 재생목록 주소"></label>
     <p class="youtube-detect" data-youtube-detect aria-live="polite"></p>
     <div class="youtube-files"><button type="button" class="secondary-button" data-youtube-files>${icon('subtitles',16)} 자막 파일 고르기</button><span data-youtube-file-list>고른 자막 없음 · 나중에 붙여도 됩니다</span></div>
-    <label class="youtube-lang">원하는 자막 언어 <select data-youtube-lang>${LANGUAGES.map(([code,name])=>`<option value="${code}">${esc(name)}</option>`).join('')}</select></label>
-    <p class="youtube-lang-note">받은 자막이 다른 언어(예: 자동 생성 영어 자막)면 시각은 그대로 두고 이 언어로 번역해서 붙입니다.</p>
+    <details class="youtube-chapter-box"><summary>챕터 (선택) · 영상 설명란의 「0:00 소개」 같은 줄을 붙여넣으면 목차가 됩니다</summary>
+      <textarea class="youtube-chapters" data-youtube-chapters rows="6" spellcheck="false" placeholder="0:00 소개&#10;1:23 첫 번째 주제&#10;12:05 두 번째 주제"></textarea><p class="youtube-guide-note" data-youtube-chapter-status>챕터가 없으면 10분이 넘는 영상은 길이의 1/10마다, 10분 이하인 영상은 1분마다 시각을 목차로 만듭니다.</p></details>
     <fieldset class="youtube-options"><legend>옵션</legend>
       <label><input type="checkbox" data-youtube-folder checked> 재생목록이면 재생목록 이름의 폴더를 만들고 영상마다 문서를 만들기</label>
       <label>앞뒤로 건너뛰기 <select data-youtube-skip>${[5,10,15].map(n=>`<option value="${n}">${n}초</option>`).join('')}</select></label>
     </fieldset>
-    <details class="youtube-guide" ${firstTime?'open':''}><summary>자막 파일 받는 방법 (Mac · Windows · Android · iPhone)</summary>
-      <p><button type="button" class="secondary-button" data-youtube-site disabled>${icon('external',15)} 자막 사이트 열기</button> <small>주소를 넣으면 눌러집니다.</small></p>${guideHTML()}</details>
+    <details class="youtube-guide" ${firstTime?'open':''}><summary>자막 파일 받는 방법 (Mac · Chrome)</summary>
+      <p class="youtube-guide-buttons"><a class="secondary-button" href="${esc(SUBTITLE_EXTENSION)}" target="_blank" rel="noopener noreferrer">${icon('external',15)} 확장 프로그램 설치</a><button type="button" class="secondary-button" data-youtube-open disabled>${icon('youtube',15)} YouTube에서 영상 열기</button></p>${guideHTML()}</details>
     <p class="dialog-status" data-youtube-status role="status"></p>
     <div class="dialog-actions"><button class="secondary-button" data-dialog-close>취소</button><button class="primary-button" data-youtube-create disabled>만들기</button></div></section>`,dialog=>{
     try{localStorage.setItem('librememo-youtube-guide-seen','1');}catch{}
-    const $d=selector=>$(selector,dialog),url=$d('[data-youtube-url]'),status=$d('[data-youtube-status]'),create=$d('[data-youtube-create]');
+    const $d=selector=>$(selector,dialog),url=$d('[data-youtube-url]'),status=$d('[data-youtube-status]'),create=$d('[data-youtube-create]'),chapterArea=$d('[data-youtube-chapters]');
     let files=[],parsed=null,busy=false;
     $d('[data-youtube-skip]').value=String(localStorage.getItem('librememo-youtube-skip')||5);
-    $d('[data-youtube-lang]').value=youtubeLanguage();
-    $d('[data-youtube-lang]').onchange=event=>{try{localStorage.setItem('librememo-youtube-lang',event.target.value);}catch{}};
     $d('[data-youtube-skip]').onchange=event=>youtubeUI().then(ui=>ui.setSkipSeconds(Number(event.target.value)));
-    const showGuide=id=>{for(const tab of $$('[data-guide-tab]',dialog))tab.setAttribute('aria-selected',String(tab.dataset.guideTab===id));for(const list of $$('[data-guide]',dialog))list.hidden=list.dataset.guide!==id;};
-    for(const tab of $$('[data-guide-tab]',dialog))tab.onclick=()=>showGuide(tab.dataset.guideTab);
-    showGuide(guidePlatform());
-    const existing=()=>parsed?.playlistId&&$d('[data-youtube-folder]').checked?playlistRecords(parsed.playlistId):parsed?.videoId?youtubeRecords().filter(r=>r.metadata.youtube.videoId===parsed.videoId):[];
+    const playlistMode=()=>!!parsed?.playlistId&&$d('[data-youtube-folder]').checked;
+    const chapters=()=>playlistMode()?undefined:parseChapters(chapterArea.value);
+    chapterArea.oninput=()=>{const found=parseChapters(chapterArea.value);$d('[data-youtube-chapter-status]').textContent=!chapterArea.value.trim()?'챕터가 없으면 10분이 넘는 영상은 길이의 1/10마다, 10분 이하인 영상은 1분마다 시각을 목차로 만듭니다.':found.length?`챕터 ${found.length}개를 찾았습니다. 사이드바 목차로 씁니다.`:'시간이 적힌 줄을 두 개 이상 찾지 못했습니다. 「0:00 소개」처럼 붙여넣어 주세요.';};
+    const existing=()=>playlistMode()?playlistRecords(parsed.playlistId):parsed?.videoId?youtubeRecords().filter(r=>r.metadata.youtube.videoId===parsed.videoId):[];
     const update=()=>{
       parsed=parseYouTubeInput(url.value);
-      const list=parsed?.playlistId&&$d('[data-youtube-folder]').checked,found=existing();
-      $d('[data-youtube-detect]').textContent=!url.value.trim()?'':!parsed?'YouTube 영상·재생목록 주소가 아닙니다.':(list?'재생목록입니다. 폴더를 만들고 영상마다 문서를 만듭니다.':'영상 1개입니다.')+(found.length?` 이미 서재에 ${found.length}개가 있어 고른 자막만 붙입니다.`:'');
-      $d('[data-youtube-site]').disabled=!parsed;create.disabled=busy||!parsed||found.length&&!files.length;
+      const found=existing();
+      $d('[data-youtube-detect]').textContent=!url.value.trim()?'':!parsed?'YouTube 영상·재생목록 주소가 아닙니다.':(playlistMode()?'재생목록입니다. 폴더를 만들고 영상마다 문서를 만듭니다. 챕터는 각 영상의 「목차」에서 넣습니다.':'영상 1개입니다.')+(found.length?` 이미 서재에 ${found.length}개가 있어 고른 자막만 붙입니다.`:'');
+      $d('[data-youtube-open]').disabled=!parsed?.videoId;create.disabled=busy||!parsed||found.length&&!files.length;
       create.textContent=found.length?'자막 붙이기':'만들기';
     };
     url.oninput=update;$d('[data-youtube-folder]').onchange=update;
-    $d('[data-youtube-site]').onclick=()=>{
-      if(!parsed)return;
-      if(!parsed.videoId){toast('자막 사이트는 영상을 하나씩 받습니다. 재생목록을 만든 뒤 각 영상 화면의 「자막 받기」를 눌러 주세요.',true);return;}
-      openSubtitleSite(watchURL(parsed.videoId));
-    };
+    $d('[data-youtube-open]').onclick=()=>{if(parsed?.videoId)window.open(watchURL(parsed.videoId),'_blank','noopener');};
     $d('[data-youtube-files]').onclick=async()=>{const picked=await pickSubtitleFiles(true);if(!picked.length)return;files=picked;$d('[data-youtube-file-list]').textContent=files.length===1?files[0].name:`${files.length}개 파일 · ${files.slice(0,2).map(f=>f.name).join(', ')}${files.length>2?' …':''}`;update();};
     create.onclick=safely(async()=>{
       if(busy||!parsed)return;busy=true;create.disabled=true;const say=text=>{if(status.isConnected)status.textContent=text;};
       try{
-        const found=existing(),target=$d('[data-youtube-lang]').value,translators=subtitleTranslators(say);
-        if(found.length){
-          say('자막을 붙이는 중…');
-          const {subtitles:early}=await readSubtitleFiles(files);await translators.prewarm(early,target);
-          const attached=await attachYouTubeSubtitles(files,found,{only:found.length===1?found[0]:null,target,translators,say});if(attached)dialog.close();return;
-        }
+        const found=existing();
+        if(found.length){say('자막을 붙이는 중…');const attached=await attachYouTubeSubtitles(files,found,{only:found.length===1?found[0]:null,chapters:chapters()});if(attached)dialog.close();return;}
         const {subtitles,skipped}=files.length?await readSubtitleFiles(files):{subtitles:[],skipped:[]};
         if(files.length&&!subtitles.length)throw Error('고른 파일에서 자막(.srt, .vtt, .smi, .ass, .ssa)을 찾지 못했습니다.');
-        // Start any on-device translator now: it may download a model, which needs this click.
-        await translators.prewarm(subtitles,target);
-        const ui=await youtubeUI();let partial=null;
-        if(parsed.playlistId&&$d('[data-youtube-folder]').checked){
+        const ui=await youtubeUI();
+        if(playlistMode()){
           say('재생목록을 읽는 중…');
           const [ids,info]=await Promise.all([ui.playlistVideoIds(parsed.playlistId),ui.playlistInfo(parsed.playlistId)]);
           if(!ids.length)throw Error('재생목록에 영상이 없습니다.');
@@ -1134,25 +1088,21 @@ function youtubeDialog(){
           for(const [i,v] of videos.entries()){
             say(`문서를 만드는 중… ${i+1}/${videos.length}`);
             // Earlier videos get later times, so "newest first" lists the playlist in order.
-            let subtitle=matches.get(v.videoId)||null,translation=null;
-            if(subtitle)({subtitle,translation}=await localizeSubtitle(subtitle,target,translators,text=>say(`문서 ${i+1}/${videos.length} · `+text)));
-            if(translation&&translation.done<translation.total)partial=translation;
-            await saveYouTubeRecord({title:v.title,youtube:{videoId:v.videoId,playlistId:parsed.playlistId,index:i,playlistTitle:info.title,channel:v.channel||info.channel,thumbnail:v.thumbnail,lang:target,translation},subtitle,folderId,created:base-i*1000});
+            await saveYouTubeRecord({title:v.title,youtube:{videoId:v.videoId,playlistId:parsed.playlistId,index:i,playlistTitle:info.title,channel:v.channel||info.channel,thumbnail:v.thumbnail},subtitle:matches.get(v.videoId)||null,folderId,created:base-i*1000});
           }
           dialog.close();libraryFolderId=folderId;await refreshLibrary();activate('library');
           try{await dataFolder?.flush();}catch(error){showError(error);}
-          toast(`「${name}」 폴더에 영상 ${videos.length}개를 만들었습니다. 자막 ${matches.size}개를 붙였습니다.`+translationNote(partial)+(unmatched.length?` 영상을 찾지 못한 자막 ${unmatched.length}개는 각 영상의 「자막 붙이기」로 붙여주세요.`:'')+(skipped.length?` 자막이 아닌 파일 ${skipped.length}개는 건너뛰었습니다.`:''));
+          toast(`「${name}」 폴더에 영상 ${videos.length}개를 만들었습니다. 자막 ${matches.size}개를 붙였습니다.`+(unmatched.length?` 영상을 찾지 못한 자막 ${unmatched.length}개는 각 영상의 「자막 붙이기」로 붙여주세요.`:'')+(skipped.length?` 자막이 아닌 파일 ${skipped.length}개는 건너뛰었습니다.`:''));
           return;
         }
         say('영상 정보를 받는 중…');
         const [meta,thumbnail]=await Promise.all([ui.videoInfo(parsed.videoId),ui.thumbnailData(parsed.videoId)]);
         const title=meta.title||'YouTube 영상 '+parsed.videoId,video={videoId:parsed.videoId,title};
-        let subtitle=subtitles.length>1?(matchSubtitleFiles(subtitles,[video]).matches.get(parsed.videoId)||subtitles[0]):subtitles[0]||null,translation=null;
-        if(subtitle)({subtitle,translation}=await localizeSubtitle(subtitle,target,translators,say));
-        const record=await saveYouTubeRecord({title,youtube:{videoId:parsed.videoId,playlistId:parsed.playlistId,channel:meta.channel,thumbnail,lang:target,translation},subtitle,mediaTime:parsed.start});
+        const subtitle=subtitles.length>1?(matchSubtitleFiles(subtitles,[video]).matches.get(parsed.videoId)||subtitles[0]):subtitles[0]||null;
+        const record=await saveYouTubeRecord({title,youtube:{videoId:parsed.videoId,playlistId:parsed.playlistId,channel:meta.channel,thumbnail,chapters:chapters()},subtitle,mediaTime:parsed.start});
         dialog.close();renderLibrary();await openRecord(record);
         try{await dataFolder?.flush();}catch(error){showError(error);}
-        toast(subtitle?'영상과 자막을 열었습니다. 자막의 시각을 누르면 그 장면으로 갑니다.'+translationNote(translation):'영상을 열었습니다. 영상 막대의 「자막 받기」로 자막 파일을 받은 뒤 「자막 붙이기」로 붙이세요.');
+        toast(subtitle?'영상과 자막을 열었습니다. 자막의 시각을 누르면 그 장면으로 갑니다.':'영상을 열었습니다. 영상 막대의 「자막 붙이기」로 자막 파일을 붙이세요.');
       }catch(error){say(error.message||String(error));throw error;}
       finally{busy=false;if(create.isConnected)update();}
     });

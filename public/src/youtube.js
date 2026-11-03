@@ -6,7 +6,7 @@
 // the subtitle file. The video plays from YouTube; the subtitle becomes an ordinary
 // LibreMemo subtitle document, so highlights, notes, bookmarks, search and export
 // all work exactly as for any other document.
-import {renderSubtitles} from './office-subtitles.js';
+import {renderSubtitles,parseSubtitles} from './office-subtitles.js';
 import {officeHTML,esc} from './office-common.js';
 
 export const SUBTITLE_FORMATS=['srt','vtt','smi','sami','ass','ssa'];
@@ -51,11 +51,8 @@ export function validateYouTube(value){
   // A small JPEG kept inline so card thumbnails also work offline.
   if(typeof value.thumbnail==='string'&&value.thumbnail.length<=400000&&/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(value.thumbnail))out.thumbnail=value.thumbnail;
   if(value.subtitle&&typeof value.subtitle==='object'&&text(value.subtitle.name,300))out.subtitle={name:text(value.subtitle.name,300)};
-  const code=v=>typeof v==='string'&&/^[a-z]{2,3}(?:-[A-Za-z]{2,4})?$/.test(v);
-  if(code(value.lang))out.lang=value.lang;
-  // How a translated subtitle was made, and how far the free daily amount got.
-  const t=value.translation;
-  if(t&&typeof t==='object'&&code(t.from)&&code(t.to)&&['browser','mymemory'].includes(t.engine)&&Number.isInteger(t.total)&&t.total>0&&t.total<=1000000&&Number.isInteger(t.done)&&t.done>=0&&t.done<=t.total)out.translation={from:t.from,to:t.to,engine:t.engine,done:t.done,total:t.total};
+  const chapters=Array.isArray(value.chapters)?value.chapters.filter(c=>c&&Number.isFinite(c.t)&&c.t>=0&&c.t<360000&&text(c.title,200).trim()).slice(0,500).map(c=>({t:Math.round(c.t),title:text(c.title,200).trim()})).sort((a,b)=>a.t-b.t):[];
+  if(chapters.length)out.chapters=chapters;
   return out;
 }
 
@@ -66,13 +63,49 @@ export function decodeSubtitle(bytes){
 }
 
 const STYLE='<style>.youtube-empty{max-width:640px;margin:48px auto;padding:24px;border:1px dashed var(--htmlmemo-reader-line,#d0d7e2);border-radius:12px;text-align:center;color:var(--htmlmemo-reader-muted,#667085)}.youtube-empty strong{display:block;color:var(--htmlmemo-reader-ink,#202633);font-size:1.15em;margin-bottom:.4em}</style>';
+const TIME='(?:(\\d{1,2}):)?(\\d{1,2}):(\\d{2})';
+const LEADING=new RegExp('^\\s*[\\[(]?'+TIME+'[\\])]?\\s*[-–—:|·.]*\\s*(.+)$'),TRAILING=new RegExp('^(.+?)\\s*[-–—:|·([]*\\s*'+TIME+'[\\])]?\\s*$');
 /**
- * The reading document of one video: its subtitle, or (until one is attached)
- * a short note. The note carries no time cues, so nothing in it is synced.
+ * Chapters from a pasted YouTube description: lines such as "0:00 Intro",
+ * "(1:02:03) Part 3" or "Part 3 - 12:34". Other lines are ignored. Two or more
+ * timestamps are needed; the earliest becomes 0:00 when the list starts later.
  */
-export function youtubeDocumentHTML(title,subtitle=null,warnings=[]){
-  const body=subtitle?renderSubtitles(subtitle.text,subtitle.format,warnings)
-    :STYLE+'<article class="office-subtitles youtube-empty" data-youtube-empty><strong>아직 자막이 없습니다.</strong><p>위쪽 영상 막대의 「자막 받기」로 자막 파일(.srt)을 받고 「자막 붙이기」로 고르면, 영상과 함께 움직이는 자막에 형광펜·메모·북마크를 달 수 있습니다.</p></article>';
+export function parseChapters(text){
+  const seen=new Set(),out=[];
+  for(const line of String(text||'').split(/\r?\n/)){
+    let m=line.match(LEADING),h,mi,se,title;
+    if(m)[,h,mi,se,title]=m;else if((m=line.match(TRAILING)))[,title,h,mi,se]=m;else continue;
+    const t=(+h||0)*3600+(+mi)*60+(+se);title=title.replace(/^[-–—:|·.\s]+|[-–—:|·.\s]+$/g,'').slice(0,200);
+    if(!title||+se>=60||seen.has(t))continue;seen.add(t);out.push({t,title});
+  }
+  out.sort((a,b)=>a.t-b.t);
+  if(out.length<2)return [];
+  if(out[0].t>0)out[0].t=0;
+  return out;
+}
+/**
+ * Outline sections for the sidebar: the chapters when there are any, otherwise
+ * timestamps — every tenth of the length for videos over 10 minutes, every
+ * minute for shorter ones. `duration` is in seconds.
+ */
+export function outlineSections(duration,chapters=[]){
+  if(chapters.length)return chapters.map(c=>({start:c.t*1000,title:clock(c.t)+' '+c.title}));
+  const length=Math.max(0,Math.ceil(duration||0));if(!length)return null;
+  const step=length>600?length/10:60,starts=[];
+  for(let at=0;at<length;at+=step)starts.push(Math.round(at));
+  return starts.map(start=>({start:start*1000,title:clock(start)}));
+}
+/**
+ * The reading document of one video: its subtitle grouped by the outline above,
+ * or (until one is attached) a short note with no time cues.
+ */
+export function youtubeDocumentHTML(title,subtitle=null,warnings=[],{chapters=[],duration=0}={}){
+  let body;
+  if(subtitle){
+    // Without a known length, the subtitle's last cue gives it.
+    const cues=parseSubtitles(subtitle.text,subtitle.format),length=duration||Math.max(0,...cues.map(c=>(c.end??c.start)/1000));
+    body=renderSubtitles(subtitle.text,subtitle.format,warnings,{sections:outlineSections(length,chapters)});
+  }else body=STYLE+'<article class="office-subtitles youtube-empty" data-youtube-empty><strong>아직 자막이 없습니다.</strong><p>위쪽 영상 막대의 「자막 붙이기」로 이 영상의 자막 파일(.srt)을 고르면, 영상과 함께 움직이는 자막에 형광펜·메모·북마크를 달 수 있습니다. 받는 방법은 내 서재 → 유튜브의 「자막 파일 받는 방법」에 있습니다.</p></article>';
   return officeHTML(title,body,warnings);
 }
 
@@ -154,37 +187,19 @@ export async function subtitlesFromZip(bytes){
   return out;
 }
 
-// CollabPals: free, no sign-up, every caption language the video has (Korean included),
-// one video at a time. It cannot take the link in its address, so LibreMemo copies the
-// link to the clipboard and opens the page; the learner pastes it.
-export const SUBTITLE_SITE='https://www.collabpals.com/tools/youtube-subtitle-downloader';
-const PICK='「Language」에 원하는 언어(한국어는 <b>Korean</b>)가 있으면 그것을, 없으면 <b>English</b>(자동 생성이면 「English (automatic)」)를 고르고 <b>Download .srt</b>를 누릅니다. 다른 언어로 받은 자막은 LibreMemo가 위에서 고른 「원하는 자막 언어」로 번역해서 붙입니다.';
-
-// Shown in the YouTube dialog. Kept as data so tests can check every platform is covered.
-export const DOWNLOAD_GUIDES=[
-  {id:'mac',label:'Mac',steps:[
-    '아래 「자막 사이트 열기」를 누릅니다. 영상 주소가 복사되고 자막 사이트(CollabPals)가 새 탭에 열립니다.',
-    '「Paste a YouTube link」 칸을 누르고 <b>⌘V</b>로 붙여넣은 뒤 <b>Get subtitles</b>를 누릅니다.',
-    PICK,
-    '파일은 Finder의 <b>다운로드</b> 폴더에 저장됩니다. LibreMemo로 돌아와 「자막 파일 고르기」에서 그 .srt 파일을 고릅니다.']},
-  {id:'pc',label:'Windows PC',steps:[
-    '아래 「자막 사이트 열기」를 누릅니다. 영상 주소가 복사되고 자막 사이트(CollabPals)가 새 탭에 열립니다.',
-    '「Paste a YouTube link」 칸을 누르고 <b>Ctrl+V</b>로 붙여넣은 뒤 <b>Get subtitles</b>를 누릅니다.',
-    PICK,
-    '파일은 파일 탐색기의 <b>다운로드</b> 폴더에 저장됩니다. LibreMemo로 돌아와 「자막 파일 고르기」에서 그 .srt 파일을 고릅니다.']},
-  {id:'android',label:'Android',steps:[
-    'YouTube 앱에서 보던 영상이라면 「공유」 → 「복사」로 링크를 복사해 위 칸에 붙여넣습니다.',
-    '아래 「자막 사이트 열기」를 누르면 영상 주소가 복사되고 Chrome(또는 삼성 인터넷) 새 탭에서 자막 사이트가 열립니다.',
-    '「Paste a YouTube link」 칸을 <b>길게 눌러 붙여넣기</b>한 뒤 <b>Get subtitles</b>를 누릅니다. '+PICK,
-    '화면 아래에 다운로드 완료가 뜨면 LibreMemo로 돌아와 「자막 파일 고르기」를 누르고 <b>최근 항목</b>이나 <b>다운로드</b>에서 .srt 파일을 고릅니다.']},
-  {id:'iphone',label:'iPhone',steps:[
-    'YouTube 앱에서 보던 영상이라면 「공유」 → 「링크 복사」로 링크를 복사해 위 칸에 붙여넣습니다.',
-    '아래 「자막 사이트 열기」를 누르면 영상 주소가 복사되고 Safari 새 탭에서 자막 사이트가 열립니다.',
-    '「Paste a YouTube link」 칸을 <b>눌러 붙여넣기</b>한 뒤 <b>Get subtitles</b>를 누릅니다. '+PICK+' 「다운로드할까요?」가 나오면 <b>다운로드</b>를 누릅니다.',
-    '파일은 <b>파일</b> 앱의 <b>다운로드</b> 폴더에 저장됩니다. LibreMemo로 돌아와 「자막 파일 고르기」 → 「찾아보기」 → 「다운로드」에서 .srt 파일을 고릅니다.']},
+// Mac: the free Chrome extension "YouTube Subtitle Downloader" saves the subtitle
+// YouTube is showing, including YouTube's own automatic translation (e.g. English
+// auto-generated → Korean). Other devices are added once this path is settled.
+export const SUBTITLE_EXTENSION='https://chromewebstore.google.com/detail/ognjcegpcoafidcfbepkfgnolnnibcjp';
+export const MAC_GUIDE=[
+  '<b>처음 한 번만:</b> 아래 「확장 프로그램 설치」를 눌러 Chrome 웹 스토어에서 <b>YouTube Subtitle Downloader</b>를 <b>Chrome에 추가</b>합니다. 주소창 오른쪽 퍼즐 모양 아이콘에서 핀을 눌러 두면 찾기 쉽습니다.',
+  '아래 「YouTube에서 영상 열기」를 눌러 Chrome에서 영상을 열고 <b>재생</b>을 시작합니다.',
+  '영상 아래쪽의 <b>⚙ 설정</b> → <b>자막</b>에서 원하는 언어를 고릅니다. 한국어 자막이 없으면 <b>영어(자동 생성)</b>를 고른 뒤, 다시 <b>⚙ 설정</b> → <b>자막</b> → <b>자동 번역</b> → <b>한국어</b>를 고릅니다.',
+  '화면에 한국어 자막이 나오면, 주소창 오른쪽의 <b>YouTube Subtitle Downloader</b> 아이콘을 누르고 <b>SRT</b>로 <b>다운로드</b>합니다. 파일은 Finder의 <b>다운로드</b> 폴더에 저장됩니다.',
+  '영상 설명란에 <b>0:00 소개</b>처럼 시간과 제목이 적힌 <b>챕터</b>가 있으면, 그 줄들을 드래그해 복사(⌘C)한 뒤 아래 「챕터」 칸에 붙여넣으면(⌘V) 사이드바 목차가 챕터로 나옵니다. 없으면 영상 길이에 맞춰 시각 목차를 만듭니다.',
+  'LibreMemo로 돌아와 「자막 파일 고르기」에서 다운로드 폴더의 <b>.srt</b> 파일을 고르고 「만들기」를 누릅니다.',
 ];
 export function guideHTML(){
-  return '<div class="youtube-guide-tabs" role="tablist">'+DOWNLOAD_GUIDES.map((g,i)=>'<button type="button" role="tab" data-guide-tab="'+g.id+'" aria-selected="'+(i===0)+'">'+esc(g.label)+'</button>').join('')+'</div>'
-    +DOWNLOAD_GUIDES.map((g,i)=>'<ol class="youtube-guide-steps" data-guide="'+g.id+'"'+(i?' hidden':'')+'>'+g.steps.map(step=>'<li>'+step+'</li>').join('')+'</ol>').join('')
-    +'<p class="youtube-guide-note">이 사이트는 영상을 하나씩만 받습니다. 재생목록은 각 영상 화면의 「자막 받기」로 영상마다 받은 뒤, 「자막 파일 고르기」에서 여러 파일(또는 zip 하나)을 한꺼번에 고르면 파일 이름으로 영상을 찾아 붙입니다. 자막은 개인 공부에만 쓰세요.</p>';
+  return '<ol class="youtube-guide-steps">'+MAC_GUIDE.map(step=>'<li>'+step+'</li>').join('')+'</ol>'
+    +'<p class="youtube-guide-note">지금은 Mac의 Chrome 방법만 안내합니다. 다른 기기 안내는 곧 추가합니다. 자막은 개인 공부에만 쓰세요.</p>';
 }
