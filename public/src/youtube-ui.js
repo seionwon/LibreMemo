@@ -81,15 +81,16 @@ export class YouTubePane {
     this.cues=[];this.current=-1;this.follow=true;this.quietUntil=0;this.savedAt=Number(this.reader.metadata.view?.mediaTime)||0;
     const pane=this.pane=document.createElement('section');pane.className='youtube-pane';pane.dataset.youtubePane='';pane.setAttribute('aria-label','YouTube 영상');
     const skip=skipSeconds(),rate=pref('rate',1,v=>RATES.includes(v));
-    pane.innerHTML=`<div class="youtube-video"><div class="youtube-frame"></div><p class="youtube-message" hidden></p></div>
+    // The picture itself is the control: left quarter back, middle half play/pause, right quarter forward.
+    // The bottom strip stays YouTube's own (progress bar, captions, settings, full screen).
+    pane.innerHTML=`<div class="youtube-video"><div class="youtube-frame"></div>
+      <div class="youtube-zones"><button type="button" data-yt="back" aria-label="${skip}초 뒤로"></button><button type="button" data-yt="play" aria-label="재생"></button><button type="button" data-yt="forward" aria-label="${skip}초 앞으로"></button></div>
+      <div class="youtube-flash" aria-hidden="true"></div><p class="youtube-message" hidden></p></div>
       <div class="youtube-bar">
-        <button type="button" class="youtube-button" data-yt="back" title="${skip}초 뒤로">${icon('undo',15)}<span>${skip}초</span></button>
-        <button type="button" class="youtube-button youtube-play" data-yt="play" title="재생" aria-label="재생">${icon('play',16)}</button>
-        <button type="button" class="youtube-button" data-yt="forward" title="${skip}초 앞으로"><span>${skip}초</span>${icon('redo',15)}</button>
         <select class="youtube-rate" data-yt="rate" title="재생 속도" aria-label="재생 속도">${RATES.map(r=>`<option value="${r}" ${r===rate?'selected':''}>${r}×</option>`).join('')}</select>
         <span class="youtube-clock" data-yt="clock">0:00</span>
         <button type="button" class="youtube-button" data-yt="follow" aria-pressed="true" title="재생 중인 자막을 따라 화면을 움직입니다">${icon('list',15)}<span>따라가기</span></button>
-        <button type="button" class="youtube-button" data-yt="mark" title="지금 장면을 북마크">${icon('bookmark',15)}<span>이 장면 북마크</span></button>
+        <button type="button" class="youtube-button" data-yt="mark" title="지금 장면을 북마크">${icon('bookmark',15)}<span>북마크</span></button>
         <button type="button" class="youtube-button" data-yt="chapters" title="영상 설명란의 챕터를 붙여넣어 목차로 쓰기">${icon('list',15)}<span>목차</span></button>
         <button type="button" class="youtube-button" data-yt="attach" title="자막 파일(.srt, .vtt 등) 붙이기">${icon('subtitles',15)}<span>${this.hasCues()?'자막 바꾸기':'자막 붙이기'}</span></button>
         <span class="youtube-nav"><button type="button" class="youtube-button" data-yt="prev" title="재생목록의 이전 영상" aria-label="이전 영상" hidden>${icon('back',15)}</button><button type="button" class="youtube-button" data-yt="next" title="재생목록의 다음 영상" aria-label="다음 영상" hidden>${icon('forward',15)}</button></span>
@@ -99,8 +100,9 @@ export class YouTubePane {
       </div>`;
     const viewport=this.reader.viewport;viewport.before(pane);tab.host.classList.add('has-youtube');
     const $=name=>pane.querySelector(`[data-yt="${name}"]`);this.$=$;
-    $('play').onclick=()=>this.toggle();
-    $('back').onclick=()=>this.seekBy(-skipSeconds());$('forward').onclick=()=>this.seekBy(skipSeconds());
+    $('play').onclick=()=>{const playing=this.player?.getPlayerState?.()===1;this.toggle();this.flash(icon(playing?'pause':'play',34));};
+    $('back').onclick=()=>{const n=skipSeconds();this.seekBy(-n);this.flash(icon('undo',26)+'<span>'+n+'초</span>');};
+    $('forward').onclick=()=>{const n=skipSeconds();this.seekBy(n);this.flash('<span>'+n+'초</span>'+icon('redo',26));};
     $('rate').onchange=event=>{const value=Number(event.target.value);savePref('rate',value);this.player?.setPlaybackRate?.(value);};
     $('follow').onclick=()=>{this.follow=!this.follow;$('follow').setAttribute('aria-pressed',String(this.follow));this.quietUntil=0;if(this.follow)this.reveal(true);};
     $('mark').onclick=()=>this.bookmark();
@@ -143,14 +145,17 @@ export class YouTubePane {
       onReady:()=>{this.ready=true;this.player.setPlaybackRate?.(Number(this.$('rate').value));},
       onStateChange:event=>{
         const playing=event.data===1;this.playing=playing;
-        this.$('play').innerHTML=icon(playing?'pause':'play',16);this.$('play').title=playing?'일시정지':'재생';this.$('play').setAttribute('aria-label',this.$('play').title);
+        this.$('play').setAttribute('aria-label',playing?'일시정지':'재생');
         if(!playing&&this.ready)this.remember(true);
         if(event.data===0)this.callbacks.onEnded?.();
       },
       onError:event=>this.message([101,150,153].includes(event.data)?'이 영상은 다른 사이트에서 재생할 수 없게 막혀 있습니다. 「YouTube에서 열기」로 보세요. 자막과 주석은 여기서 계속 쓸 수 있습니다.':'영상을 재생하지 못했습니다. (YouTube 오류 '+event.data+')'),
     }});
   }
-  message(text){const el=this.pane.querySelector('.youtube-message');el.textContent=text;el.hidden=false;}
+  // An unplayable video keeps YouTube's own message and links reachable.
+  message(text){const el=this.pane.querySelector('.youtube-message');el.textContent=text;el.hidden=false;this.pane.querySelector('.youtube-zones').hidden=true;}
+  /** A short sign in the middle of the picture, as YouTube shows for taps. */
+  flash(html){const el=this.pane.querySelector('.youtube-flash');el.innerHTML=html;el.classList.remove('show');void el.offsetWidth;el.classList.add('show');}
   /** The playing time; right after a seek, the target until the player reports it (it answers with the old time for a moment). */
   time(){
     let t=0;try{t=this.player?.getCurrentTime?.()||0;}catch{}
