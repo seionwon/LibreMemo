@@ -310,6 +310,61 @@ test('the centring space after the last subtitle is app UI that saving drops',as
   assert.doesNotMatch(serializeHTML(doc,{version:1,annotations:[]}),/htmlmemo-yt-center-space/);
 });
 
+test('video height is bounded by the visible document and visual viewport, including subtitle padding',async()=>{
+  const {YouTubePane}=await import('../public/src/youtube-ui.js');
+  const saved=globalThis.window;globalThis.window={innerHeight:1000};
+  try{
+    const doc=new DOMParser().parseFromString('<section><div class="youtube-bar"></div><div class="youtube-resize"></div></section>','text/html');
+    const pane=doc.querySelector('section');
+    Object.defineProperty(pane.querySelector('.youtube-bar'),'offsetHeight',{value:60});
+    Object.defineProperty(pane.querySelector('.youtube-resize'),'offsetHeight',{value:14});
+    const host={clientHeight:950,getBoundingClientRect:()=>({top:50,bottom:1000,height:950}),closest:()=>({getBoundingClientRect:()=>({top:50,bottom:650,height:600})})};
+    const viewport={ownerDocument:{defaultView:{getComputedStyle:()=>({paddingTop:'25px',paddingBottom:'100px'})}}};
+    const self={tab:{host},pane,reader:{viewport},subtitleLine:()=>40,toolbarOverlap:()=>20};Object.setPrototypeOf(self,YouTubePane.prototype);
+    assert.equal(self.videoRoom(),400,'600 visible pixels minus controls, border and the unshrinkable subtitle padding');
+    globalThis.window.visualViewport={offsetTop:100,height:300};
+    assert.equal(self.videoRoom(),100,'the visible viewport also limits an oversized document host');
+  }finally{globalThis.window=saved;}
+});
+
+test('on short windows the visible height beats the minimum, for default and remembered video sizes',async()=>{
+  const {YouTubePane}=await import('../public/src/youtube-ui.js');
+  const saved=globalThis.window;globalThis.window={innerHeight:500};
+  try{
+    const doc=new DOMParser().parseFromString('<section><div class="youtube-video"></div><div class="youtube-resize"></div></section>','text/html');
+    const pane=doc.querySelector('section'),video=pane.querySelector('.youtube-video');Object.defineProperty(pane,'clientWidth',{value:1600});
+    video.getBoundingClientRect=()=>({height:parseFloat(pane.style.getPropertyValue('--yt-video-h'))||0});
+    let room=54.8;
+    const self={pane,video,videoRoom:()=>room};Object.setPrototypeOf(self,YouTubePane.prototype);
+    for(const share of [null,.85]){
+      self.videoShare=share;self.applyVideoHeight();
+      assert.equal(pane.style.getPropertyValue('--yt-video-h'),'54px','never round up beyond the visible edge or enforce the old 90px minimum');
+    }
+    room=-10;self.videoRoom=()=>Math.max(0,room);self.applyVideoHeight();assert.equal(pane.style.getPropertyValue('--yt-video-h'),'0px');
+    room=500;self.videoRoom=()=>room;Object.defineProperty(pane,'clientWidth',{value:101,configurable:true});
+    self.applyVideoHeight();assert.equal(pane.style.getPropertyValue('--yt-video-h'),'56px','the width limit also beats the minimum and keeps 16:9');
+  }finally{globalThis.window=saved;}
+});
+
+test('reactivating a hidden video tab or wrapping its controls recalculates the height without a window resize',async()=>{
+  const {YouTubePane}=await import('../public/src/youtube-ui.js');
+  const saved={window:globalThis.window,localStorage:globalThis.localStorage,ResizeObserver:globalThis.ResizeObserver};
+  globalThis.window={innerHeight:1000,addEventListener(){}};globalThis.localStorage={getItem:()=>'.85'};
+  let changed;const observed=[];
+  globalThis.ResizeObserver=class{constructor(callback){changed=callback;}observe(node){observed.push(node);}};
+  try{
+    const doc=new DOMParser().parseFromString('<section><div class="youtube-video"></div><div class="youtube-bar"></div><div class="youtube-resize"></div></section>','text/html');
+    const pane=doc.querySelector('section'),video=pane.querySelector('.youtube-video'),host={clientHeight:950};Object.defineProperty(pane,'clientWidth',{value:1600});
+    video.getBoundingClientRect=()=>({height:parseFloat(pane.style.getPropertyValue('--yt-video-h'))||400});
+    const self={pane,video,tab:{host}};Object.setPrototypeOf(self,YouTubePane.prototype);self.bindResize();
+    assert.deepEqual(observed,[host,pane.querySelector('.youtube-bar')]);
+    assert.equal(pane.style.getPropertyValue('--yt-video-h'),'850px');
+    host.clientHeight=350;changed();assert.equal(pane.style.getPropertyValue('--yt-video-h'),'309px');
+    Object.defineProperty(pane.querySelector('.youtube-bar'),'offsetHeight',{value:72});
+    changed();assert.equal(pane.style.getPropertyValue('--yt-video-h'),'237px');
+  }finally{for(const [key,value] of Object.entries(saved))if(value===undefined)delete globalThis[key];else globalThis[key]=value;}
+});
+
 test('the line left under the video is not the one hidden by a low annotation toolbar',async()=>{
   const {YouTubePane}=await import('../public/src/youtube-ui.js');
   const toolbar={hidden:false,getBoundingClientRect:()=>({top:720,height:20,bottom:740})};

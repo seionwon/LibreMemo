@@ -342,6 +342,13 @@ export class YouTubePane {
     const handle=this.pane.querySelector('.youtube-resize');this.videoShare=pref('height',0,v=>v>=VIDEO_SHARE_MIN&&v<=VIDEO_SHARE_MAX)||null;
     this.applyVideoHeight();
     this.onWindowResize=()=>this.applyVideoHeight();window.addEventListener('resize',this.onWindowResize);
+    // Tab activation, sidebar resizing and wrapping controls can change the
+    // available height without resizing the browser window.
+    if(typeof ResizeObserver!=='undefined'){
+      this.sizeObserver=new ResizeObserver(()=>{if(!this.disposed)this.applyVideoHeight();});
+      if(this.tab.host)this.sizeObserver.observe(this.tab.host);
+      const bar=this.pane.querySelector('.youtube-bar');if(bar)this.sizeObserver.observe(bar);
+    }
     const height=()=>this.video.getBoundingClientRect().height;
     const set=(px,save)=>{this.videoShare=clampShare(px/window.innerHeight);this.applyVideoHeight();if(save)savePref('height',this.videoShare);};
     let drag=null;
@@ -370,8 +377,21 @@ export class YouTubePane {
   videoRoom(){
     const host=this.tab.host,pane=this.pane,style=host?.ownerDocument?.defaultView?.getComputedStyle?.(host);
     const bar=pane.querySelector('.youtube-bar')?.offsetHeight||0,strip=pane.querySelector('.youtube-resize')?.offsetHeight||0;
-    const viewport=this.reader?.viewport,pad=parseFloat(viewport?.ownerDocument?.defaultView?.getComputedStyle?.(viewport)?.paddingTop)||0;
-    return (host?.clientHeight||window.innerHeight)-(parseFloat(style?.paddingTop)||0)-bar-strip-1-pad-this.subtitleLine()-this.toolbarOverlap();
+    let height=host?.clientHeight||window.innerHeight;
+    const rect=host?.getBoundingClientRect?.();
+    if(rect?.height>0){
+      const main=host.closest?.('#main')?.getBoundingClientRect(),view=window.visualViewport;
+      const top=Math.max(rect.top,main?.top??0,view?.offsetTop||0);
+      const bottom=Math.min(rect.bottom,main?.bottom??Infinity,(view?.offsetTop||0)+(view?.height||window.innerHeight));
+      height=Math.min(height,Math.max(0,bottom-top));
+    }
+    const viewport=this.reader?.viewport,subStyle=viewport?.ownerDocument?.defaultView?.getComputedStyle?.(viewport);
+    const pad=parseFloat(subStyle?.paddingTop)||0,bottomPad=parseFloat(subStyle?.paddingBottom)||0;
+    // Flex items cannot shrink below their padding. Leave that space as well as
+    // one visible subtitle line, so focusing the resize control cannot scroll
+    // the video top out of the clipped document area.
+    const subtitles=Math.max(pad+this.subtitleLine()+this.toolbarOverlap(),pad+bottomPad);
+    return Math.max(0,height-(parseFloat(style?.paddingTop)||0)-(parseFloat(style?.paddingBottom)||0)-bar-strip-1-subtitles);
   }
   /** Bottom part of the document pane covered by the floating annotation toolbar, when it sits low. */
   toolbarOverlap(){
@@ -386,11 +406,11 @@ export class YouTubePane {
     if(!this.videoShare){
       // The default size (40% of the window) also gives way to one subtitle line on short windows.
       const room=this.videoRoom(),natural=Math.min(.4*window.innerHeight,(pane.clientWidth||Infinity)*9/16);
-      if(natural>room){pane.setAttribute('data-yt-sized','');pane.style.setProperty('--yt-video-h',Math.round(Math.max(VIDEO_MIN_PX,room))+'px');}
+      if(natural>room){pane.setAttribute('data-yt-sized','');pane.style.setProperty('--yt-video-h',Math.floor(room)+'px');}
       else{pane.removeAttribute('data-yt-sized');pane.style.removeProperty('--yt-video-h');}
     }
     else{
-      const px=Math.round(Math.max(VIDEO_MIN_PX,Math.min(this.videoShare*window.innerHeight,(pane.clientWidth||Infinity)*9/16,Math.max(VIDEO_MIN_PX,this.videoRoom()))));
+      const px=Math.floor(Math.max(0,Math.min(Math.max(VIDEO_MIN_PX,this.videoShare*window.innerHeight),(pane.clientWidth||Infinity)*9/16,this.videoRoom())));
       pane.setAttribute('data-yt-sized','');pane.style.setProperty('--yt-video-h',px+'px');
     }
     if(this.follow&&this.cues?.length&&this.reader?.doc)globalThis.requestAnimationFrame?.(()=>{if(!this.disposed)this.reveal(true,'auto');});
@@ -398,7 +418,7 @@ export class YouTubePane {
     handle?.setAttribute('aria-valuenow',String(now));handle?.setAttribute('aria-valuetext',this.videoShare?'영상 높이 '+now+'px':'기본 크기');
   }
   dispose(){
-    if(this.disposed)return;this.disposed=true;window.removeEventListener('resize',this.onWindowResize);window.removeEventListener('blur',this.onWindowBlur);window.removeEventListener('focus',this.onWindowFocus);clearInterval(this.timer);clearTimeout(this.tapTimer);document.removeEventListener('keydown',this.onFullscreenKey);this.visibility.disconnect();document.removeEventListener('click',this.onOutlineClick,true);
+    if(this.disposed)return;this.disposed=true;this.sizeObserver?.disconnect();window.removeEventListener('resize',this.onWindowResize);window.removeEventListener('blur',this.onWindowBlur);window.removeEventListener('focus',this.onWindowFocus);clearInterval(this.timer);clearTimeout(this.tapTimer);document.removeEventListener('keydown',this.onFullscreenKey);this.visibility.disconnect();document.removeEventListener('click',this.onOutlineClick,true);
     if(this.ready)this.remember(true);
     try{this.player?.destroy?.();}catch{}
     for(const type of ['wheel','touchmove','keydown'])this.reader.viewport?.removeEventListener(type,this.onUserScroll);
