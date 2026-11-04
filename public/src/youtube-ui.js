@@ -263,16 +263,58 @@ export class YouTubePane {
       this.cues[this.current]?.el.removeAttribute('data-htmlmemo-yt-now');this.current=index;
       const cue=this.cues[index];
       if(cue){cue.el.setAttribute('data-htmlmemo-yt-now','');this.$('now').textContent=cue.text;}else this.$('now').textContent='';
-      if(cue&&this.follow&&(this.playing||force)&&Date.now()>this.quietUntil)this.reveal();
+      // Following keeps the playing line in the middle of the subtitle area.
+      if(cue&&this.follow&&(this.playing||force)&&Date.now()>this.quietUntil)this.reveal(true);
     }
     if(this.playing&&Math.abs(t-this.savedAt)>=5)this.remember();
   }
   /** Scroll the current cue into view only when it has left the visible area. */
-  reveal(always=false){
-    const cue=this.cues[this.current];if(!cue)return;
+  reveal(always=false,behavior='smooth'){
+    const cue=this.cues[this.current];if(!cue)return;this.ensureCenterSpace();this.centerMargins();
     const frame=this.reader.frame.getBoundingClientRect(),scale=frame.width/(this.reader.frame.offsetWidth||frame.width)||1,rect=cue.el.getBoundingClientRect(),view=this.reader.viewport.getBoundingClientRect();
     const top=frame.top+rect.top*scale,bottom=frame.top+rect.bottom*scale;
-    if(always||top<view.top+16||bottom>view.bottom-16)cue.el.scrollIntoView({block:'center',behavior:'smooth'});
+    if(always||top<view.top+16||bottom>view.bottom-16)cue.el.scrollIntoView({block:'center',behavior});
+  }
+  /** Scale of the subtitle frame on screen (reader zoom). */
+  frameScale(){const frame=this.reader.frame,r=frame?.getBoundingClientRect?.();return r?.width&&frame.offsetWidth?r.width/frame.offsetWidth:1;}
+  /**
+   * Room after the last line so the closing subtitles can also scroll to the middle.
+   * It is app UI (stripped when saving) and comes after all text, so nothing moves.
+   */
+  ensureCenterSpace(){
+    const doc=this.reader.doc,body=doc?.body;if(!body||!this.reader.viewport)return;
+    let space=doc.getElementById('htmlmemo-yt-center-space');
+    if(!space){space=doc.createElement('div');space.id='htmlmemo-yt-center-space';for(const name of ['data-htmlmemo-ui','data-htmlmemo-preview','aria-hidden'])space.setAttribute(name,name==='aria-hidden'?'true':'');space.style.cssText='display:block;margin:0;padding:0;border:0;pointer-events:none';}
+    if(space.parentNode!==body||body.lastElementChild!==space)body.append(space);
+    const px=Math.round((this.reader.viewport.clientHeight||0)/2/this.frameScale())+'px';
+    if(space.style.height!==px){space.style.height=px;this.reader.measure?.();}
+  }
+  /** Top padding of the subtitle area and the part a low toolbar covers, in screen px. */
+  visibleCuts(){
+    const viewport=this.reader.viewport,style=viewport?.ownerDocument?.defaultView?.getComputedStyle?.(viewport);
+    const top=parseFloat(style?.paddingTop)||0,host=this.tab.host,bar=host?.ownerDocument?.getElementById?.('toolbar');
+    let bottom=0;
+    if(bar&&!bar.hidden&&viewport?.getBoundingClientRect){const v=viewport.getBoundingClientRect(),t=bar.getBoundingClientRect();if(t.height&&t.top+t.height/2>=v.top+v.height/2&&t.top<v.bottom)bottom=Math.ceil(v.bottom-t.top)+4;}
+    return {top,bottom};
+  }
+  /**
+   * "Centre" means the middle of what is visible: scroll margins on the playing line
+   * shift block:'center' by the padding above and the toolbar below. The rule sits in
+   * app UI that saving drops, so nothing is written into the document.
+   */
+  centerMargins(){
+    const doc=this.reader.doc;if(!doc?.head)return;
+    const {top,bottom}=this.visibleCuts(),scale=this.frameScale(),css=`[data-htmlmemo-yt-now]{scroll-margin:${Math.round(top/scale)}px 0 ${Math.round(bottom/scale)}px}`;
+    let style=doc.getElementById('htmlmemo-yt-center-style');
+    if(!style){style=doc.createElement('style');style.id='htmlmemo-yt-center-style';style.setAttribute('data-htmlmemo-ui','');style.setAttribute('data-htmlmemo-preview','');doc.head.append(style);}
+    if(style.textContent!==css)style.textContent=css;
+  }
+  /** Height of one subtitle line on screen, with its row spacing. */
+  subtitleLine(){
+    const el=this.cues?.[this.current]?.el||this.cues?.[0]?.el;if(!el)return 40;
+    const style=el.ownerDocument?.defaultView?.getComputedStyle?.(el),line=parseFloat(style?.lineHeight)||parseFloat(style?.fontSize)*1.5||24;
+    const pad=(parseFloat(style?.paddingTop)||0)+(parseFloat(style?.paddingBottom)||0);
+    return Math.ceil((line+pad)*this.frameScale())+8;
   }
   remember(now=false){
     const t=this.time();if(!Number.isFinite(t))return;this.savedAt=t;
@@ -313,15 +355,37 @@ export class YouTubePane {
       if(!step)return;event.preventDefault();set(height()+step*window.innerHeight*.05,true);
     };
   }
+  /**
+   * Tallest the video may be: the rest of the document pane minus the video bar, the
+   * resize strip and one subtitle line, so at least one line of subtitles stays visible.
+   */
+  videoRoom(){
+    const host=this.tab.host,pane=this.pane,style=host?.ownerDocument?.defaultView?.getComputedStyle?.(host);
+    const bar=pane.querySelector('.youtube-bar')?.offsetHeight||0,strip=pane.querySelector('.youtube-resize')?.offsetHeight||0;
+    const viewport=this.reader?.viewport,pad=parseFloat(viewport?.ownerDocument?.defaultView?.getComputedStyle?.(viewport)?.paddingTop)||0;
+    return (host?.clientHeight||window.innerHeight)-(parseFloat(style?.paddingTop)||0)-bar-strip-1-pad-this.subtitleLine()-this.toolbarOverlap();
+  }
+  /** Bottom part of the document pane covered by the floating annotation toolbar, when it sits low. */
+  toolbarOverlap(){
+    const host=this.tab.host,bar=host?.ownerDocument?.getElementById?.('toolbar');
+    if(!bar||bar.hidden||!host.getBoundingClientRect)return 0;
+    const h=host.getBoundingClientRect(),t=bar.getBoundingClientRect();
+    if(!t.height||t.top+t.height/2<h.top+h.height/2||t.top>=h.bottom)return 0;
+    return Math.ceil(h.bottom-t.top)+4;
+  }
   applyVideoHeight(){
     const pane=this.pane,handle=pane.querySelector('.youtube-resize');
-    if(!this.videoShare){pane.removeAttribute('data-yt-sized');pane.style.removeProperty('--yt-video-h');}
+    if(!this.videoShare){
+      // The default size (40% of the window) also gives way to one subtitle line on short windows.
+      const room=this.videoRoom(),natural=Math.min(.4*window.innerHeight,(pane.clientWidth||Infinity)*9/16);
+      if(natural>room){pane.setAttribute('data-yt-sized','');pane.style.setProperty('--yt-video-h',Math.round(Math.max(VIDEO_MIN_PX,room))+'px');}
+      else{pane.removeAttribute('data-yt-sized');pane.style.removeProperty('--yt-video-h');}
+    }
     else{
-      // Never wider than the pane, and leave the video bar and a few subtitle lines below it.
-      const bar=pane.querySelector('.youtube-bar')?.offsetHeight||0,room=(this.tab.host.clientHeight||window.innerHeight)-bar-120;
-      const px=Math.round(Math.max(VIDEO_MIN_PX,Math.min(this.videoShare*window.innerHeight,(pane.clientWidth||Infinity)*9/16,Math.max(VIDEO_MIN_PX,room))));
+      const px=Math.round(Math.max(VIDEO_MIN_PX,Math.min(this.videoShare*window.innerHeight,(pane.clientWidth||Infinity)*9/16,Math.max(VIDEO_MIN_PX,this.videoRoom()))));
       pane.setAttribute('data-yt-sized','');pane.style.setProperty('--yt-video-h',px+'px');
     }
+    if(this.follow&&this.cues?.length&&this.reader?.doc)globalThis.requestAnimationFrame?.(()=>{if(!this.disposed)this.reveal(true,'auto');});
     const now=Math.round(this.video.getBoundingClientRect?.().height||0);
     handle?.setAttribute('aria-valuenow',String(now));handle?.setAttribute('aria-valuetext',this.videoShare?'영상 높이 '+now+'px':'기본 크기');
   }

@@ -149,7 +149,7 @@ test('dragging the strip under the video bar sets the video height, remembered a
     handle.onpointermove({pointerId:3,clientY:650});assert.equal(pane.style.getPropertyValue('--yt-video-h'),'550px');
     handle.onpointerup({pointerId:3});assert.equal(pane.classList.contains('youtube-resizing'),false);assert.equal(store.get('librememo-youtube-height'),'0.55');
     handle.onpointerdown({button:0,pointerId:4,clientY:500,preventDefault(){}});handle.onpointermove({pointerId:4,clientY:2000});handle.onpointerup({pointerId:4});
-    assert.equal(pane.style.getPropertyValue('--yt-video-h'),'830px','leaves the video bar and some subtitle room below');
+    assert.equal(pane.style.getPropertyValue('--yt-video-h'),'850px','no taller than 85% of the window');
     handle.onpointerdown({button:0,pointerId:5,clientY:500,preventDefault(){}});handle.onpointermove({pointerId:5,clientY:-2000});handle.onpointerup({pointerId:5});
     assert.equal(pane.style.getPropertyValue('--yt-video-h'),'120px');
     handle.onkeydown({key:'ArrowDown',preventDefault(){}});assert.equal(pane.style.getPropertyValue('--yt-video-h'),'170px');
@@ -221,7 +221,7 @@ test('the − and + buttons in the video bar shrink and grow the video by a tent
     assert.equal(pane.style.getPropertyValue('--yt-video-h'),'500px');assert.equal(store.get('librememo-youtube-height'),'0.5');
     pane.querySelector('[data-yt="smaller"]').onclick();pane.querySelector('[data-yt="smaller"]').onclick();assert.equal(pane.style.getPropertyValue('--yt-video-h'),'300px');
     for(let i=0;i<10;i++)pane.querySelector('[data-yt="smaller"]').onclick();assert.equal(pane.style.getPropertyValue('--yt-video-h'),'120px','never below 12% of the window');
-    for(let i=0;i<12;i++)pane.querySelector('[data-yt="bigger"]').onclick();assert.equal(pane.style.getPropertyValue('--yt-video-h'),'830px','leaves the bar and a few subtitle lines');
+    for(let i=0;i<12;i++)pane.querySelector('[data-yt="bigger"]').onclick();assert.equal(pane.style.getPropertyValue('--yt-video-h'),'850px','no taller than 85% of the window');
   }finally{globalThis.window=saved.window;globalThis.localStorage=saved.localStorage;}
 });
 
@@ -274,4 +274,61 @@ test('the tap zones over the video never draw a focus box, and Space on one is t
   const p={state:2,getPlayerState(){return this.state;},playVideo(){this.state=1;},pauseVideo(){this.state=2;},seekTo(){}};
   const self={player:p,ready:true,callbacks:{},$:()=>null,flash(){}};Object.setPrototypeOf(self,YouTubePane.prototype);
   assert.equal(self.handleKey({key:' ',target:doc.querySelector('button')}),true);assert.equal(p.state,1);
+});
+
+test('the video grows only until one subtitle line is left, and following keeps the playing line centred',async()=>{
+  const {YouTubePane}=await import('../public/src/youtube-ui.js');
+  const store=new Map();const saved={window:globalThis.window,localStorage:globalThis.localStorage};
+  globalThis.localStorage={getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,String(v))};
+  globalThis.window={innerHeight:1000,addEventListener(){},removeEventListener(){}};
+  try{
+    const doc=new DOMParser().parseFromString('<section class="youtube-pane"><div class="youtube-video"></div><div class="youtube-bar"><button data-yt="smaller"></button><button data-yt="bigger"></button></div><div class="youtube-resize"></div></section>','text/html');
+    const pane=doc.querySelector('.youtube-pane'),video=pane.querySelector('.youtube-video');Object.defineProperty(pane,'clientWidth',{value:1600});
+    video.getBoundingClientRect=()=>({height:pane.hasAttribute('data-yt-sized')?parseFloat(pane.style.getPropertyValue('--yt-video-h')):400});
+    const cueEl={ownerDocument:{defaultView:{getComputedStyle:()=>({lineHeight:'30px',paddingTop:'4px',paddingBottom:'4px'})}}};
+    const host={clientHeight:600};
+    const self={pane,video,tab:{host},cues:[{el:cueEl}],current:0,follow:false,reader:{},$:()=>null};Object.setPrototypeOf(self,YouTubePane.prototype);
+    assert.equal(self.subtitleLine(),46,'line 30 + padding 8 + spacing 8');
+    self.bindResize();for(let i=0;i<12;i++)pane.querySelector('[data-yt="bigger"]').onclick();
+    assert.equal(pane.style.getPropertyValue('--yt-video-h'),'553px','600 − 1 − one 46px line');
+    store.set('librememo-youtube-height','0');self.videoShare=null;host.clientHeight=300;self.applyVideoHeight();
+    assert.equal(pane.style.getPropertyValue('--yt-video-h'),'253px','the default size also leaves one line on a short window');
+    host.clientHeight=900;self.applyVideoHeight();assert.equal(pane.hasAttribute('data-yt-sized'),false,'back to the default when it fits');
+  }finally{globalThis.window=saved.window;globalThis.localStorage=saved.localStorage;}
+  const {readFile}=await import('node:fs/promises');
+  const source=await readFile(new URL('../public/src/youtube-ui.js',import.meta.url),'utf8');
+  assert.match(source,/if\(cue&&this\.follow&&\(this\.playing\|\|force\)&&Date\.now\(\)>this\.quietUntil\)this\.reveal\(true\);/,'every new line is centred while following');
+});
+test('the centring space after the last subtitle is app UI that saving drops',async()=>{
+  const {YouTubePane}=await import('../public/src/youtube-ui.js');
+  const {serializeHTML}=await import('../public/src/document.js');
+  const doc=new DOMParser().parseFromString('<html><head></head><body><article data-subtitles><p>Line</p></article></body></html>','text/html');
+  let measured=0;const self={reader:{doc,viewport:{clientHeight:500},measure:()=>measured++}};Object.setPrototypeOf(self,YouTubePane.prototype);
+  self.ensureCenterSpace();const space=doc.getElementById('htmlmemo-yt-center-space');
+  assert.equal(space.style.height,'250px');assert.equal(doc.body.lastElementChild,space);assert.equal(measured,1);
+  self.ensureCenterSpace();assert.equal(measured,1,'unchanged height does not re-measure');
+  assert.doesNotMatch(serializeHTML(doc,{version:1,annotations:[]}),/htmlmemo-yt-center-space/);
+});
+
+test('the line left under the video is not the one hidden by a low annotation toolbar',async()=>{
+  const {YouTubePane}=await import('../public/src/youtube-ui.js');
+  const toolbar={hidden:false,getBoundingClientRect:()=>({top:720,height:20,bottom:740})};
+  const host={getBoundingClientRect:()=>({top:50,height:720,bottom:770}),ownerDocument:{getElementById:id=>id==='toolbar'?toolbar:null}};
+  const self={tab:{host}};Object.setPrototypeOf(self,YouTubePane.prototype);
+  assert.equal(self.toolbarOverlap(),54,'770 − 720 + 4');
+  toolbar.getBoundingClientRect=()=>({top:80,height:20,bottom:100});assert.equal(self.toolbarOverlap(),0,'a toolbar moved up over the video takes nothing');
+  toolbar.hidden=true;assert.equal(self.toolbarOverlap(),0);
+});
+
+test('the playing line is centred in the visible part: below the top padding and above a low toolbar',async()=>{
+  const {YouTubePane}=await import('../public/src/youtube-ui.js');
+  const {serializeHTML}=await import('../public/src/document.js');
+  const doc=new DOMParser().parseFromString('<html><head></head><body><p data-htmlmemo-yt-now>Line</p></body></html>','text/html');
+  const toolbar={hidden:false,getBoundingClientRect:()=>({top:700,height:20,bottom:720})};
+  const viewport={getBoundingClientRect:()=>({top:300,height:440,bottom:740}),ownerDocument:{defaultView:{getComputedStyle:()=>({paddingTop:'24px'})}}};
+  const self={reader:{doc,viewport,frame:{offsetWidth:500,getBoundingClientRect:()=>({width:1000})}},tab:{host:{ownerDocument:{getElementById:id=>id==='toolbar'?toolbar:null}}}};
+  Object.setPrototypeOf(self,YouTubePane.prototype);
+  assert.deepEqual(self.visibleCuts(),{top:24,bottom:44});
+  self.centerMargins();assert.equal(doc.getElementById('htmlmemo-yt-center-style').textContent,'[data-htmlmemo-yt-now]{scroll-margin:12px 0 22px}','screen px divided by the 2× zoom');
+  assert.doesNotMatch(serializeHTML(doc,{version:1,annotations:[]}),/htmlmemo-yt-center-style/);
 });
