@@ -103,7 +103,7 @@ export class YouTubePane {
     // The bottom strip (progress bar and control row, 88-140px) stays YouTube's own. Its full-screen
     // button is hidden (fs:0): double-tapping the picture is the full-screen control.
     pane.innerHTML=`<div class="youtube-video"><div class="youtube-frame"></div>
-      <div class="youtube-zones"><button type="button" data-yt="back" aria-label="${skip}초 뒤로"></button><button type="button" data-yt="play" aria-label="재생"></button><button type="button" data-yt="forward" aria-label="${skip}초 앞으로"></button></div>
+      <div class="youtube-zones"><button type="button" tabindex="-1" data-yt="back" aria-label="${skip}초 뒤로"></button><button type="button" tabindex="-1" data-yt="play" aria-label="재생"></button><button type="button" tabindex="-1" data-yt="forward" aria-label="${skip}초 앞으로"></button></div>
       <div class="youtube-flash" aria-hidden="true"></div><p class="youtube-message" hidden></p></div>
       <div class="youtube-bar">
         <button type="button" class="youtube-button" data-yt="follow" aria-pressed="true" title="재생 중인 자막을 따라 화면을 움직입니다">${icon('list',15)}<span>따라가기</span></button>
@@ -122,7 +122,7 @@ export class YouTubePane {
     const viewport=this.reader.viewport;viewport.before(pane);tab.host.classList.add('has-youtube');
     const $=name=>pane.querySelector(`[data-yt="${name}"]`);this.$=$;this.video=pane.querySelector('.youtube-video');
     // One tap acts after a short wait; a second tap in that time toggles full screen instead.
-    const tap=action=>()=>{if(this.tapTimer){clearTimeout(this.tapTimer);this.tapTimer=0;this.toggleFullscreen();return;}this.tapTimer=setTimeout(()=>{this.tapTimer=0;action();},250);};
+    const tap=action=>event=>{event?.currentTarget?.blur?.();if(this.tapTimer){clearTimeout(this.tapTimer);this.tapTimer=0;this.toggleFullscreen();return;}this.tapTimer=setTimeout(()=>{this.tapTimer=0;action();},250);};
     $('play').onclick=tap(()=>{const playing=this.player?.getPlayerState?.()===1;this.toggle();this.flash(icon(playing?'pause':'play',34));});
     $('back').onclick=tap(()=>{const n=skipSeconds();this.seekBy(-n);this.flash(icon('undo',26)+'<span>'+n+'초</span>');});
     $('forward').onclick=tap(()=>{const n=skipSeconds();this.seekBy(n);this.flash('<span>'+n+'초</span>'+icon('redo',26));});
@@ -193,7 +193,7 @@ export class YouTubePane {
     if(this.disposed||event.ctrlKey||event.metaKey||event.altKey)return false;
     const target=event.target?.nodeType===1?event.target:null,key=event.key;
     if(target?.closest?.('input,textarea,select,[contenteditable=""],[contenteditable=true],[role=separator],[role=slider]'))return false;
-    if((key===' '||key==='Enter')&&target?.closest?.('button,a,summary,[role=button]'))return false;
+    if((key===' '||key==='Enter')&&target?.closest?.('button,a,summary,[role=button]')&&!target.closest('.youtube-zones'))return false;
     const p=this.player,ok=!!p?.seekTo&&this.ready,lower=key.length===1?key.toLowerCase():key;
     const skip=seconds=>{this.seekBy(seconds);this.flash(seconds<0?icon('undo',26)+'<span>'+(-seconds)+'초</span>':'<span>'+seconds+'초</span>'+icon('redo',26));};
     if(key==='?'){this.callbacks.onShortcuts?.();return true;}

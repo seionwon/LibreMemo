@@ -262,3 +262,16 @@ test('the app hands keys to the YouTube pane before the reader and tool shortcut
   assert.ok(routed>0);assert.ok(routed<app.indexOf('if(reader().handleReadingKey?.(event))'));assert.ok(routed<app.indexOf("const tools={v:'select'"));
   assert.match(app,/onShortcuts:\(\)=>\{if\(!\$\('#dialog'\)\.open\)youtubeShortcutsDialog\(YOUTUBE_SHORTCUTS\);\}/);
 });
+
+test('the tap zones over the video never draw a focus box, and Space on one is the play shortcut',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const source=await readFile(new URL('../public/src/youtube-ui.js',import.meta.url),'utf8'),css=await readFile(new URL('../public/design.tailwind.css',import.meta.url),'utf8');
+  for(const zone of ['back','play','forward'])assert.match(source,new RegExp(`<button type="button" tabindex="-1" data-yt="${zone}"`));
+  assert.match(source,/const tap=action=>event=>\{event\?\.currentTarget\?\.blur\?\.\(\);/,'a click leaves no focus on the zone');
+  assert.match(css,/\.youtube-zones button,\.youtube-zones button:focus,\.youtube-zones button:focus-visible\{outline:none\}/);assert.doesNotMatch(css,/\.youtube-zones button:focus-visible\{outline:2px/);
+  const {YouTubePane}=await import('../public/src/youtube-ui.js');
+  const doc=new DOMParser().parseFromString('<div class="youtube-zones"><button data-yt="play"></button></div>','text/html');
+  const p={state:2,getPlayerState(){return this.state;},playVideo(){this.state=1;},pauseVideo(){this.state=2;},seekTo(){}};
+  const self={player:p,ready:true,callbacks:{},$:()=>null,flash(){}};Object.setPrototypeOf(self,YouTubePane.prototype);
+  assert.equal(self.handleKey({key:' ',target:doc.querySelector('button')}),true);assert.equal(p.state,1);
+});
