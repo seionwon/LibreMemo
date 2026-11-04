@@ -5,6 +5,7 @@
 - 제품 이름은 LibreMemo(구 HTMLMemo)입니다. 계정은 `seionwon`, 브랜치는 `main`입니다. 저장소 이름 변경 전에는 `seionwon/HTMLMemo`와 `https://seionwon.github.io/HTMLMemo/`, 변경 뒤에는 `seionwon/LibreMemo`와 `https://seionwon.github.io/LibreMemo/`를 사용합니다. 현재 origin과 실제 GitHub 이름을 확인하고, 새 주소가 게시되기 전에 전환 완료로 기록하지 않습니다. 다른 MemoSuite 프로젝트의 계정과 혼동하지 않습니다.
 - [저장소 전환 안내](docs/rename-to-librememo.md)에 따라 기존 주소에 변경 버전을 먼저 게시한 뒤 저장소를 바꿉니다. 기존 데이터·저장 폴더 관리 파일·동기화 규약의 호환 식별자를 기계적으로 이름 변경하지 않습니다. 실제 소스 폴더는 기존 CodeMemo 대화가 사용하는 `HTMLMemo` 경로를 유지합니다.
 - 현재 저장소의 origin URL과 credential username을 사용합니다. 전역 `gh auth switch`, 토큰을 포함한 원격 URL, 자격 증명 출력으로 인증을 바꾸지 않습니다. 토큰·개인 문서·기기 설정을 소스나 빌드에 넣지 않습니다.
+- 사용자가 별도로 배포를 제외하지 않으면 소스 수정 작업은 추가 확인 없이 검증부터 GitHub Pages 게시·온라인 확인까지 진행합니다.
 - 사용자가 게시를 요청했으면 소스 검사·빌드·필요한 실제 Chrome 검사, 관련 파일만 커밋, `git push origin main`, 해당 커밋의 GitHub Actions·Pages 게시 성공, 온라인 파일과 화면 확인까지 진행합니다. 로컬 빌드만 완료한 상태를 배포 완료로 표현하지 않습니다.
 - 기존 `.github/workflows/deploy-pages.yml`이 main push 뒤 검사·빌드·게시를 수행합니다. 게시 소스는 GitHub Actions이며 dist만 공개됩니다. 이미 정상인 Source 설정을 다시 바꾸거나 별도 공개 서버를 만들지 않습니다.
 - 연결 오류가 나면 현재 환경에서 저장소 접근과 GitHub API를 다시 확인하고 GitHub 응답, 인증 실패, 명령 실행 환경의 네트워크 제한을 구분합니다. 이전 대화나 이력의 접속 오류만으로 현재 연결도 차단되어 있다고 판단하지 않습니다.
