@@ -6404,9 +6404,10 @@ CodeMemo의 별도 임시 Chrome 검사는 EPUB 본문·스타일 표시와 내�
 | --- | --- |
 | ID | hist-20261104-007 |
 | 변경 종류 | 스타일(`public/design.tailwind.css`), 단위·Chrome 검사 |
-| 상태 | 로컬 검증 완료, 게시 진행 |
+| 상태 | GitHub Pages 게시 완료(1.9.54) |
 
 - **요청:** 「youtube play 화면에서, 사이드바의 목차에서 시간이 두 줄로 보임. 시간은 항상 한 줄로 보이도록 해줘.」
 - **원인:** 목차 항목은 가로 배치(flex)이고 긴 제목이 넘치지 않도록 아무 곳에서나 줄을 바꾸게(`overflow-wrap:anywhere`) 되어 있습니다. 사이드바가 좁거나 제목이 길면 시간 칸이 줄어들면서 「1:02」 같은 시간 안에서 줄이 바뀌었습니다.
 - **수정:** 유튜브 목차의 시간(`.outline-time`)은 줄어들지 않고(`flex:none`) 줄을 바꾸지 않도록(`white-space:nowrap`, `overflow-wrap:normal`) 했습니다. 이제 줄바꿈은 시간 오른쪽의 제목에서만 일어납니다. 앱 사이드바와 문서 사이드바 모두 같습니다.
 - **검증:** `npm run check`, 단위 검사 979개(두 묶음 481·498개, 새 검사 1개 포함), `npm run build`, `git diff --check` 통과. 게시 후 Chrome 검사(compact library)에 96px 폭 사이드바에서 「1:02:03」과 긴 제목을 놓고 시간이 한 줄(줄 상자 1개, 줄 높이 1배)이며 잘리지 않는지 보는 단계를 추가했습니다. 실제 유튜브 문서를 열어 눈으로 확인하지는 않았습니다.
+- **게시 (2026-11-04 10:54 +09:00):** 커밋 `0ce6eaa`의 [Actions 41755314355](https://github.com/seionwon/LibreMemo/actions/runs/41755314355)에서 build·deploy·verify가 모두 성공했습니다. 새 한 줄 시간 단계가 든 compact library 검사를 포함해 게시 후 Chrome 검사 87개가 통과했습니다. 공개 `version.js` 1.9.54와 공개 `styles.css`의 `.outline-time` 규칙을 확인했습니다.
