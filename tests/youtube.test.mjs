@@ -171,3 +171,21 @@ test('punctuation that machine translation pushes to the next cue goes back to t
   const doc=new DOMParser().parseFromString(youtubeDocumentHTML('Video',{text:srt,format:'srt'}),'text/html');
   assert.deepEqual([...doc.querySelectorAll('.subtitle-text')].map(n=>n.textContent),['결국 미국에 오게 되었습니다.','저는 그저 호기심 많은 사람이었을 뿐입니다']);
 });
+
+test('the video player hides YouTube\'s own full-screen button; double-tapping the picture is the full-screen control',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const source=await readFile(new URL('../public/src/youtube-ui.js',import.meta.url),'utf8');
+  const main=source.match(/this\.player=new YT\.Player\([^;]*playerVars:\{([^}]*)\}/);
+  assert.ok(main,'main player options');assert.match(main[1],/(^|,)fs:0(,|$)/);
+  assert.match(source,/this\.toggleFullscreen\(\);return;/,'a second tap still toggles full screen');
+  const css=await readFile(new URL('../public/design.tailwind.css',import.meta.url),'utf8');
+  assert.match(css,/\.youtube-zones\{[^}]*bottom:clamp\(88px,16%,140px\)/,'tap zones stop above the progress bar');
+});
+
+test('the video clock reads "current / total" once the player knows the length',async()=>{
+  const {YouTubePane}=await import('../public/src/youtube-ui.js');
+  const pane={player:{getDuration:()=>3723}};
+  assert.equal(YouTubePane.prototype.clockText.call(pane,359),'5:59 / 1:02:03');
+  pane.player.getDuration=()=>0;assert.equal(YouTubePane.prototype.clockText.call(pane,359),'5:59');
+  assert.equal(YouTubePane.prototype.clockText.call({},5),'0:05');
+});

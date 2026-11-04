@@ -93,7 +93,8 @@ export class YouTubePane {
     const pane=this.pane=document.createElement('section');pane.className='youtube-pane';pane.dataset.youtubePane='';pane.setAttribute('aria-label','YouTube 영상');
     const skip=skipSeconds(),rate=pref('rate',1,v=>RATES.includes(v));
     // The picture itself is the control: left quarter back, middle half play/pause, right quarter forward.
-    // The bottom strip stays YouTube's own (progress bar, captions, settings, full screen).
+    // The bottom strip (progress bar and control row, 88-140px) stays YouTube's own. Its full-screen
+    // button is hidden (fs:0): double-tapping the picture is the full-screen control.
     pane.innerHTML=`<div class="youtube-video"><div class="youtube-frame"></div>
       <div class="youtube-zones"><button type="button" data-yt="back" aria-label="${skip}초 뒤로"></button><button type="button" data-yt="play" aria-label="재생"></button><button type="button" data-yt="forward" aria-label="${skip}초 앞으로"></button></div>
       <div class="youtube-flash" aria-hidden="true"></div><p class="youtube-message" hidden></p></div>
@@ -159,7 +160,7 @@ export class YouTubePane {
   async mount(){
     let YT;try{YT=await loadYouTubeAPI();}catch(error){this.message(error.message);return;}
     if(this.disposed)return;
-    this.player=new YT.Player(this.pane.querySelector('.youtube-frame'),{host:PLAYER_HOST,videoId:this.youtube.videoId,playerVars:{playsinline:1,rel:0,iv_load_policy:3,cc_load_policy:0,start:Math.floor(this.savedAt>3?this.savedAt-2:0),origin:location.origin},events:{
+    this.player=new YT.Player(this.pane.querySelector('.youtube-frame'),{host:PLAYER_HOST,videoId:this.youtube.videoId,playerVars:{playsinline:1,rel:0,fs:0,iv_load_policy:3,cc_load_policy:0,start:Math.floor(this.savedAt>3?this.savedAt-2:0),origin:location.origin},events:{
       onReady:()=>{this.ready=true;this.player.setPlaybackRate?.(Number(this.$('rate').value));},
       onStateChange:event=>{
         const playing=event.data===1;this.playing=playing;
@@ -187,6 +188,8 @@ export class YouTubePane {
   /** A short sign in the middle of the picture, as YouTube shows for taps. */
   flash(html){const el=this.pane.querySelector('.youtube-flash');el.innerHTML=html;el.classList.remove('show');void el.offsetWidth;el.classList.add('show');}
   /** The playing time; right after a seek, the target until the player reports it (it answers with the old time for a moment). */
+  // "current / total"; the total is left out until the player reports a duration.
+  clockText(t){let total=0;try{total=this.player?.getDuration?.()||0;}catch{}return total>0?clock(t)+' / '+clock(total):clock(t);}
   time(){
     let t=0;try{t=this.player?.getCurrentTime?.()||0;}catch{}
     if(this.target){if(Math.abs(t-this.target.t)<1.5||Date.now()>this.target.until)this.target=null;else return this.target.t;}
@@ -198,7 +201,7 @@ export class YouTubePane {
   setSiblings(prev,next){this.$('prev').hidden=!prev;this.$('next').hidden=!next;this.$('prev').title=prev?'이전 영상: '+prev:'';this.$('next').title=next?'다음 영상: '+next:'';}
   tick(force=false){
     if(this.disposed||!this.ready)return;
-    const t=this.time();this.$('clock').textContent=clock(t);
+    const t=this.time();this.$('clock').textContent=this.clockText(t);
     const index=cueAt(this.cues,t);
     if(index!==this.current||force){
       this.cues[this.current]?.el.removeAttribute('data-htmlmemo-yt-now');this.current=index;
