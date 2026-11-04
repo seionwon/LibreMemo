@@ -387,7 +387,7 @@ test('phone document body touch dismisses open app and document sidebars while k
  assert.equal(doc.body.classList.contains('toc-open'),false);
 });
 
-test('statusbar slides up only on status changes and auto-hides after settling while staying pinned on active saves or errors',async()=>{
+test('statusbar stays down for routine autosaves and rises for notices and save problems',async()=>{
  const css=await readFile(new URL('../public/design.tailwind.css',import.meta.url),'utf8');
  assert.match(css,/\.statusbar\{position:fixed;left:0;right:0;bottom:0;z-index:35;transform:translateY\(100%\);opacity:0;pointer-events:none;transition:transform \.22s ease,opacity \.22s ease\}/);
  assert.match(css,/\.statusbar\[data-statusbar-visible\],\.statusbar:hover,\.statusbar:focus-within,\.statusbar:has\(\.save-error,\[data-book-incomplete\],#retry-save\)\{transform:translateY\(0\);opacity:1\}/);
@@ -407,25 +407,21 @@ test('statusbar slides up only on status changes and auto-hides after settling w
  const bar=doc.querySelector('.statusbar');
  doc.querySelector('#data-folder-status').textContent='폴더 저장 완료';
  assert.equal(bar.hasAttribute('data-statusbar-visible'),false);
+ context.syncStatusbarVisibility();scheduledFn?.();assert.equal(bar.hasAttribute('data-statusbar-visible'),false,'settled start');
  context.setStatusLeft('주석이 앱에 자동 저장됨');
- assert.equal(bar.hasAttribute('data-statusbar-visible'),true);
- assert.equal(typeof scheduledFn,'function');
- scheduledFn();
- assert.equal(bar.hasAttribute('data-statusbar-visible'),false,'slides back down after timer when idle');
- context.setStatusLeft('주석이 앱에 자동 저장됨');
- assert.equal(bar.hasAttribute('data-statusbar-visible'),false,'unchanged status does not pop up statusbar');
- doc.querySelector('#data-folder-status').textContent='폴더 저장 중…';
- context.syncStatusbarVisibility();
- assert.equal(bar.hasAttribute('data-statusbar-visible'),false,'background reading position save does not pop up statusbar');
- context.tabs.push({opening:false,queue:{editsPending:true}});
- context.setStatusLeft('저장 중…');
- assert.equal(bar.hasAttribute('data-statusbar-visible'),true);
- scheduledFn?.();
- assert.equal(bar.hasAttribute('data-statusbar-visible'),true,'stays visible while edits are pending');
- context.tabs[0].queue.editsPending=false;
- context.setStatusLeft('주석이 앱에 자동 저장됨');
- scheduledFn?.();
- assert.equal(bar.hasAttribute('data-statusbar-visible'),false,'slides down once save settles');
+ assert.equal(bar.hasAttribute('data-statusbar-visible'),false,'a routine save does not cover the page');
+ doc.querySelector('#data-folder-status').textContent='폴더 저장 중…';context.syncStatusbarVisibility();
+ context.tabs.push({opening:false,queue:{editsPending:true}});context.setStatusLeft('저장 중…');
+ assert.equal(bar.hasAttribute('data-statusbar-visible'),false,'saving in progress stays quiet (the tab dot shows it)');
+ context.tabs[0].queue.editsPending=false;context.setStatusLeft('주석이 앱에 자동 저장됨');doc.querySelector('#data-folder-status').textContent='폴더 저장 완료';context.syncStatusbarVisibility();
+ assert.equal(bar.hasAttribute('data-statusbar-visible'),false);
+ context.setStatusLeft('새 버전을 설치했습니다.');
+ assert.equal(bar.hasAttribute('data-statusbar-visible'),true,'other notices still rise');
+ assert.equal(typeof scheduledFn,'function');scheduledFn();
+ assert.equal(bar.hasAttribute('data-statusbar-visible'),false,'and slide back down');
+ const failure=doc.createElement('span');failure.className='save-state save-error';failure.textContent='주석 자동 저장 실패 · 디스크 가득 참';doc.querySelector('#status-left').replaceChildren(failure);context.syncStatusbarVisibility();
+ assert.equal(bar.hasAttribute('data-statusbar-visible'),true,'a save error rises');scheduledFn?.();
+ assert.equal(bar.hasAttribute('data-statusbar-visible'),true,'and stays until it is resolved');
 });
 test('a touch double tap on empty space toggles full screen once, while drags, slow taps and other tools do not',()=>{
  let now=1000;const realNow=performance.now;performance.now=()=>now;

@@ -144,8 +144,15 @@ export class YouTubePane {
     // Scrolling by hand pauses "follow" briefly instead of fighting the reader.
     this.onUserScroll=()=>{this.quietUntil=Date.now()+8000;};
     for(const type of ['wheel','touchmove','keydown'])viewport.addEventListener(type,this.onUserScroll,{passive:true});
+    // Only a plain click on a cue's time plays from there. Marking text (a drag that
+    // often starts on the time at the line's beginning) or any annotation tool never does,
+    // so annotating keeps a paused video paused.
+    this.onDocPointerDown=event=>{this.docPress={x:event.clientX,y:event.clientY};};
     this.onDocClick=event=>{
       const time=event.target?.closest?.('.subtitle-time');if(!time)return;
+      if(this.reader.tool&&this.reader.tool!=='select')return;
+      const press=this.docPress;this.docPress=null;
+      if(press&&Math.hypot(event.clientX-press.x,event.clientY-press.y)>4)return;
       const selection=this.reader.doc?.getSelection?.();if(selection&&!selection.isCollapsed)return;
       const cue=this.cues.find(c=>c.el===time.closest('.subtitle-cue'));if(cue){this.quietUntil=0;this.seek(cue.start,true);}
     };
@@ -168,6 +175,7 @@ export class YouTubePane {
     const doc=this.reader.doc;if(!doc)return;
     if(!doc.getElementById('htmlmemo-youtube-style')){const style=doc.createElement('style');style.id='htmlmemo-youtube-style';style.textContent=DOC_STYLE;doc.head.append(style);}
     doc.removeEventListener('click',this.onDocClick);doc.addEventListener('click',this.onDocClick);
+    doc.removeEventListener('pointerdown',this.onDocPointerDown,true);doc.addEventListener('pointerdown',this.onDocPointerDown,true);
     this.cues=[...doc.querySelectorAll('.subtitle-cue')].map(el=>{const time=el.querySelector('.subtitle-time'),t=cueTimes(time?.textContent);if(t&&time.dataset.clock!==clock(t.start))time.dataset.clock=clock(t.start);return t&&{el,start:t.start,end:t.end,text:(el.querySelector('.subtitle-text')?.textContent||'').trim()};}).filter(Boolean).sort((a,b)=>a.start-b.start);
     doc.querySelector('[data-subtitles]')?.toggleAttribute('data-htmlmemo-yt-long',this.cues.some(c=>c.start>=3600));
   }
@@ -395,7 +403,7 @@ export class YouTubePane {
     try{this.player?.destroy?.();}catch{}
     for(const type of ['wheel','touchmove','keydown'])this.reader.viewport?.removeEventListener(type,this.onUserScroll);
     const doc=this.reader.doc;
-    if(doc){doc.removeEventListener('click',this.onDocClick);doc.getElementById('htmlmemo-youtube-style')?.remove();doc.querySelectorAll('[data-htmlmemo-yt-now]').forEach(el=>el.removeAttribute('data-htmlmemo-yt-now'));}
+    if(doc){doc.removeEventListener('click',this.onDocClick);doc.removeEventListener('pointerdown',this.onDocPointerDown,true);doc.getElementById('htmlmemo-youtube-style')?.remove();doc.querySelectorAll('[data-htmlmemo-yt-now]').forEach(el=>el.removeAttribute('data-htmlmemo-yt-now'));}
     this.pane.remove();this.tab.host.classList.remove('has-youtube');
   }
 }

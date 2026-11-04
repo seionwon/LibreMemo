@@ -332,3 +332,21 @@ test('the playing line is centred in the visible part: below the top padding and
   self.centerMargins();assert.equal(doc.getElementById('htmlmemo-yt-center-style').textContent,'[data-htmlmemo-yt-now]{scroll-margin:12px 0 22px}','screen px divided by the 2× zoom');
   assert.doesNotMatch(serializeHTML(doc,{version:1,annotations:[]}),/htmlmemo-yt-center-style/);
 });
+
+test('annotating subtitles never starts a paused video: only a plain click on a time plays',async()=>{
+  const {YouTubePane}=await import('../public/src/youtube-ui.js');
+  const doc=new DOMParser().parseFromString('<article><p class="subtitle-cue"><span class="subtitle-time">0:05</span> Hello</p></article>','text/html');
+  const time=doc.querySelector('.subtitle-time'),seeks=[];
+  const pane=Object.create(YouTubePane.prototype);
+  Object.assign(pane,{reader:{doc,tool:'select'},cues:[{el:doc.querySelector('.subtitle-cue'),start:5}],seek:(t,play)=>seeks.push([t,play])});
+  // Pull the two handlers out of the constructor source so they run as written.
+  const {readFile}=await import('node:fs/promises');const src=await readFile(new URL('../public/src/youtube-ui.js',import.meta.url),'utf8');
+  const body=src.slice(src.indexOf('this.onDocPointerDown='),src.indexOf('// A timestamp in the outline'));
+  new Function(body).call(pane);
+  doc.getSelection=()=>({isCollapsed:true});
+  const press=(x,y)=>pane.onDocPointerDown({clientX:x,clientY:y}),click=(x,y)=>pane.onDocClick({target:time,clientX:x,clientY:y});
+  press(10,10);click(60,10);assert.deepEqual(seeks,[],'a drag from the time to mark text does not play');
+  pane.reader.tool='highlight';press(10,10);click(10,10);assert.deepEqual(seeks,[],'annotation tools never play');
+  pane.reader.tool='select';doc.getSelection=()=>({isCollapsed:false});press(10,10);click(10,10);assert.deepEqual(seeks,[],'a selection does not play');
+  doc.getSelection=()=>({isCollapsed:true});press(10,10);click(11,10);assert.deepEqual(seeks,[[5,true]],'a plain click on the time plays from there');
+});

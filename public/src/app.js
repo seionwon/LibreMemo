@@ -57,27 +57,28 @@ function toast(message, error = false) { const el=$('#toast'),security=isSecurit
 function showError(error) { if (error?.name !== 'AbortError') toast(error?.message || String(error),true); }
 function setButton(selector, name, label = '') { $(selector).innerHTML=icon(name)+(label ? `<span>${label}</span>`:''); }
 function setIconButton(selector, name, label, size = 18) { const button=$(selector);button.innerHTML=icon(name,size);button.title=label;button.setAttribute('aria-label',label); }
-let statusbarTimer=null,lastStatusbarSignature='';
+let statusbarTimer=null,lastStatusbarSignature=[];
+// Routine autosave progress is not news: the tab's dot shows unsaved edits, and the
+// statusbar stays down so it never covers the page while annotating. It rises for
+// problems (save errors, retry, incomplete book), going offline/online and other notices.
+const ROUTINE_STATUS=/^(?:저장 중…|주석이 앱에 자동 저장됨|폴더 저장 중…|폴더 저장 완료)$/;
 function statusbarSignature() {
   const left=$('#status-left'),folderButton=$('#data-folder-status'),net=$('#network-status');
-  const quietFolder=!tabs.some(t=>t.opening||t.queue?.editsPending)&&!folderSetupBusy;
-  const folderText=(folderButton?.textContent||'').trim();
+  const leftText=(left?.textContent||'').trim(),folderText=(folderButton?.textContent||'').trim();
   return [
-    (left?.textContent||'').trim(),
-    $('.save-state',left)?.className||'',
+    ROUTINE_STATUS.test(leftText)?'':leftText,
+    $('.save-error',left)?'error':'',
     $('[data-book-incomplete]',left)?'incomplete':'',
     $('#retry-save',left)?'retry':'',
-    quietFolder&&folderText==='폴더 저장 중…'?'폴더 저장 완료':folderText,
-    folderButton?.className||'',
-    (net?.textContent||'').trim(),
-    net?.className||'',
-  ].join('|');
+    ROUTINE_STATUS.test(folderText)?'':folderText,
+    folderButton?.classList.contains('save-error')?'folder-error':'',
+    (net?.textContent||'').trim()+(net?.classList.contains('offline')?' offline':''),
+  ];
 }
 function statusbarPinned() {
   const bar=$('.statusbar');if(!bar)return false;
   if($('.save-error,[data-book-incomplete],#retry-save',bar))return true;
-  if(tabs.some(t=>t.opening||t.queue?.editsPending)||folderSetupBusy)return true;
-  return false;
+  return !!folderSetupBusy;
 }
 function scheduleStatusbarHide(delay=2200) {
   clearTimeout(statusbarTimer);
@@ -101,7 +102,10 @@ function revealStatusbar({immediate=false,delay=2200}={}) {
   scheduleStatusbarHide(delay);
 }
 function syncStatusbarVisibility({force=false}={}) {
-  const sig=statusbarSignature(),changed=sig!==lastStatusbarSignature;
+  // News is a part gaining content (a notice, an error) or the network changing;
+  // a notice clearing back to quiet is not.
+  const sig=statusbarSignature(),before=lastStatusbarSignature,last=sig.length-1;
+  const changed=sig.some((value,i)=>value!==before[i]&&(value!==''||i===last)&&!(i===last&&before[i]===undefined));
   lastStatusbarSignature=sig;
   if(force||changed||statusbarPinned())revealStatusbar();
 }
