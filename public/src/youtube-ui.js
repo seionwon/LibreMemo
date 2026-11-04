@@ -62,6 +62,13 @@ export async function mapLimit(items,limit,task){
 }
 
 const RATES=[.5,.75,1,1.25,1.5,1.75,2];
+/** YouTube player keyboard shortcuts, as YouTube lists them (shown by "?"). */
+export const YOUTUBE_SHORTCUTS=[
+  ['Space · K','재생 / 일시정지'],['← / →','5초 뒤로 / 앞으로'],['J / L','10초 뒤로 / 앞으로'],
+  [', / .','일시정지 중 한 프레임 뒤로 / 앞으로'],['< / >','재생 속도 느리게 / 빠르게'],['0 – 9','영상의 0% – 90% 위치로'],
+  ['Home / End','처음 / 끝으로'],['↑ / ↓','볼륨 5% 높이기 / 낮추기'],['M','음소거 / 해제'],['C','YouTube 자막 켜기 / 끄기'],
+  ['F','영상 전체 화면 / 돌아오기'],['Shift + N / Shift + P','재생목록의 다음 / 이전 영상'],['?','이 단축키 목록'],
+];
 const pref=(key,fallback,valid)=>{try{const v=Number(localStorage.getItem('librememo-youtube-'+key));return valid(v)?v:fallback;}catch{return fallback;}};
 const savePref=(key,value)=>{try{localStorage.setItem('librememo-youtube-'+key,String(value));}catch{}};
 // Video height as a share of the window height (0 = default 40%).
@@ -177,6 +184,43 @@ export class YouTubePane {
       },
       onError:event=>this.message([101,150,153].includes(event.data)?'이 영상은 다른 사이트에서 재생할 수 없게 막혀 있습니다. 「YouTube에서 열기」로 보세요. 자막과 주석은 여기서 계속 쓸 수 있습니다.':'영상을 재생하지 못했습니다. (YouTube 오류 '+event.data+')'),
     }});
+  }
+  /**
+   * YouTube's own shortcuts while the app (not the video frame) has the keyboard.
+   * Returns true when the key was used. Fields, buttons and sliders keep their keys.
+   */
+  handleKey(event){
+    if(this.disposed||event.ctrlKey||event.metaKey||event.altKey)return false;
+    const target=event.target?.nodeType===1?event.target:null,key=event.key;
+    if(target?.closest?.('input,textarea,select,[contenteditable=""],[contenteditable=true],[role=separator],[role=slider]'))return false;
+    if((key===' '||key==='Enter')&&target?.closest?.('button,a,summary,[role=button]'))return false;
+    const p=this.player,ok=!!p?.seekTo&&this.ready,lower=key.length===1?key.toLowerCase():key;
+    const skip=seconds=>{this.seekBy(seconds);this.flash(seconds<0?icon('undo',26)+'<span>'+(-seconds)+'초</span>':'<span>'+seconds+'초</span>'+icon('redo',26));};
+    if(key==='?'){this.callbacks.onShortcuts?.();return true;}
+    if(key==='N'&&event.shiftKey||key==='P'&&event.shiftKey){const button=this.$(key==='N'?'next':'prev');if(!button||button.hidden)return false;this.callbacks.onNavigate?.(key==='N'?1:-1);return true;}
+    if(lower==='f'&&!event.shiftKey){this.toggleFullscreen();return true;}
+    if(!ok)return key===' '||lower==='k'?true:false;
+    const duration=()=>{try{return p.getDuration?.()||0;}catch{return 0;}};
+    if(key===' '||lower==='k'){const playing=p.getPlayerState?.()===1;this.toggle();this.flash(icon(playing?'pause':'play',34));return true;}
+    if(key==='ArrowLeft'||key==='ArrowRight'){skip(key==='ArrowLeft'?-5:5);return true;}
+    if(lower==='j'||lower==='l'){skip(lower==='j'?-10:10);return true;}
+    if((key===','||key==='.')&&p.getPlayerState?.()!==1){this.seek(this.time()+(key===','?-1:1)/30);return true;}
+    if(key==='<'||key==='>'){
+      const select=this.$('rate'),now=Number(select?.value)||1,i=RATES.indexOf(now),next=RATES[Math.max(0,Math.min(RATES.length-1,(i<0?2:i)+(key==='<'?-1:1)))];
+      if(select)select.value=String(next);savePref('rate',next);p.setPlaybackRate?.(next);this.flash('<span>'+next+'×</span>');return true;
+    }
+    if(/^[0-9]$/.test(key)&&!event.shiftKey){const d=duration();if(d)this.seek(d*Number(key)/10);return true;}
+    if(key==='Home'||key==='End'){const d=duration();this.seek(key==='Home'?0:Math.max(0,d-.5));return true;}
+    if(key==='ArrowUp'||key==='ArrowDown'){
+      const v=Math.max(0,Math.min(100,Math.round((p.getVolume?.()??100)+(key==='ArrowUp'?5:-5))));p.setVolume?.(v);if(v>0)p.unMute?.();
+      this.flash(icon('speaker',22)+'<span>'+v+'%</span>');return true;
+    }
+    if(lower==='m'){const muted=p.isMuted?.();if(muted)p.unMute?.();else p.mute?.();this.flash(icon('speaker',22)+'<span>'+(muted?'소리 켬':'음소거')+'</span>');return true;}
+    if(lower==='c'){
+      try{if(this.captionsOn){p.unloadModule?.('captions');this.captionsOn=false;}else{p.loadModule?.('captions');p.setOption?.('captions','reload',true);this.captionsOn=true;}}catch{}
+      this.flash('<span>'+(this.captionsOn?'YouTube 자막 켬':'YouTube 자막 끔')+'</span>');return true;
+    }
+    return false;
   }
   yieldZones(active){
     if(this.disposed||active?.localName!=='iframe'||!this.video?.contains(active))return false;

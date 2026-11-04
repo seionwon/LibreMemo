@@ -1003,10 +1003,16 @@ function chaptersDialog(record){
     requestAnimationFrame(()=>area.focus());
   });
 }
+function youtubeShortcutsDialog(rows){
+  modal(`<section class="youtube-shortcuts"><div class="dialog-heading"><h2>${icon('youtube',20)} 키보드 단축키</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>
+    <p class="dialog-description">YouTube 플레이어와 같은 단축키입니다. 글자를 입력하는 칸에서는 동작하지 않습니다. 영상 화면을 눌러 YouTube 쪽에 키보드가 가 있을 때는 YouTube가 직접 처리합니다.</p>
+    <div class="help-table-scroll"><table><thead><tr><th scope="col">키</th><th scope="col">동작</th></tr></thead><tbody>${rows.map(([key,label])=>`<tr><th scope="row"><kbd>${esc(key)}</kbd></th><td>${esc(label)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="dialog-actions"><button class="primary-button" data-dialog-close>닫기</button></div></section>`);
+}
 function mountYouTube(tab){
   tab.youtube?.dispose();tab.youtube=null;
   if(!tab.reader?.metadata?.youtube)return;
-  void youtubeUI().then(({YouTubePane})=>{
+  void youtubeUI().then(({YouTubePane,YOUTUBE_SHORTCUTS})=>{
     if(!tabs.includes(tab)||tab.closing||!tab.reader||tab.youtube)return;
     const record=()=>records.find(r=>r.id===tab.record.id)||tab.record;
     tab.youtube=new YouTubePane(tab,{
@@ -1019,6 +1025,7 @@ function mountYouTube(tab){
         const self=record(),list=self.metadata.youtube.playlistId&&files.length>1?playlistRecords(self.metadata.youtube.playlistId):[self];
         await attachYouTubeSubtitles(files,list.some(r=>r.id===self.id)?list:[self,...list],{only:self});
       }),
+      onShortcuts:()=>{if(!$('#dialog').open)youtubeShortcutsDialog(YOUTUBE_SHORTCUTS);},
       onNavigate:safely(async step=>{
         const self=record(),list=playlistRecords(self.metadata.youtube.playlistId||''),at=list.findIndex(r=>r.id===self.id),next=list[at+step];
         if(next)await openRecord(next);
@@ -2243,6 +2250,8 @@ function handleKey(event) {
   if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'){event.preventDefault();event.shiftKey?reader().redo():reader().undo();return;}
   if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='f'){event.preventDefault();if(reader().documentSidebarUI)reader().showDocumentSidebarView('search');else renderSidebar('search');return;}
   if(event.ctrlKey||event.metaKey||event.altKey)return;
+  // A YouTube document answers YouTube's own player shortcuts first.
+  if(active()?.youtube?.handleKey?.(event)){event.preventDefault();return;}
   if(reader().handleReadingKey?.(event)){event.preventDefault();return;}
   if(event.key.toLowerCase()==='f'){event.preventDefault();void toggleReaderFocus();return;}
   const tools={v:'select',p:'pen',h:'highlight',u:'underline',r:'rect',e:'eraser',n:'note'};const tool=tools[event.key.toLowerCase()];if(tool){event.preventDefault();toolAction(tool);}

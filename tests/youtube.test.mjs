@@ -224,3 +224,41 @@ test('the − and + buttons in the video bar shrink and grow the video by a tent
     for(let i=0;i<12;i++)pane.querySelector('[data-yt="bigger"]').onclick();assert.equal(pane.style.getPropertyValue('--yt-video-h'),'830px','leaves the bar and a few subtitle lines');
   }finally{globalThis.window=saved.window;globalThis.localStorage=saved.localStorage;}
 });
+
+test('YouTube player shortcuts work from the app, and fields, buttons and sliders keep their keys',async()=>{
+  const {YouTubePane,YOUTUBE_SHORTCUTS}=await import('../public/src/youtube-ui.js');
+  const store=new Map();const saved=globalThis.localStorage;globalThis.localStorage={getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,String(v))};
+  try{
+    const doc=new DOMParser().parseFromString('<section><select data-yt="rate"><option value="1" selected>1</option><option value="1.25">1.25</option><option value="0.75">0.75</option></select><button data-yt="next"></button><button data-yt="prev" hidden></button><input id="field"><button id="btn"></button><div role="separator" id="strip"></div><p id="text"></p></section>','text/html');
+    const pane=doc.querySelector('section'),calls=[],log=[],rate={value:'1'};
+    const p={state:2,t:30,volume:50,muted:false,rate:1,getPlayerState(){return this.state;},seekTo(t){this.t=t;log.push(['seek',Math.round(t*100)/100]);},playVideo(){this.state=1;log.push(['play']);},pauseVideo(){this.state=2;log.push(['pause']);},getCurrentTime(){return this.t;},getDuration:()=>200,getVolume(){return this.volume;},setVolume(v){this.volume=v;},unMute(){this.muted=false;},mute(){this.muted=true;},isMuted(){return this.muted;},setPlaybackRate(r){this.rate=r;},loadModule(m){log.push(['load',m]);},unloadModule(m){log.push(['unload',m]);},setOption(){}};
+    const self={pane,player:p,ready:true,callbacks:{onShortcuts:()=>calls.push('?'),onNavigate:step=>calls.push(step)},$:name=>name==='rate'?rate:pane.querySelector(`[data-yt="${name}"]`),flash(){},tick(){},toggleFullscreen:()=>calls.push('full')};
+    Object.setPrototypeOf(self,YouTubePane.prototype);
+    const key=(k,target=doc.querySelector('#text'),extra={})=>self.handleKey({key:k,target,shiftKey:/^[A-Z?<>]$/.test(k),...extra});
+    assert.equal(key(' '),true);assert.equal(p.state,1,'Space plays');assert.equal(key('k'),true);assert.equal(p.state,2,'K pauses');
+    self.target=null;p.t=30;key('ArrowRight');assert.equal(p.t,35);self.target=null;key('j');assert.equal(p.t,25);self.target=null;key('l');assert.equal(p.t,35);self.target=null;key('ArrowLeft');assert.equal(p.t,30);
+    self.target=null;key('.');assert.equal(Math.round(p.t*30),901,'one frame forward while paused');
+    key('5');assert.equal(p.t,100,'5 → 50%');key('Home');assert.equal(p.t,0);key('End');assert.equal(p.t,199.5);
+    key('ArrowUp');assert.equal(p.volume,55);key('ArrowDown');key('ArrowDown');assert.equal(p.volume,45);
+    key('m');assert.equal(p.muted,true);key('m');assert.equal(p.muted,false);
+    key('>');assert.equal(p.rate,1.25);assert.equal(rate.value,'1.25');assert.equal(store.get('librememo-youtube-rate'),'1.25');
+    key('<');key('<');assert.equal(p.rate,.75);
+    key('c');key('c');assert.deepEqual(log.filter(x=>x[0]!=='seek'&&x[0]!=='play'&&x[0]!=='pause'),[['load','captions'],['unload','captions']]);
+    assert.equal(key('f'),true);assert.equal(key('?'),true);assert.equal(key('N'),true);assert.equal(key('P'),false,'no previous video: the key is left alone');
+    assert.deepEqual(calls,['full','?',1]);
+    const before=log.length;
+    assert.equal(key(' ',doc.querySelector('#field')),false);assert.equal(key('k',doc.querySelector('#field')),false);
+    assert.equal(key(' ',doc.querySelector('#btn')),false,'Space presses a focused button');assert.equal(key('ArrowLeft',doc.querySelector('#strip')),false,'the resize strip keeps its arrows');
+    assert.equal(key('k',undefined,{ctrlKey:true}),false);assert.equal(key('v'),false,'tool keys stay with the app');assert.equal(key('n'),false);
+    assert.equal(log.length,before);
+    assert.ok(YOUTUBE_SHORTCUTS.some(([k])=>k==='?'));
+  }finally{globalThis.localStorage=saved;}
+});
+
+test('the app hands keys to the YouTube pane before the reader and tool shortcuts',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const app=await readFile(new URL('../public/src/app.js',import.meta.url),'utf8');
+  const routed=app.indexOf('if(active()?.youtube?.handleKey?.(event)){event.preventDefault();return;}');
+  assert.ok(routed>0);assert.ok(routed<app.indexOf('if(reader().handleReadingKey?.(event))'));assert.ok(routed<app.indexOf("const tools={v:'select'"));
+  assert.match(app,/onShortcuts:\(\)=>\{if\(!\$\('#dialog'\)\.open\)youtubeShortcutsDialog\(YOUTUBE_SHORTCUTS\);\}/);
+});
