@@ -881,3 +881,9 @@ test('YouTube outline timestamps take the subtitle time colour when the reader a
   a.doc.documentElement.dataset.theme='light';a.context.youtubeOutlineStyle(panel,yt);assert.equal(panel.style.getPropertyValue('--youtube-time')||'','','a dark reader beside a light sidebar falls back to the sidebar grey');
   a.setReader(a.r);a.open('outline');assert.equal(panel.hasAttribute('data-youtube-outline'),false,'ordinary documents keep the outline prefix colour');
 });
+test('YouTube outline timestamps never wrap inside the sidebar row',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const css=await readFile(new URL('../public/design.tailwind.css',import.meta.url),'utf8');
+  const rule=css.match(/\[data-youtube-outline\] \.outline-time\{([^}]*)\}/)?.[1]||'';
+  for(const part of ['white-space:nowrap','overflow-wrap:normal','flex:none'])assert.ok(rule.includes(part),part);
+});
