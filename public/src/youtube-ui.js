@@ -118,6 +118,12 @@ export class YouTubePane {
     $('play').onclick=tap(()=>{const playing=this.player?.getPlayerState?.()===1;this.toggle();this.flash(icon(playing?'pause':'play',34));});
     $('back').onclick=tap(()=>{const n=skipSeconds();this.seekBy(-n);this.flash(icon('undo',26)+'<span>'+n+'초</span>');});
     $('forward').onclick=tap(()=>{const n=skipSeconds();this.seekBy(n);this.flash('<span>'+n+'초</span>'+icon('redo',26));});
+    // Clicking YouTube's own controls focuses its iframe and blurs this window. The tap
+    // zones then step aside so YouTube's panels (more videos and its ✕) take clicks,
+    // until the video plays again or focus comes back to the app.
+    this.onWindowBlur=()=>setTimeout(()=>this.yieldZones(document.activeElement),0);
+    this.onWindowFocus=()=>this.resumeZones();
+    window.addEventListener('blur',this.onWindowBlur);window.addEventListener('focus',this.onWindowFocus);
     this.onFullscreenKey=event=>{if(event.key==='Escape'&&this.video.classList.contains('youtube-fill'))this.toggleFullscreen();};
     document.addEventListener('keydown',this.onFullscreenKey);
     $('rate').onchange=event=>{const value=Number(event.target.value);savePref('rate',value);this.player?.setPlaybackRate?.(value);};
@@ -163,7 +169,7 @@ export class YouTubePane {
     this.player=new YT.Player(this.pane.querySelector('.youtube-frame'),{host:PLAYER_HOST,videoId:this.youtube.videoId,playerVars:{playsinline:1,rel:0,fs:0,iv_load_policy:3,cc_load_policy:0,start:Math.floor(this.savedAt>3?this.savedAt-2:0),origin:location.origin},events:{
       onReady:()=>{this.ready=true;this.player.setPlaybackRate?.(Number(this.$('rate').value));},
       onStateChange:event=>{
-        const playing=event.data===1;this.playing=playing;
+        const playing=event.data===1;this.playing=playing;if(playing)this.resumeZones();
         this.$('play').setAttribute('aria-label',playing?'일시정지':'재생');
         if(!playing&&this.ready)this.remember(true);
         if(event.data===0)this.callbacks.onEnded?.();
@@ -171,6 +177,11 @@ export class YouTubePane {
       onError:event=>this.message([101,150,153].includes(event.data)?'이 영상은 다른 사이트에서 재생할 수 없게 막혀 있습니다. 「YouTube에서 열기」로 보세요. 자막과 주석은 여기서 계속 쓸 수 있습니다.':'영상을 재생하지 못했습니다. (YouTube 오류 '+event.data+')'),
     }});
   }
+  yieldZones(active){
+    if(this.disposed||active?.localName!=='iframe'||!this.video?.contains(active))return false;
+    this.pane.querySelector('.youtube-zones')?.setAttribute('data-yield','');return true;
+  }
+  resumeZones(){this.pane?.querySelector('.youtube-zones')?.removeAttribute('data-yield');}
   // An unplayable video keeps YouTube's own message and links reachable.
   message(text){const el=this.pane.querySelector('.youtube-message');el.textContent=text;el.hidden=false;this.pane.querySelector('.youtube-zones').hidden=true;}
   /**
@@ -266,7 +277,7 @@ export class YouTubePane {
     handle?.setAttribute('aria-valuenow',String(now));handle?.setAttribute('aria-valuetext',this.videoShare?'영상 높이 '+now+'px':'기본 크기');
   }
   dispose(){
-    if(this.disposed)return;this.disposed=true;window.removeEventListener('resize',this.onWindowResize);clearInterval(this.timer);clearTimeout(this.tapTimer);document.removeEventListener('keydown',this.onFullscreenKey);this.visibility.disconnect();document.removeEventListener('click',this.onOutlineClick,true);
+    if(this.disposed)return;this.disposed=true;window.removeEventListener('resize',this.onWindowResize);window.removeEventListener('blur',this.onWindowBlur);window.removeEventListener('focus',this.onWindowFocus);clearInterval(this.timer);clearTimeout(this.tapTimer);document.removeEventListener('keydown',this.onFullscreenKey);this.visibility.disconnect();document.removeEventListener('click',this.onOutlineClick,true);
     if(this.ready)this.remember(true);
     try{this.player?.destroy?.();}catch{}
     for(const type of ['wheel','touchmove','keydown'])this.reader.viewport?.removeEventListener(type,this.onUserScroll);

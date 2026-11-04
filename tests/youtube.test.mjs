@@ -189,3 +189,17 @@ test('the video clock reads "current / total" once the player knows the length',
   pane.player.getDuration=()=>0;assert.equal(YouTubePane.prototype.clockText.call(pane,359),'5:59');
   assert.equal(YouTubePane.prototype.clockText.call({},5),'0:05');
 });
+
+test('clicking YouTube\'s own controls lets its panels (more videos, ✕) take clicks until the video plays again',async()=>{
+  const {YouTubePane}=await import('../public/src/youtube-ui.js');
+  const doc=new DOMParser().parseFromString('<section><div class="youtube-video"><div class="youtube-frame"><iframe></iframe></div><div class="youtube-zones"></div></div><iframe id="other"></iframe></section>','text/html');
+  const pane={pane:doc.querySelector('section'),video:doc.querySelector('.youtube-video')};
+  const zones=doc.querySelector('.youtube-zones'),yieldZones=YouTubePane.prototype.yieldZones,resumeZones=YouTubePane.prototype.resumeZones;
+  assert.equal(yieldZones.call(pane,doc.querySelector('#other')),false);assert.equal(zones.hasAttribute('data-yield'),false,'another frame does not count');
+  assert.equal(yieldZones.call(pane,doc.querySelector('button')),false);
+  assert.equal(yieldZones.call(pane,doc.querySelector('.youtube-frame iframe')),true);assert.equal(zones.hasAttribute('data-yield'),true);
+  resumeZones.call(pane);assert.equal(zones.hasAttribute('data-yield'),false);
+  const {readFile}=await import('node:fs/promises');
+  const css=await readFile(new URL('../public/design.tailwind.css',import.meta.url),'utf8');assert.match(css,/\.youtube-zones\[data-yield\]\{pointer-events:none\}/);
+  const source=await readFile(new URL('../public/src/youtube-ui.js',import.meta.url),'utf8');assert.match(source,/const playing=event\.data===1;this\.playing=playing;if\(playing\)this\.resumeZones\(\);/);
+});
