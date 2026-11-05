@@ -204,27 +204,6 @@ test('clicking YouTube\'s own controls lets its panels (more videos, ✕) take c
   const source=await readFile(new URL('../public/src/youtube-ui.js',import.meta.url),'utf8');assert.match(source,/const playing=event\.data===1;this\.playing=playing;if\(playing\)this\.resumeZones\(\);/);
 });
 
-test('the − and + buttons in the video bar shrink and grow the video by a tenth of the window, within the same limits',async()=>{
-  const {YouTubePane}=await import('../public/src/youtube-ui.js');
-  const store=new Map();const saved={window:globalThis.window,localStorage:globalThis.localStorage};
-  globalThis.localStorage={getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,String(v))};
-  globalThis.window={innerHeight:1000,addEventListener(){},removeEventListener(){}};
-  try{
-    const doc=new DOMParser().parseFromString('<section class="youtube-pane youtube-collapsed"><div class="youtube-video"></div><div class="youtube-bar"><button data-yt="smaller"></button><button data-yt="bigger"></button><button data-yt="size"></button></div><div class="youtube-resize"></div></section>','text/html');
-    const pane=doc.querySelector('.youtube-pane'),video=pane.querySelector('.youtube-video');
-    Object.defineProperty(pane,'clientWidth',{value:1600});
-    video.getBoundingClientRect=()=>({height:pane.hasAttribute('data-yt-sized')?parseFloat(pane.style.getPropertyValue('--yt-video-h')):400});
-    const self={pane,video,tab:{host:{clientHeight:950}},$:name=>pane.querySelector(`[data-yt="${name}"]`)};Object.setPrototypeOf(self,YouTubePane.prototype);
-    pane.querySelector('[data-yt="size"]').onclick=()=>pane.classList.toggle('youtube-collapsed');
-    self.bindResize();
-    pane.querySelector('[data-yt="bigger"]').onclick();assert.equal(pane.classList.contains('youtube-collapsed'),false,'a collapsed video opens');
-    assert.equal(pane.style.getPropertyValue('--yt-video-h'),'500px');assert.equal(store.get('librememo-youtube-height'),'0.5');
-    pane.querySelector('[data-yt="smaller"]').onclick();pane.querySelector('[data-yt="smaller"]').onclick();assert.equal(pane.style.getPropertyValue('--yt-video-h'),'300px');
-    for(let i=0;i<10;i++)pane.querySelector('[data-yt="smaller"]').onclick();assert.equal(pane.style.getPropertyValue('--yt-video-h'),'120px','never below 12% of the window');
-    for(let i=0;i<12;i++)pane.querySelector('[data-yt="bigger"]').onclick();assert.equal(pane.style.getPropertyValue('--yt-video-h'),'850px','no taller than 85% of the window');
-  }finally{globalThis.window=saved.window;globalThis.localStorage=saved.localStorage;}
-});
-
 test('YouTube player shortcuts work from the app, and fields, buttons and sliders keep their keys',async()=>{
   const {YouTubePane,YOUTUBE_SHORTCUTS}=await import('../public/src/youtube-ui.js');
   const store=new Map();const saved=globalThis.localStorage;globalThis.localStorage={getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,String(v))};
@@ -282,14 +261,14 @@ test('the video grows only until one subtitle line is left, and following keeps 
   globalThis.localStorage={getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,String(v))};
   globalThis.window={innerHeight:1000,addEventListener(){},removeEventListener(){}};
   try{
-    const doc=new DOMParser().parseFromString('<section class="youtube-pane"><div class="youtube-video"></div><div class="youtube-bar"><button data-yt="smaller"></button><button data-yt="bigger"></button></div><div class="youtube-resize"></div></section>','text/html');
+    const doc=new DOMParser().parseFromString('<section class="youtube-pane"><div class="youtube-video"></div><div class="youtube-bar"></div><div class="youtube-resize"></div></section>','text/html');
     const pane=doc.querySelector('.youtube-pane'),video=pane.querySelector('.youtube-video');Object.defineProperty(pane,'clientWidth',{value:1600});
     video.getBoundingClientRect=()=>({height:pane.hasAttribute('data-yt-sized')?parseFloat(pane.style.getPropertyValue('--yt-video-h')):400});
     const cueEl={ownerDocument:{defaultView:{getComputedStyle:()=>({lineHeight:'30px',paddingTop:'4px',paddingBottom:'4px'})}}};
     const host={clientHeight:600};
     const self={pane,video,tab:{host},cues:[{el:cueEl}],current:0,follow:false,reader:{},$:()=>null};Object.setPrototypeOf(self,YouTubePane.prototype);
     assert.equal(self.subtitleLine(),46,'line 30 + padding 8 + spacing 8');
-    self.bindResize();for(let i=0;i<12;i++)pane.querySelector('[data-yt="bigger"]').onclick();
+    self.bindResize();for(let i=0;i<12;i++)pane.querySelector('.youtube-resize').onkeydown({key:'ArrowDown',preventDefault(){}});
     assert.equal(pane.style.getPropertyValue('--yt-video-h'),'553px','600 − 1 − one 46px line');
     store.set('librememo-youtube-height','0');self.videoShare=null;host.clientHeight=300;self.applyVideoHeight();
     assert.equal(pane.style.getPropertyValue('--yt-video-h'),'253px','the default size also leaves one line on a short window');

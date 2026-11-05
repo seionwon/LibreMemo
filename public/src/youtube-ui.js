@@ -113,7 +113,6 @@ export class YouTubePane {
         <button type="button" class="youtube-button" data-yt="chapters" title="영상 설명란의 챕터를 붙여넣어 목차로 쓰기">${icon('list',15)}<span>목차</span></button>
         <button type="button" class="youtube-button" data-yt="attach" title="자막 파일(.srt, .vtt 등) 붙이기">${icon('subtitles',15)}<span>${this.hasCues()?'자막 바꾸기':'자막 붙이기'}</span></button>
         <span class="youtube-nav"><button type="button" class="youtube-button" data-yt="prev" title="재생목록의 이전 영상" aria-label="이전 영상" hidden>${icon('back',15)}</button><button type="button" class="youtube-button" data-yt="next" title="재생목록의 다음 영상" aria-label="다음 영상" hidden>${icon('forward',15)}</button></span>
-        <span class="youtube-sizes" role="group" aria-label="영상 크기"><button type="button" class="youtube-button" data-yt="smaller" title="영상 작게 (끝의 띠를 끌어도 됩니다)" aria-label="영상 작게">−</button><button type="button" class="youtube-button" data-yt="bigger" title="영상 크게 (끝의 띠를 끌어도 됩니다)" aria-label="영상 크게">+</button></span>
         <button type="button" class="youtube-button" data-yt="size" aria-pressed="false" title="영상 접기">${icon('chevron-down',15)}</button>
         <a class="youtube-button youtube-open" data-yt="open" href="${esc(watchURL(this.youtube.videoId,this.youtube.playlistId))}" target="_blank" rel="noopener noreferrer" title="YouTube에서 열기">${icon('external',15)}</a>
         <p class="youtube-now" data-yt="now" aria-live="off"></p>
@@ -360,10 +359,6 @@ export class YouTubePane {
     const end=event=>{if(!drag||event.pointerId!==drag.id)return;drag=null;handle.releasePointerCapture?.(event.pointerId);this.pane.classList.remove('youtube-resizing');if(this.videoShare)savePref('height',this.videoShare);};
     handle.onpointerup=end;handle.onpointercancel=end;handle.onlostpointercapture=end;
     handle.ondblclick=()=>{this.videoShare=null;savePref('height',0);this.applyVideoHeight();};
-    // Buttons for the same size, a tenth of the window height per press.
-    const stepBy=step=>{if(this.pane.classList.contains('youtube-collapsed'))this.$?.('size')?.click();set(height()+step*window.innerHeight*.1,true);};
-    const smaller=this.pane.querySelector('[data-yt="smaller"]'),bigger=this.pane.querySelector('[data-yt="bigger"]');
-    if(smaller)smaller.onclick=()=>stepBy(-1);if(bigger)bigger.onclick=()=>stepBy(1);
     handle.onkeydown=event=>{
       const step=event.key==='ArrowUp'?-1:event.key==='ArrowDown'?1:0;
       if(event.key==='Home'||event.key==='Enter'){event.preventDefault();handle.ondblclick();return;}
