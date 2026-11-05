@@ -149,14 +149,14 @@ test('execution places URL sharing before a concise installation card without nu
     assert.equal(cards[1].getAttribute('aria-label'),'앱 설치');assert.equal(cards[1].firstElementChild.textContent,'홈 화면에 앱 아이콘이 필요할 때 앱 설치를 선택하면 됩니다.');
     assert.equal(doc.querySelector('.execution-step,#execution-import,#execution-settings'),null);
     assert.equal(doc.querySelector('#install-message').textContent,'설치하지 않아도 앱의 URL에서 바로 사용할 수 있습니다.');
-    const status=doc.querySelector('#install-status');assert.equal(status.querySelectorAll('br').length,1);assert.equal(status.lastChild.textContent,'설치를 하면 인터넷 연결 없이도 사용 가능합니다.');
+    const status=doc.querySelector('#install-status');assert.equal(status.querySelectorAll('br').length,1);assert.equal(status.lastChild.textContent,'앱의 오프라인 준비를 마치면 저장한 문서를 인터넷 없이 읽고 메모할 수 있습니다. 영상 재생·웹/AI 검색·동기화에는 인터넷이 필요합니다.');
   }
   assert.doesNotMatch(assets.app['src/app.js'].text,/["']#execution-(?:import|settings)["']/);
   openExecution(app);assert.equal(app.doc.querySelector('#dialog').open,false);
 });
 test('the single execution installation button restores its state after dismissal or failure and can retry',async()=>{
   const app=await fileApp({address:PUBLIC_APP_URL}),doc=app.doc;openExecution(app);const button=doc.querySelector('#execution-install');let finish,calls=0;
-  const offline=()=>assert.ok(doc.querySelector('#install-status').textContent.endsWith('설치를 하면 인터넷 연결 없이도 사용 가능합니다.'));
+  const offline=()=>assert.ok(doc.querySelector('#install-status').textContent.endsWith('앱의 오프라인 준비를 마치면 저장한 문서를 인터넷 없이 읽고 메모할 수 있습니다. 영상 재생·웹/AI 검색·동기화에는 인터넷이 필요합니다.'));
   app.emit('beforeinstallprompt',{preventDefault(){},prompt:async()=>calls++,userChoice:new Promise(resolve=>finish=resolve)});
   button.onclick();assert.equal(calls,1);assert.equal(button.disabled,true);assert.equal(button.textContent,'설치 확인 중…');assert.equal(button.getAttribute('aria-label'),'설치 확인 중…');offline();
   button.onclick();assert.equal(calls,1);finish({outcome:'dismissed'});await new Promise(resolve=>setImmediate(resolve));assert.equal(button.disabled,false);assert.equal(button.textContent,'앱 설치');assert.match(doc.querySelector('#toast').textContent,/취소/);

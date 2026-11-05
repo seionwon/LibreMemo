@@ -17,7 +17,7 @@ function cueText(value){
 function add(cues,start,end,text,speaker=''){
   if(start===null||!Number.isFinite(start)||start<0||start>3599999999||end!=null&&(!Number.isFinite(end)||end<start))return false;
   const body=cueText(text);if(!body)return true;
-  if(cues.length>=MAX_CUES)throw Error('자막은 500,000개 대사 이하로 나누어 가져와 주세요.');
+  if(cues.length>=MAX_CUES)throw Error('자막은 1,000,000개 대사 이하로 나누어 가져와 주세요.');
   cues.push({start,end,text:body,speaker:cueText(speaker)});return true;
 }
 function timedBlocks(text,format,cues){
@@ -37,7 +37,7 @@ function sami(text,cues){
   if(!/<sami\b/i.test(text))throw Error('SAMI 파일의 시작 표시가 없습니다.');
   const labels=new Map();for(const m of text.matchAll(/\.([\w-]+)\s*\{([^}]+)\}/g)){const name=m[2].match(/\bName\s*:\s*([^;]+)/i)?.[1]?.trim();if(name)labels.set(m[1].toLowerCase(),name);}
   const sync=[...text.matchAll(/<sync\b[^>]*\bstart\s*=\s*["']?(\d+)["']?[^>]*>/gi)];let invalid=0;
-  if(sync.length>MAX_CUES)throw Error('자막은 500,000개 시간 구간 이하로 나누어 가져와 주세요.');
+  if(sync.length>MAX_CUES)throw Error('자막은 1,000,000개 시간 구간 이하로 나누어 가져와 주세요.');
   for(let i=0;i<sync.length;i++){
     const mark=sync[i],start=Number(mark[1]),end=i+1<sync.length?Number(sync[i+1][1]):null,body=text.slice(mark.index+mark[0].length,sync[i+1]?.index??text.length);
     const paragraphs=[...body.matchAll(/<p\b([^>]*)>([^]*?)(?=<p\b|$)/gi)];
@@ -66,7 +66,7 @@ function ass(text,cues,warnings){
   return invalid;
 }
 export function parseSubtitles(text,format,warnings=[]){
-  if(text.length>LIMIT)throw Error('자막 파일은 2GB 이하로 나누어 가져와 주세요.');
+  if(text.length>LIMIT)throw Error('자막의 텍스트 길이가 처리 한도를 넘습니다. 자막을 나누어 가져와 주세요.');
   text=text.replace(/^\uFEFF/,'').replace(/\r\n?/g,'\n');const cues=[];let invalid;
   if(['srt','vtt'].includes(format))invalid=timedBlocks(text,format,cues);
   else if(['smi','sami'].includes(format))invalid=sami(text,cues);

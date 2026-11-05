@@ -4,6 +4,7 @@ import {mkdir,writeFile} from 'node:fs/promises';
 import {createServer} from '../scripts/server.mjs';
 import {prepareAssets,root} from '../scripts/assets.mjs';
 import {launchChrome} from './chrome.mjs';
+import {HELP_TOPICS} from '../public/src/help-content.js';
 
 async function setup(){
  await prepareAssets();const server=createServer();await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -73,7 +74,7 @@ test('real Chrome: Pages-only searchable help keeps navigation, mobile layouts a
   await page.click('.help-results [data-help-open="backup-restore"]');assert.match(await page.evaluate('document.querySelector(".help-article").textContent'),/서버에서 대신 복구/);assert.equal(await fits(page),true);
   await page.click('#help-back-settings');assert.equal(await page.evaluate('document.activeElement.id'),'settings-help');await page.click('#settings-help');await page.click('.help-header [data-dialog-close]');await page.waitFor('!document.querySelector("#dialog").open');
   assert.equal(await page.evaluate('document.activeElement.id'),'settings-button');assert.equal(await page.evaluate('document.querySelectorAll(".tab.document").length'),1);assert.deepEqual(await preserved(page),before);assert.deepEqual(f.browser.errors,[]);
-  await writeFile(root+'/test-results/pages-only-help.json',JSON.stringify({url:f.url,topics:32,widths:[1280,390,320,844],search:true,backAndClose:true,preserved:true,hardwareAndroidTested:false,status:'pass'},null,2)+'\n');
+  await writeFile(root+'/test-results/pages-only-help.json',JSON.stringify({url:f.url,topics:HELP_TOPICS.length,widths:[1280,390,320,844],search:true,backAndClose:true,preserved:true,hardwareAndroidTested:false,status:'pass'},null,2)+'\n');
  }finally{await f.close();}
 });
 

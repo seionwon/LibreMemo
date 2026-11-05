@@ -1,0 +1,53 @@
+{
+  "version": "1.9.64",
+  "helpTopics": 43,
+  "reviewedAgainst": [
+    "public/src/office-formats.js",
+    "public/src/image-formats.js",
+    "public/src/youtube-ui.js",
+    "public/src/youtube.js",
+    "public/src/reading-layout-panel.js",
+    "public/src/viewer-presets-panel.js",
+    "public/src/text-style.js",
+    "public/src/ai-search.js",
+    "public/src/reader.js",
+    "public/src/sync-adapter.js",
+    "public/src/app.js",
+    "public/src/office-subtitles.js"
+  ],
+  "local": {
+    "check": {
+      "javascriptFiles": 238,
+      "json": true,
+      "status": "pass"
+    },
+    "unit": {
+      "total": 991,
+      "passed": 991,
+      "failed": 0,
+      "skipped": 0
+    },
+    "build": "pass",
+    "diffCheck": "pass",
+    "formatTableMissingExtensions": [],
+    "readmeBrokenLocalLinks": []
+  },
+  "earlierUnitAttempt": {
+    "passed": 990,
+    "failed": 1,
+    "reason": "새 판으로 옮길 항목이 없다는 안내를 수정하면서 기존 검사 문구가 일치하지 않았습니다. 기대 문구를 새 안내에 맞추고 전체 991개를 다시 통과했습니다."
+  },
+  "trustedBrowser": {
+    "status": "pass",
+    "width": 320,
+    "height": 568,
+    "theme": "light",
+    "topicsInspected": 43,
+    "overflowFailures": [],
+    "errors": [],
+    "scope": "실제 도움말 렌더러·콘텐츠·컴파일 CSS의 격리 화면입니다. 폴더·개인 문서·네트워크 영상은 사용하지 않았습니다.",
+    "desktop": "미실행: Browser verification busy or quota reached. 다른 크기의 추가 요청도 실행하지 않았으며 공개 CI 화면 검사를 이어갑니다."
+  },
+  "fullLocalBrowserSuite": "macOS 샌드박스에서 직접 Chrome을 실행하지 않아 미실행",
+  "deployment": "pending"
+}

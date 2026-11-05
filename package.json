@@ -1,9 +1,9 @@
 {
   "name": "librememo",
-  "version": "1.9.63",
+  "version": "1.9.64",
   "private": true,
   "type": "module",
-  "description": "웹 페이지를 한 파일로 보관하고 주석을 자동 저장하는 PWA",
+  "description": "문서·전자책·이미지·자막을 읽고 주석과 북마크를 자동 저장하는 PWA",
   "repository": {
     "type": "git",
     "url": "https://github.com/seionwon/LibreMemo.git"

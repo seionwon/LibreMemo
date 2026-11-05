@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "status": 200,
+  "title": "LibreMemo 도움말 검증",
+  "url": "http://127.0.0.1:4173/test-results/help-refresh-20261105/?theme=light&topic=import-files",
+  "results": [
+    {
+      "type": "wait",
+      "selector": "html[data-audit=\"pass\"]"
+    },
+    {
+      "type": "text",
+      "selector": "#fixture-report",
+      "text": "{\"width\":320,\"height\":568,\"theme\":\"light\",\"topics\":43,\"allFit\":true,\"failed\":[],\"errors\":[]}"
+    },
+    {
+      "type": "text",
+      "selector": ".help-article",
+      "text": "기능별 안내문서 가져오기와 중복 문서지원 파일, 여러 파일 열기와 이미 보관한 파일의 선택을 설명합니다.파일을 여는 방법내 서재 → 파일 가져오기에서 파일을 선택하거나 앱으로 끌어다 놓습니다. 여러 파일도 한 번에 가져올 수 있습니다. 현재 서재 폴더에 보관되고 위쪽 문서 탭으로 열립니다. 문서가 준비될 때까지 기다린 뒤 주석을 남기세요. 원본 본문을 편집하는 기능은 아니며, 주석·북마크·읽기 설정을 따로 저장합니다.지원 파일 한눈에 보기종류확장자웹 문서·PDFHTML, HTM, MHTML, MHT, PDF전자책·만화EPUB, EPUB3, MOBI, AZW, AZW3, FB2, FBZ, FB2.ZIP, CBZ스캔 문서DJVU, DJV한글HWP, HWPX, HMLWord·OpenDocument 문서DOCX, ODT, OTT표·스프레드시트XLSX, XLSM, XLS, CSV, TSV, ODS, OTS슬라이드PPTX, ODP, OTP마크다운·텍스트·데이터MD, MARKDOWN, TXT, JSON이미지·스크린샷PNG, APNG, JPG, JPEG, JPE, JFIF, WebP, AVIF, GIF, BMP, SVG자막SRT, VTT, SMI, SAMI, ASS, SSA주석까지 담은 보관 파일LIBREMEMO이미 같은 파일이 있으면원본 내용이 같은 문서가 있으면 기존 주석을 이어서 사용할지, 새 주석으로 시작할지, 취소할지 선택하는 안내가 나옵니다. 예전 주석이 필요하다면 기존 문서를 이어서 여는 선택을 사용하세요. 같은 파일명이라도 내용이 다르면 같은 원본으로 판단하지 않습니다.그림과 자료를 함께 보관하려면단일 HTML이나 MHTML처럼 자료를 포함한 파일이 알맞습니다. MHTML에 들어 있는 이미지·스타일·글꼴 등을 풀어 보관하며, 저장 당시 포함되지 않은 자료는 되살릴 수 없습니다. 가져오기 전 파일은 자동으로 변경하거나 지우지 않습니다.이미지와 유튜브에서 시작하기복사한 스크린샷은 내 서재 → 이미지 붙여넣기 또는 입력란 밖에서 Ctrl/⌘ V로 가져옵니다. 영상 주소는 내 서재 → 유튜브에서 엽니다. 유튜브 자막 ZIP은 그 창의 자막 파일 고르기에서 선택하며, 일반 파일 가져오기는 임의의 ZIP 전체를 서재로 풀어 넣는 기능이 아닙니다.이미지뿐인 자료의 글자 인식(OCR), DRM·암호 보호 해제는 제공하지 않습니다. 파일이 커도 모든 기기에서 열 수 있다는 뜻은 아니며, 표시 용량·처리 시간·기기 메모리 제한에 걸리면 나누어 가져오세요. 자세한 범위는 각 형식의 도움말에서 확인합니다.이어서 보기내 서재·폴더·검색·정렬스크린샷·이미지에 주석 달기자막 파일 읽기와 주석DjVu 스캔 문서 읽기유튜브 영상의 자막에 주석 달기그림·일부 내용·주석이 보이지 않을 때내보내기: 원본 포함 보관 파일 · 읽기용 HTML · PDF← 이전 안내서재 전체를 백업하고 새 기기에서 복원하기다음 안내 →DjVu 스캔 문서 읽기"
+    }
+  ],
+  "errors": [],
+  "screenshot": "test-results/help-refresh-20261105/mobile.json.png"
+}

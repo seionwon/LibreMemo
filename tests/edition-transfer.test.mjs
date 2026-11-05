@@ -43,5 +43,5 @@ test('cancelling a transfer writes nothing and unlocatable bookmark labels stay 
   await f.finish('cancel');assert.equal(f.created.length,0);assert.equal(f.metrics.saves,0);assert.deepEqual(f.old,before);
 });
 test('a document without annotations or bookmarks does not open the file picker',async()=>{
-  const f=fixture({marks:false});await f.open();assert.equal(f.metrics.picks,0);assert.equal(f.created.length,0);assert.match(f.messages.at(-1),/옮길 주석과 북마크가 없습니다/);
+  const f=fixture({marks:false});await f.open();assert.equal(f.metrics.picks,0);assert.equal(f.created.length,0);assert.match(f.messages.at(-1),/옮길 주석·북마크·수정한 목차가 없습니다/);
 });

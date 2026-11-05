@@ -267,7 +267,7 @@ export class DeviceSyncAdapter {
       if(!value.body&&previous&&!sameLocalFile(previous.sourceIdentity||await localFileIdentity(previous.originalFile||previous.file||new Blob([previous.html],{type:'text/html'})),record.sourceIdentity))throw Error('문서 원본이 다릅니다. 원본 파일을 포함해 다시 보내주세요.');
       const reuse=previous&&await sameStoredContent(previous,value);
       if(decision){
-        if(!reuse)throw Error('선택한 주석의 원본 HTML이 다릅니다. 기존 내용은 유지했습니다.');
+        if(!reuse)throw Error('선택한 주석의 원본이나 읽기 화면이 다릅니다. 기존 내용은 유지했습니다.');
         if(decision.choice==='merge'&&!containsMarks(record,previous))throw Error('합친 주석에 이 기기의 내용이 빠져 있습니다. 기존 내용은 유지했습니다.');consumedTokens.add(decision.token);
         if(sameMarks(previous,record)){mirrored.push(previous.id);continue;}
         plans.push({type:'annotations',value,previous,resolution:'remote',confirmed:true});continue;

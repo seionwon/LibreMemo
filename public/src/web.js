@@ -53,7 +53,7 @@ async function readResource(url,fetchPage){
 // packages only resources that the destination site permits us to read.
 export async function readWebPage(url,{fetchPage=globalThis.fetch,capture=globalThis.HTMLMemoCapture?.captureDocument}={}){
   const resource=await readResource(url,fetchPage);
-  if(resource.type&&!/^(text\/html|application\/xhtml\+xml)\b/i.test(resource.type))throw new Error('HTML 웹페이지가 아닙니다. HTML 파일 가져오기를 사용해주세요.');
+  if(resource.type&&!/^(text\/html|application\/xhtml\+xml)\b/i.test(resource.type))throw new Error('HTML 웹페이지가 아닙니다. 내 서재의 파일 가져오기를 사용해주세요.');
   const header=new TextDecoder().decode(resource.bytes.subarray(0,4096));
   const charset=resource.type.match(/charset\s*=\s*["']?([^\s;"']+)/i)?.[1]||header.match(/<meta\b[^>]*charset\s*=\s*["']?([\w-]+)/i)?.[1]||'utf-8';
   let html;try{html=new TextDecoder(charset).decode(resource.bytes);}catch{throw new Error('이 페이지의 문자 인코딩을 읽지 못했습니다. HTML 파일로 저장한 뒤 가져와주세요.');}
