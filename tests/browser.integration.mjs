@@ -1004,7 +1004,7 @@ test('real Chrome: Pages-only URL use, safe text import, app tabs and optional i
     await writeFile(join(root,'test-results/pages-only-install-guide-320.png'),await page.screenshot());await page.click('#dialog [data-dialog-close]');
     await page.send('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false});
     await page.click('#execution-web');await page.waitFor('document.querySelector("#dialog").open&&!!document.querySelector("#web-help-paste")');
-    assert.match(await page.evaluate('document.querySelector("#dialog").textContent'),/추가 프로그램이나 서버 연결은 필요하지 않습니다/);
+    assert.match(await page.evaluate('document.querySelector("#dialog").textContent'),/앱 설치는 선택 사항이며 별도 서버를 설치하거나 실행할 필요는 없습니다/);
     assert.equal(await page.evaluate('!!document.querySelector(\'#dialog a[href*=".zip"],#dialog a[href^="chrome:"]\')'),false);
     await page.click('#dialog [data-dialog-close]');await page.click('#library-tab');
     const open=async()=>page.evaluate(`document.querySelector('#address').value=${JSON.stringify(exampleURL)};document.querySelector('#address-form').requestSubmit();`);
