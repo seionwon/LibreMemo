@@ -1,0 +1,35 @@
+{
+  "ok": true,
+  "status": 200,
+  "title": "LibreMemo · 나만의 앱 서재",
+  "url": "http://127.0.0.1:4173/test-results/youtube-size-controls-20261105/index.html",
+  "results": [
+    {
+      "type": "wait",
+      "selector": "#fixture-report[data-scenario=\"default\"][data-removed=\"true\"]"
+    },
+    {
+      "type": "click",
+      "selector": "[data-yt=\"size\"]"
+    },
+    {
+      "type": "click",
+      "selector": "[data-yt=\"size\"]"
+    },
+    {
+      "type": "click",
+      "selector": "#fixture-max"
+    },
+    {
+      "type": "wait",
+      "selector": "#fixture-report[data-scenario=\"maximum\"][data-fits=\"true\"][data-removed=\"true\"]"
+    },
+    {
+      "type": "text",
+      "selector": "#fixture-report",
+      "text": "{\"scenario\":\"maximum\",\"fits\":true,\"removed\":true,\"strip\":14,\"videoTop\":25,\"videoBottom\":579,\"videoHeight\":554,\"videoWidth\":985,\"mainTop\":25,\"visibleBottom\":800,\"subtitleVisible\":117,\"ratio\":1.778,\"scrollTop\":0}"
+    }
+  ],
+  "errors": [],
+  "screenshot": "test-results/youtube-size-controls-20261105/desktop.json.png"
+}

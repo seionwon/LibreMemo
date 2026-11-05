@@ -1,0 +1,64 @@
+{
+  "checkedAt": "2026-11-05T01:13:27.078Z",
+  "base": "https://seionwon.github.io/LibreMemo/",
+  "commit": "c7e2d579ba11c8968407cc3e31f44d6eed11f2b0",
+  "version": "1.9.63",
+  "files": [
+    {
+      "file": "index.html",
+      "status": 200,
+      "matchCI": true,
+      "matchLocal": true,
+      "sha256": "c83f7d905d2050b8d93a2653dec221fbe7abef00064a10d4137228140b502d53"
+    },
+    {
+      "file": "src/version.js",
+      "status": 200,
+      "matchCI": true,
+      "matchLocal": true,
+      "sha256": "9a4bdadf69b4de7a110966226c4f3154516d033a7bcc21b63e72d7adbf770050"
+    },
+    {
+      "file": "src/youtube-ui.js",
+      "status": 200,
+      "matchCI": true,
+      "matchLocal": true,
+      "sha256": "81f2b040f4b47a5e92a676b92f07b54bb60f3af9c8780911516cd0e44f1cbfbf"
+    },
+    {
+      "file": "src/help-content.js",
+      "status": 200,
+      "matchCI": true,
+      "matchLocal": true,
+      "sha256": "622d2dccf9d317c41ed0c8f022991aea3b42bb797009a7cc423480cb5c061d43"
+    },
+    {
+      "file": "styles.css",
+      "status": 200,
+      "matchCI": true,
+      "matchLocal": true,
+      "sha256": "31a61500110c1a460514357869c316ff6ebdaed83d611712770a95f7e7e828b8"
+    },
+    {
+      "file": "src/app.js",
+      "status": 200,
+      "matchCI": true,
+      "matchLocal": true,
+      "sha256": "77c711c6e6be6a3bf3c7dc6d3e687a872cc15ee9f2df9e07b887f9dc3144553c"
+    },
+    {
+      "file": "manifest.webmanifest",
+      "status": 200,
+      "matchCI": true,
+      "matchLocal": true,
+      "sha256": "49f597f9fc725fdfd87bc1446d0dad4fe461ca05d73238aaf58daaf744640e6e"
+    },
+    {
+      "file": "sw.js",
+      "status": 200,
+      "matchCI": true,
+      "matchLocal": false,
+      "sha256": "68c0986fc97a067bc2a547185fef9dde0f7d1fc8e91faacefbc393e03c65b1b4"
+    }
+  ]
+}

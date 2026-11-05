@@ -1,0 +1,63 @@
+{
+  "verifiedAt": "2026-11-05 10:24:56 +09:00",
+  "status": "pass",
+  "version": "1.9.63",
+  "sourceCommit": "c7e2d579ba11c8968407cc3e31f44d6eed11f2b0",
+  "url": "https://seionwon.github.io/LibreMemo/",
+  "workflow": "https://github.com/seionwon/LibreMemo/actions/runs/41946560083",
+  "localUnitTests": {
+    "passed": 991,
+    "failed": 0,
+    "skipped": 0
+  },
+  "localSyntaxAndJsonFiles": 238,
+  "ciUnitTests": {
+    "total": 991,
+    "passed": 990,
+    "failed": 0,
+    "skipped": 1,
+    "skipReason": "Linux의 macOS 전용 Chrome 실행 안전 검사"
+  },
+  "ciSyntaxAndJsonFiles": 219,
+  "publishedChrome": {
+    "passed": 87,
+    "failed": 0,
+    "skipped": 0
+  },
+  "publishedFilesMatched": 8,
+  "layoutChecks": [
+    {
+      "screen": "desktop",
+      "scenario": "maximum",
+      "fits": true,
+      "removed": true,
+      "strip": 14,
+      "videoTop": 25,
+      "videoBottom": 579,
+      "videoHeight": 554,
+      "videoWidth": 985,
+      "mainTop": 25,
+      "visibleBottom": 800,
+      "subtitleVisible": 117,
+      "ratio": 1.778,
+      "scrollTop": 0
+    },
+    {
+      "screen": "mobile",
+      "scenario": "maximum",
+      "fits": true,
+      "removed": true,
+      "strip": 14,
+      "videoTop": 25,
+      "videoBottom": 205,
+      "videoHeight": 180,
+      "videoWidth": 320,
+      "mainTop": 25,
+      "visibleBottom": 844,
+      "subtitleVisible": 517,
+      "ratio": 1.778,
+      "scrollTop": 0
+    }
+  ],
+  "limits": "영상 칸 검증은 실제 제품 코드·스타일과 네트워크 플레이어 대역을 사용한다. 실제 YouTube 스트리밍·실물 휴대폰 터치를 검증한 것은 아니다."
+}
