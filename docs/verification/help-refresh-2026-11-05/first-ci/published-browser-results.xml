@@ -68,9 +68,9 @@
   code: 'ERR_TEST_FAILURE',
   failureType: 'testCodeFailure',
   cause: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /추가 프로그램이나 서버 연결은 필요하지 않습니다/. Input:
-  
+
   'Chrome에서 탐색하고 여기서 메모하기LibreMemo는 이 URL만 열면 사용할 수 있습니다. 앱 설치는 선택 사항이며 별도 서버를 설치하거나 실행할 필요는 없습니다.브라우저에서 웹페이지를 저장할 때는 Webpage, Single File(웹페이지, 단일 파일 · .mhtml) 형식이 제공되면 선택하세요. 이미지·스타일을 하나의 파일에 함께 보관합니다. 저장 메뉴는 기기마다 다를 수 있습니다.주소창에 검색어나 웹 주소를 입력하면 Chrome의 일반 탭에서 엽니다. 필요한 글을 복사한 뒤 LibreMemo 탭으로 돌아옵니다. 읽던 문서와 주석은 그대로입니다.텍스트 붙여넣기에서 글과 실제 원문 주소를 넣거나, Chrome에서 저장한 HTML·MHTML 파일을 가져옵니다.다른 Chrome 탭의 현재 주소·본문·로그인 정보나 클립보드를 자동으로 읽지 않습니다. 사이트가 탭 연결을 격리하거나 팝업을 막으면 직접 링크를 사용하세요. 이미 가진 HTML 파일은 그대로 가져올 수 있습니다.파일 가져오기텍스트 붙여넣기'
-  
+
       at TestContext.&lt;anonymous> (file:///home/runner/work/LibreMemo/LibreMemo/tests/browser.integration.mjs:1007:12)
       at async Test.run (node:internal/test_runner/test:1054:7)
       at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {
