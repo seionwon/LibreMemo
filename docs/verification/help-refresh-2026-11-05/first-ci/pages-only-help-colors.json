@@ -1,0 +1,98 @@
+{
+  "checks": [
+    {
+      "theme": "light",
+      "topic": "first-document",
+      "ratios": {
+        "title": 5.921890978666537,
+        "section": 5.921890978666537,
+        "category": 5.921890978666537,
+        "selected": 5.021097726850627,
+        "group": 5.604086977702589
+      }
+    },
+    {
+      "theme": "light",
+      "topic": "speech",
+      "ratios": {
+        "title": 5.476206330976531,
+        "section": 5.476206330976531,
+        "category": 5.476206330976531,
+        "selected": 4.663207297616045,
+        "group": 5.182320427241044,
+        "note": 4.835659583531155
+      }
+    },
+    {
+      "theme": "light",
+      "topic": "storage-differences",
+      "ratios": {
+        "title": 5.469669463835058,
+        "section": 5.469669463835058,
+        "category": 5.469669463835058,
+        "selected": 4.669165015886762,
+        "group": 5.176134367390488,
+        "table": 4.870450710744963
+      }
+    },
+    {
+      "theme": "light",
+      "topic": "save-problems",
+      "ratios": {
+        "title": 5.36236042361217,
+        "section": 5.36236042361217,
+        "category": 5.36236042361217,
+        "selected": 4.586442681666897,
+        "group": 5.0745841704906685
+      }
+    },
+    {
+      "theme": "dark",
+      "topic": "first-document",
+      "ratios": {
+        "title": 8.826347833076316,
+        "section": 8.826347833076316,
+        "category": 8.826347833076316,
+        "selected": 6.833669544340971,
+        "group": 8.12506809094199
+      }
+    },
+    {
+      "theme": "dark",
+      "topic": "speech",
+      "ratios": {
+        "title": 8.667400984643374,
+        "section": 8.667400984643374,
+        "category": 8.667400984643374,
+        "selected": 6.7112996246504055,
+        "group": 7.9787500451565485,
+        "note": 7.6704425726632905
+      }
+    },
+    {
+      "theme": "dark",
+      "topic": "storage-differences",
+      "ratios": {
+        "title": 8.548235949493472,
+        "section": 8.548235949493472,
+        "category": 8.548235949493472,
+        "selected": 6.616942807988885,
+        "group": 7.8690530285690015,
+        "table": 7.1262847513231655
+      }
+    },
+    {
+      "theme": "dark",
+      "topic": "save-problems",
+      "ratios": {
+        "title": 9.012325955795621,
+        "section": 9.012325955795621,
+        "category": 9.012325955795621,
+        "selected": 6.942367269491756,
+        "group": 8.29626969539918
+      }
+    }
+  ],
+  "minimumTextContrast": 4.5,
+  "status": "pass"
+}

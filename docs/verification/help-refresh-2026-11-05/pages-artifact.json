@@ -1,0 +1,24 @@
+{
+  "id": 13400549968,
+  "name": "github-pages",
+  "sizeBytes": 33268881,
+  "sha256": "d9537173c0fee353c155ef199ce3205d42a9a1876fea1c5670e35c8fa5888e73",
+  "digestVerified": true,
+  "selectedFiles": [
+    "index.html",
+    "example.html",
+    "src/version.js",
+    "src/help-content.js",
+    "src/help.js",
+    "src/app.js",
+    "src/youtube.js",
+    "src/sync-ui.js",
+    "src/sync-adapter.js",
+    "src/office-subtitles.js",
+    "src/web.js",
+    "shared/capture.js",
+    "styles.css",
+    "manifest.webmanifest",
+    "sw.js"
+  ]
+}

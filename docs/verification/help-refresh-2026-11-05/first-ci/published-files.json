@@ -1,0 +1,142 @@
+{
+  "version": "1.9.64",
+  "source": "6829a18c84febf3e599d5d6840de9131eef2fc54",
+  "url": "https://seionwon.github.io/LibreMemo/",
+  "files": [
+    {
+      "file": "index.html",
+      "status": 200,
+      "bytes": 20396,
+      "sha256": "ac88abcd72615c9c212afc3e8c7a2cad9cf84872ab5a7150ec7d746dfd37f24a",
+      "ciSha256": "ac88abcd72615c9c212afc3e8c7a2cad9cf84872ab5a7150ec7d746dfd37f24a",
+      "matchesCI": true,
+      "matchesLocal": true
+    },
+    {
+      "file": "example.html",
+      "status": 200,
+      "bytes": 5880,
+      "sha256": "2d60c4599c49ca6d25550d7c27c7de273e4838580206578de61c810917ebf23b",
+      "ciSha256": "2d60c4599c49ca6d25550d7c27c7de273e4838580206578de61c810917ebf23b",
+      "matchesCI": true,
+      "matchesLocal": true
+    },
+    {
+      "file": "src/version.js",
+      "status": 200,
+      "bytes": 91,
+      "sha256": "1d382692b596707699f16ebe3423a267c936e7518727430e16f0fb629fc42b9a",
+      "ciSha256": "1d382692b596707699f16ebe3423a267c936e7518727430e16f0fb629fc42b9a",
+      "matchesCI": true,
+      "matchesLocal": true
+    },
+    {
+      "file": "src/help-content.js",
+      "status": 200,
+      "bytes": 125386,
+      "sha256": "04c0bd3185ae976e88ea9b07d3dd922102ba5860145967eda707c9abc969a27d",
+      "ciSha256": "04c0bd3185ae976e88ea9b07d3dd922102ba5860145967eda707c9abc969a27d",
+      "matchesCI": true,
+      "matchesLocal": true
+    },
+    {
+      "file": "src/help.js",
+      "status": 200,
+      "bytes": 11185,
+      "sha256": "aba75c71de07cb248b2d00bd7de16ed4a7ebc0da5e787686836a069dc6c150b4",
+      "ciSha256": "aba75c71de07cb248b2d00bd7de16ed4a7ebc0da5e787686836a069dc6c150b4",
+      "matchesCI": true,
+      "matchesLocal": true
+    },
+    {
+      "file": "src/app.js",
+      "status": 200,
+      "bytes": 257200,
+      "sha256": "a42b8abffce076ea1d82a89ce5943a53007e6e14504b25c9fa0d6e486c1079b2",
+      "ciSha256": "a42b8abffce076ea1d82a89ce5943a53007e6e14504b25c9fa0d6e486c1079b2",
+      "matchesCI": true,
+      "matchesLocal": true
+    },
+    {
+      "file": "src/youtube.js",
+      "status": 200,
+      "bytes": 16399,
+      "sha256": "6e49192bc28c676e940bb86249e2c5810929a236cdc9094482030d1a0fae8a66",
+      "ciSha256": "6e49192bc28c676e940bb86249e2c5810929a236cdc9094482030d1a0fae8a66",
+      "matchesCI": true,
+      "matchesLocal": true
+    },
+    {
+      "file": "src/sync-ui.js",
+      "status": 200,
+      "bytes": 20225,
+      "sha256": "4afea71a723f1fc5638f45429f509ee9337cc8cb853bad39ccc1fe5835f4f924",
+      "ciSha256": "4afea71a723f1fc5638f45429f509ee9337cc8cb853bad39ccc1fe5835f4f924",
+      "matchesCI": true,
+      "matchesLocal": true
+    },
+    {
+      "file": "src/sync-adapter.js",
+      "status": 200,
+      "bytes": 34596,
+      "sha256": "670687d0b2f6fb0b3a3cf41ab4100a8cdc4e39105757ff4c994f0076a849592a",
+      "ciSha256": "670687d0b2f6fb0b3a3cf41ab4100a8cdc4e39105757ff4c994f0076a849592a",
+      "matchesCI": true,
+      "matchesLocal": true
+    },
+    {
+      "file": "src/office-subtitles.js",
+      "status": 200,
+      "bytes": 8191,
+      "sha256": "bd5e9a02fb14591a4205d842f1df059f539ee8ecdade176387801d5048d07b54",
+      "ciSha256": "bd5e9a02fb14591a4205d842f1df059f539ee8ecdade176387801d5048d07b54",
+      "matchesCI": true,
+      "matchesLocal": true
+    },
+    {
+      "file": "src/web.js",
+      "status": 200,
+      "bytes": 7261,
+      "sha256": "a89f4ab13a72e0c54f0952b5c582f12922f0dc8256b2c24d631c2fd923080f39",
+      "ciSha256": "a89f4ab13a72e0c54f0952b5c582f12922f0dc8256b2c24d631c2fd923080f39",
+      "matchesCI": true,
+      "matchesLocal": true
+    },
+    {
+      "file": "shared/capture.js",
+      "status": 200,
+      "bytes": 12192,
+      "sha256": "30f781a3f46b3acb228695bbc6464f7305df46714987bcc406609b2f25e33027",
+      "ciSha256": "30f781a3f46b3acb228695bbc6464f7305df46714987bcc406609b2f25e33027",
+      "matchesCI": true,
+      "matchesLocal": true
+    },
+    {
+      "file": "styles.css",
+      "status": 200,
+      "bytes": 147070,
+      "sha256": "31a61500110c1a460514357869c316ff6ebdaed83d611712770a95f7e7e828b8",
+      "ciSha256": "31a61500110c1a460514357869c316ff6ebdaed83d611712770a95f7e7e828b8",
+      "matchesCI": true,
+      "matchesLocal": true
+    },
+    {
+      "file": "manifest.webmanifest",
+      "status": 200,
+      "bytes": 4077,
+      "sha256": "ee71f4422306c69905658410720cda5801b62e5a98c27d696de3714a1fd62b55",
+      "ciSha256": "ee71f4422306c69905658410720cda5801b62e5a98c27d696de3714a1fd62b55",
+      "matchesCI": true,
+      "matchesLocal": true
+    },
+    {
+      "file": "sw.js",
+      "status": 200,
+      "bytes": 33927,
+      "sha256": "8dc8005cdbec797181d5c301fb3e2fbc213bd434690022502e8bee3bc27fda6c",
+      "ciSha256": "8dc8005cdbec797181d5c301fb3e2fbc213bd434690022502e8bee3bc27fda6c",
+      "matchesCI": true,
+      "matchesLocal": false
+    }
+  ]
+}

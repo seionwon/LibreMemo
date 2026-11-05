@@ -1,0 +1,165 @@
+{
+  "conclusion": "success",
+  "created_at": "2026-11-05T08:55:26Z",
+  "head_sha": "bae7d12b0b506fb2a2362f26087e8c73bc952f00",
+  "html_url": "https://github.com/seionwon/LibreMemo/actions/runs/41998207673",
+  "id": 41998207673,
+  "status": "completed",
+  "updated_at": "2026-11-05T09:11:21Z",
+  "jobs": [
+    {
+      "completed_at": "2026-11-05T08:57:57Z",
+      "conclusion": "success",
+      "id": 127146549086,
+      "name": "build",
+      "started_at": "2026-11-05T08:55:29Z",
+      "status": "completed",
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/checkout@v6"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/setup-node@v6"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/configure-pages@v5"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run npm ci"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run npm test"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run npm run check"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run npm run build"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/upload-pages-artifact@v4"
+        },
+        {
+          "conclusion": "success",
+          "name": "Post Run actions/setup-node@v6"
+        },
+        {
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v6"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job"
+        }
+      ]
+    },
+    {
+      "completed_at": "2026-11-05T08:58:22Z",
+      "conclusion": "success",
+      "id": 127147621086,
+      "name": "deploy",
+      "started_at": "2026-11-05T08:58:03Z",
+      "status": "completed",
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job"
+        },
+        {
+          "conclusion": "success",
+          "name": "Publish LibreMemo"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job"
+        }
+      ]
+    },
+    {
+      "completed_at": "2026-11-05T09:11:20Z",
+      "conclusion": "success",
+      "id": 127147787046,
+      "name": "verify",
+      "started_at": "2026-11-05T08:58:24Z",
+      "status": "completed",
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/checkout@v6"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/setup-node@v6"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run npm ci"
+        },
+        {
+          "conclusion": "success",
+          "name": "Install Korean fonts for realistic mobile layout checks"
+        },
+        {
+          "conclusion": "success",
+          "name": "Verify the published URL-only app, sidebar, annotation tree and pen scaling in Chrome"
+        },
+        {
+          "conclusion": "success",
+          "name": "Keep published desktop and mobile verification screenshots"
+        },
+        {
+          "conclusion": "success",
+          "name": "Post Run actions/setup-node@v6"
+        },
+        {
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v6"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "created_at": "2026-11-05T09:11:18Z",
+      "digest": "sha256:6d27852a21544f65fb232bb78f57c02d2cfef85677a92fe619740a70cb367b73",
+      "id": 13402671804,
+      "name": "published-sidebar-screenshots",
+      "size_in_bytes": 20713657,
+      "downloadedSHA256": "sha256:6d27852a21544f65fb232bb78f57c02d2cfef85677a92fe619740a70cb367b73"
+    },
+    {
+      "created_at": "2026-11-05T08:57:54Z",
+      "digest": "sha256:d9537173c0fee353c155ef199ce3205d42a9a1876fea1c5670e35c8fa5888e73",
+      "id": 13400549968,
+      "name": "github-pages",
+      "size_in_bytes": 33268881,
+      "downloadedSHA256": "sha256:d9537173c0fee353c155ef199ce3205d42a9a1876fea1c5670e35c8fa5888e73"
+    }
+  ],
+  "browserResults": {
+    "total": 87,
+    "passed": 87,
+    "failed": 0,
+    "skipped": 0
+  }
+}

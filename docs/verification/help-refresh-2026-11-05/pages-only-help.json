@@ -1,0 +1,15 @@
+{
+  "url": "https://seionwon.github.io/LibreMemo/",
+  "topics": 43,
+  "widths": [
+    1280,
+    390,
+    320,
+    844
+  ],
+  "search": true,
+  "backAndClose": true,
+  "preserved": true,
+  "hardwareAndroidTested": false,
+  "status": "pass"
+}
