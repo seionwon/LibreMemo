@@ -1639,8 +1639,12 @@ test('real Chrome: compact library shares titles and sources, keeps dense views 
         if([1280,390,320].includes(width)){await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,'test-results/library-compact-'+view+'-'+width+'.png'),await page.screenshot());}
       }
     }
+    // Visible cards now read their source to create a preview. Measure list
+    // filtering separately; the preview test verifies lazy reads and cache reuse.
+    assert.equal(await page.evaluate('document.querySelector("#document-grid").dataset.view'),'list');
+    const cardPreviewReads=await page.evaluate('(()=>{const reads=window.libraryContentReads;window.libraryContentReads=0;return reads;})()');
     const filter=async value=>page.evaluate(`(()=>{const input=document.querySelector('#library-filter');input.value=${JSON.stringify(value)};input.dispatchEvent(new Event('input'));return document.querySelectorAll('.document-card').length;})()`);
-    assert.equal(await filter('로컬 LLM'),1);assert.equal(await filter('받은 원본.mhtml'),1);assert.equal(await filter('no-such-document'),0);assert.equal(await page.evaluate('getComputedStyle(document.querySelector("#document-grid")).display'),'none');assert.equal(await filter(''),8);assert.equal(await page.evaluate('window.libraryContentReads'),0);await writeFile(join(root,'test-results/pages-only-library-filenames.json'),JSON.stringify({contentReads:0,layouts:filenameMetrics},null,2));
+    assert.equal(await filter('로컬 LLM'),1);assert.equal(await filter('받은 원본.mhtml'),1);assert.equal(await filter('no-such-document'),0);assert.equal(await page.evaluate('getComputedStyle(document.querySelector("#document-grid")).display'),'none');assert.equal(await filter(''),8);assert.equal(await page.evaluate('window.libraryContentReads'),0);await writeFile(join(root,'test-results/pages-only-library-filenames.json'),JSON.stringify({contentReads:0,cardPreviewReads,layouts:filenameMetrics},null,2));
     await page.click('[data-card-menu="compact-0"]');await page.waitFor('document.querySelector("#dialog").open');
     assert.equal(await page.evaluate('["menu-open","menu-export","menu-history","menu-migrate","menu-remove"].every(id=>!!document.getElementById(id))'),true);await page.click('#dialog [data-dialog-close]');
     await page.navigate(url);await page.waitFor('document.querySelectorAll(".document-card").length===8');assert.equal(await page.evaluate('document.querySelector("#document-grid").dataset.view'),'list');

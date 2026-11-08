@@ -302,5 +302,14 @@
     "publishedFiles": 10,
     "allMatchCI": true,
     "browser": "보완판 push 전까지 진행 중; 최종 상태는 후속 기록에서 확인"
+  },
+  "first166PublishedBrowserAttempt": {
+    "run": "https://github.com/seionwon/LibreMemo/actions/runs/42484240502",
+    "total": 88,
+    "passed": 87,
+    "failed": 1,
+    "previewScenario": "pass",
+    "failure": "기존 compact 서재 검사가 미리보기 생성의 정상 본문 읽기(2회)까지 0회로 가정했습니다.",
+    "correction": "카드 생성/레이아웃 검사와 목록 검색의 읽기 측정을 분리합니다. 목록 검색 0회 조건, 새 미리보기 지연 생성/캐시/보존 검사는 유지합니다. 앱 코드는 추가 수정하지 않았으며 공개 재검증 대기."
   }
 }
