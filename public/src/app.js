@@ -10,7 +10,8 @@ import {OFFICE_MIMES,OFFICE_FORMATS} from './office-formats.js';
 import {IMAGE_MIMES,IMAGE_EXTENSIONS,pastedImages,clipboardImageFile,isImagePasteTarget} from './image-formats.js';
 import {canSleep,cancelTabSleep,scheduleTabSleep} from './tab-sleep.js';
 import {AI_TEXT_LIMIT,aiSearchRequest,aiSearchURL} from './ai-search.js';
-import { listDocuments, getDocument, trashDocument, restoreDocument, deleteDocument, deleteTrashedDocuments, getSetting, setSetting, saveDocumentHTML, listRevisionPeriods, listRevisionDay, adjacentRevisionDay, getRevision, putDocumentRevision, checkpointAnnotations, putDocumentView, putDocumentThumbnail, replaceDocumentBody, putDocumentSourceIdentity, writeExternalHTML, updateLibraryFolders, onStorageChange, readLibrary } from './storage.js';
+import { listDocuments, getDocument, getDocumentPreview, trashDocument, restoreDocument, deleteDocument, deleteTrashedDocuments, getSetting, setSetting, saveDocumentHTML, listRevisionPeriods, listRevisionDay, adjacentRevisionDay, getRevision, putDocumentRevision, checkpointAnnotations, putDocumentView, replaceDocumentBody, putDocumentSourceIdentity, writeExternalHTML, updateLibraryFolders, onStorageChange, readLibrary } from './storage.js';
+import {CardPreviewQueue,cardPreviewKey,savedCardPicture} from './card-previews.js';
 import {readWebPage,pastedPage,PASTE_LIMIT,isWebSearch,BrowserTabs} from './web.js';
 import { readLocalHTML, droppedHTMLFiles, findLocalDuplicates, identifyLocalFile, htmlExportName } from './local-files.js';
 import { normalizePreferences, loadPreferences, storePreferences, serializeSettings, readSettingsFile, PRESET_COLORS, PRESET_PALETTES, normalizeHexColor, hexToRgb, rgbToHex, hexToHsv, hsvToHex } from './preferences.js';
@@ -278,8 +279,8 @@ async function refreshLibrary() {
   })().finally(()=>{libraryRead=null;});
   return libraryRead;
 }
-// Every card shows a thumbnail of the same shape: a video's own picture, otherwise
-// a tile coloured by format, so the card view reads as one consistent grid.
+// Cached local pictures fill the shared 16:9 card; format tiles cover empty or
+// unsupported content while visible cards prepare their preview in the background.
 const THUMB_KINDS={video:['영상','#cc0000','youtube'],pdf:['PDF','#c2410c','file'],image:['이미지','#2563eb','file'],subtitle:['자막','#7c3aed','subtitles'],word:['문서','#1d4ed8','file'],hangul:['한글','#0e7490','file'],sheet:['표','#15803d','grid'],slides:['슬라이드','#b45309','file'],ebook:['전자책','#a16207','library'],djvu:['DjVu','#6b7280','file'],markdown:['MD','#334155','text'],text:['TXT','#475569','text'],web:['웹','#0f766e','globe']};
 function thumbKind(record){
   if(record.metadata?.youtube)return 'video';
@@ -289,7 +290,7 @@ function thumbKind(record){
   return THUMB_KINDS[OFFICE_FORMATS[ext]]?OFFICE_FORMATS[ext]:'web';
 }
 function cardThumb(record){
-  const kind=thumbKind(record),[label,color,glyph]=THUMB_KINDS[kind],picture=record.metadata?.youtube?.thumbnail||record.metadata?.thumbnail;
+  const kind=thumbKind(record),[label,color,glyph]=THUMB_KINDS[kind],cached=cardPreviewQueue?.cache.get(record.id),picture=savedCardPicture(record)||(cached?.key===cardPreviewKey(record)?cached.image:'');
   if(picture)return `<span class="card-thumb card-thumb-picture" aria-hidden="true"><img src="${esc(picture)}" alt="" loading="lazy" decoding="async">${kind==='video'?`<span class="card-thumb-play">${icon('play',13)}</span>`:''}</span>`;
   return `<span class="card-thumb" style="--thumb:${color}" aria-hidden="true">${icon(glyph,26)}<b>${esc(label)}</b></span>`;
 }
@@ -334,8 +335,36 @@ function renderLibrary() {
   libraryGridState=result;
   }
   renderLibraryFolders();
+  observeCardPreviews(result);
   if(activeId==='library')$('#status-left').textContent=libraryTrash?`휴지통 ${trashRecords.length}개의 문서 · 복원 가능`:`${records.length}개의 문서 · ${folder?folder.name+' 자동 저장':'이 기기에 보관'}`;
   renderFolderState();
+}
+let cardPreviewQueue,cardPreviewObserver,cardPreviewState;
+const cardPreviewNodes=new Map();
+function pauseCardPreviews(){cardPreviewQueue?.pause();cardPreviewObserver?.disconnect();cardPreviewNodes.clear();cardPreviewState=null;}
+function observeCardPreviews(result){
+  if(typeof IntersectionObserver!=='function')return;
+  if(activeId!=='library'||preferences.libraryView!=='card'){pauseCardPreviews();return;}
+  if(cardPreviewState===result)return;cardPreviewState=result;
+  const current=(record,key)=>activeId==='library'&&preferences.libraryView==='card'&&cardPreviewNodes.has(record.id)&&cardPreviewKey((libraryTrash?trashRecords:records).find(item=>item.id===record.id)||{})===key;
+  cardPreviewQueue??=new CardPreviewQueue({
+    load:getDocumentPreview,read:getSetting,write:setSetting,current,
+    generate:async(record,options)=>(await import('./thumbnails.js')).recordThumbnail(record,options),
+    publish:(record,picture)=>{
+      if(!current(record,cardPreviewKey(record)))return;
+      const node=cardPreviewNodes.get(record.id),img=document.createElement('img');img.alt='';img.loading='lazy';img.decoding='async';img.src=picture;
+      node.classList.add('card-thumb-picture');node.replaceChildren(img);
+      if(record.metadata?.youtube){const play=document.createElement('span');play.className='card-thumb-play';play.innerHTML=icon('play',13);node.append(play);}
+    },
+  });
+  cardPreviewObserver??=new IntersectionObserver(entries=>{
+    for(const entry of entries){const id=entry.target.closest('[data-record]')?.dataset.record,record=(libraryTrash?trashRecords:records).find(item=>item.id===id);if(!record||cardPreviewNodes.get(id)!==entry.target)continue;if(entry.isIntersecting)cardPreviewQueue.request(record);else cardPreviewQueue.cancel(id);}
+  },{root:$('#library'),rootMargin:'80px 0px'});
+  cardPreviewObserver.disconnect();cardPreviewNodes.clear();cardPreviewQueue.resume();
+  for(const node of $$('#document-grid .card-thumb')){
+    const id=node.closest('[data-record]').dataset.record;cardPreviewNodes.set(id,node);
+    cardPreviewObserver.observe(node);
+  }
 }
 function indexLibraryFolders() {
   if(!libraryIndex.update(records,libraryFolders,folder?.name||'전용 폴더'))return;
@@ -494,7 +523,7 @@ function activate(id) {
   tabs.forEach(tab=>tab.id===id?cancelTabSleep(tab):scheduleTabSleep(tab,sleepTab));
   if(active()?.asleep)safely(()=>wakeTab(active()))();
   if(reader()){if(!sameSidebar)renderToolbar();if(reader().documentSidebarUI?.isConnected&&!reader().tocStrip){reader().applyTocWidth(preferences.sidebarWidth*reader().sidebarUnit(),{persist:false,snapStrip:false});reader().syncAfterTocResize();}if(!sameSidebar)restoreSidebar();if(reader().dynamicDirty)reader().scheduleDynamicRefresh();}else $('#toolbar').hidden=true;
-  if(id==='library')renderLibrary();
+  if(id==='library')renderLibrary();else pauseCardPreviews();
   if(id==='execution'){$('#status-left').textContent='앱 설치 · URL 공유 · 모든 데이터는 이 기기에 저장';document.title='앱 설치 · URL 공유 · LibreMemo';syncStatusbarVisibility();}
 }
 async function selectTab(id) {
@@ -612,7 +641,6 @@ async function openRecord(record, prepared = null, {deferReady = false, sourceId
   if(parsed.file){tab.record.file=parsed.file;delete tab.record.html;tab.reader.initialHTML=null;tab.record.metadata=tab.reader.metadata;tab.record.source=tab.reader.metadata.source;tab.title=tab.record.title=tab.reader.metadata.title;}
   if(activeId===tab.id)restoreSidebar();
   mountYouTube(tab);
-  scheduleThumbnail(tab);
   renderToolbar();
   updateChrome();
   // Preserve the imported/current annotation baseline before the first new edit.
@@ -973,20 +1001,6 @@ async function attachYouTubeSubtitles(files,candidates,{only=null,chapters}={}){
   const notes=[lostAnnotations||lostBookmarks?`새 자막에서 찾지 못한 주석 ${lostAnnotations}개·북마크 ${lostBookmarks}개는 목록에 남겨 두었습니다.`:'',unmatched.length?`영상을 찾지 못한 자막 ${unmatched.length}개: ${unmatched.slice(0,3).map(s=>s.name).join(', ')}${unmatched.length>3?' …':''}`:'',skipped.length?`자막이 아닌 파일 ${skipped.length}개는 건너뛰었습니다.`:''].filter(Boolean);
   toast((attached?`자막 ${attached}개를 붙였습니다.`:'붙인 자막이 없습니다.')+(notes.length?' '+notes.join(' '):''),!attached);
   return attached;
-}
-/** Make a card picture once per document, from what its reader shows (see thumbnails.js). */
-function scheduleThumbnail(tab){
-  // Only a found picture is saved, once; opening a text-only document never writes.
-  const metadata=tab.reader?.metadata;if(!metadata||metadata.youtube||typeof metadata.thumbnail==='string'||tab.thumbnailChecked)return;tab.thumbnailChecked=true;
-  setTimeout(()=>{
-    if(!tabs.includes(tab)||tab.closing||!tab.reader)return;
-    void import('./thumbnails.js').then(({documentThumbnail})=>documentThumbnail(tab.reader)).then(async thumbnail=>{
-      if(!thumbnail||!tabs.includes(tab)||tab.closing||!tab.reader||typeof tab.reader.metadata.thumbnail==='string')return;
-      tab.reader.metadata.thumbnail=thumbnail;
-      const saved=await putDocumentThumbnail(tab.record.id,thumbnail,tab.record.syncEpoch);
-      const {html,file,originalFile,...summary}=saved;cacheLibraryDocument(summary);if(activeId==='library')renderLibrary();
-    }).catch(()=>{/* the card keeps its format tile */});
-  },1500);
 }
 const chaptersText=chapters=>(chapters||[]).map(c=>clock(c.t)+' '+c.title).join('\n');
 /** Paste or edit a video's chapters; the sidebar outline is rebuilt from them. */

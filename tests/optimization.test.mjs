@@ -9,6 +9,7 @@ import {$,$$,icon,escapeHTML,formatDate,formatBytes,displayHost} from '../public
 import {isPDFDocument} from '../public/src/pdf-document.js';
 import {IMAGE_EXTENSIONS} from '../public/src/image-formats.js';
 import {OFFICE_FORMATS} from '../public/src/office-formats.js';
+import {savedCardPicture,cardPreviewKey} from '../public/src/card-previews.js';
 installDOM();
 const tree=[{id:'books',parentId:'',name:'책'},{id:'part',parentId:'books',name:'1부'}];
 const rows=()=>Array.from({length:5000},(_,i)=>({id:'d'+i,title:'문서 '+i,name:i+'.html',source:'',created:i,modified:5000-i,folderId:i%2?'part':'',metadata:{annotations:[],view:{}}}));
@@ -48,7 +49,7 @@ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8'
 function libraryApp(){
   const doc=documentFor(html),records=rows().slice(0,4),folders=validateFolders(tree),calls={read:0,render:0};
   doc.querySelector('#library-filter').value='';
-  const context=vm.createContext({document:doc,$:(s,root=doc)=>$(s,root),$$:(s,root=doc)=>$$(s,root),icon,esc:escapeHTML,isPDFDocument,IMAGE_EXTENSIONS,OFFICE_FORMATS,formatDate,formatBytes,displayHost,LibraryIndex,validateFolders,
+  const context=vm.createContext({document:doc,$:(s,root=doc)=>$(s,root),$$:(s,root=doc)=>$$(s,root),icon,esc:escapeHTML,isPDFDocument,IMAGE_EXTENSIONS,OFFICE_FORMATS,savedCardPicture,cardPreviewKey,formatDate,formatBytes,displayHost,LibraryIndex,validateFolders,
     folderPath:(folders,id,map)=>{const path=[];for(let f=map.get(id);f;f=map.get(f.parentId))path.unshift(f);return path;},clearTimeout,
     readLibrary:async()=>{calls.read++;return {documents:records,folders};},renderFolderState:()=>{},
     initialRecords:records,initialFolders:folders});

@@ -1,0 +1,285 @@
+{
+  "version": "1.9.65",
+  "local": {
+    "check": {
+      "javascript": 241,
+      "json": true,
+      "status": "pass"
+    },
+    "unit": {
+      "total": 999,
+      "passed": 999,
+      "failed": 0,
+      "skipped": 0
+    },
+    "build": "pass",
+    "diffCheck": "pass"
+  },
+  "initialUnitAttempt": {
+    "passed": 998,
+    "failed": 1,
+    "reason": "서재 함수를 따로 실행하는 최적화 검사에 새 helper 의존성 2개를 전달하지 않았습니다. 실제 helper를 주입한 뒤 전체 검사를 통과했습니다."
+  },
+  "trustedChrome": {
+    "engine-desktop": {
+      "version": "1.9.65",
+      "scope": "실제 미리보기 엔진·캐시와 지원 파일 변환기의 격리 화면; 전체 앱 검사는 CI에서 수행",
+      "results": [
+        {
+          "id": "preview-csv",
+          "width": 320,
+          "height": 180,
+          "ink": 1059
+        },
+        {
+          "id": "preview-djvu",
+          "width": 320,
+          "height": 180,
+          "ink": 2325
+        },
+        {
+          "id": "preview-docx",
+          "width": 320,
+          "height": 180,
+          "ink": 2204
+        },
+        {
+          "id": "preview-epub",
+          "width": 320,
+          "height": 180,
+          "ink": 1586
+        },
+        {
+          "id": "preview-hml",
+          "width": 320,
+          "height": 180,
+          "ink": 78
+        },
+        {
+          "id": "preview-md",
+          "width": 320,
+          "height": 180,
+          "ink": 1826
+        },
+        {
+          "id": "preview-pdf",
+          "width": 320,
+          "height": 180,
+          "ink": 1259
+        },
+        {
+          "id": "preview-png",
+          "width": 320,
+          "height": 180,
+          "ink": 3356
+        },
+        {
+          "id": "preview-pptx",
+          "width": 320,
+          "height": 180,
+          "ink": 371
+        },
+        {
+          "id": "preview-srt",
+          "width": 320,
+          "height": 180,
+          "ink": 1883
+        },
+        {
+          "id": "preview-txt",
+          "width": 320,
+          "height": 180,
+          "ink": 707
+        },
+        {
+          "id": "preview-video",
+          "width": 320,
+          "height": 180,
+          "ink": 57053
+        },
+        {
+          "id": "preview-web",
+          "width": 320,
+          "height": 180,
+          "ink": 1996
+        },
+        {
+          "id": "preview-xlsx",
+          "width": 320,
+          "height": 180,
+          "ink": 2285
+        }
+      ],
+      "errors": [],
+      "unsafeExecuted": false,
+      "pass": true
+    },
+    "engine-mobile": {
+      "version": "1.9.65",
+      "scope": "실제 미리보기 엔진·캐시와 지원 파일 변환기의 격리 화면; 전체 앱 검사는 CI에서 수행",
+      "results": [
+        {
+          "id": "preview-csv",
+          "width": 320,
+          "height": 180,
+          "ink": 1059
+        },
+        {
+          "id": "preview-djvu",
+          "width": 320,
+          "height": 180,
+          "ink": 2325
+        },
+        {
+          "id": "preview-docx",
+          "width": 320,
+          "height": 180,
+          "ink": 2204
+        },
+        {
+          "id": "preview-epub",
+          "width": 320,
+          "height": 180,
+          "ink": 1586
+        },
+        {
+          "id": "preview-hml",
+          "width": 320,
+          "height": 180,
+          "ink": 78
+        },
+        {
+          "id": "preview-md",
+          "width": 320,
+          "height": 180,
+          "ink": 1826
+        },
+        {
+          "id": "preview-pdf",
+          "width": 320,
+          "height": 180,
+          "ink": 1259
+        },
+        {
+          "id": "preview-png",
+          "width": 320,
+          "height": 180,
+          "ink": 3356
+        },
+        {
+          "id": "preview-pptx",
+          "width": 320,
+          "height": 180,
+          "ink": 371
+        },
+        {
+          "id": "preview-srt",
+          "width": 320,
+          "height": 180,
+          "ink": 1883
+        },
+        {
+          "id": "preview-txt",
+          "width": 320,
+          "height": 180,
+          "ink": 707
+        },
+        {
+          "id": "preview-video",
+          "width": 320,
+          "height": 180,
+          "ink": 57053
+        },
+        {
+          "id": "preview-web",
+          "width": 320,
+          "height": 180,
+          "ink": 1996
+        },
+        {
+          "id": "preview-xlsx",
+          "width": 320,
+          "height": 180,
+          "ink": 2285
+        }
+      ],
+      "errors": [],
+      "unsafeExecuted": false,
+      "overflow": false,
+      "pass": true
+    },
+    "actual-app": {
+      "version": "1.9.65",
+      "actualApp": true,
+      "preprocessedReadingCopies": true,
+      "results": [
+        {
+          "id": "preview-web",
+          "width": 320
+        },
+        {
+          "id": "preview-docx",
+          "width": 320
+        },
+        {
+          "id": "preview-pptx",
+          "width": 320
+        },
+        {
+          "id": "preview-xlsx",
+          "width": 320
+        },
+        {
+          "id": "preview-hml",
+          "width": 320
+        },
+        {
+          "id": "preview-md",
+          "width": 320
+        },
+        {
+          "id": "preview-txt",
+          "width": 320
+        },
+        {
+          "id": "preview-csv",
+          "width": 320
+        },
+        {
+          "id": "preview-epub",
+          "width": 320
+        },
+        {
+          "id": "preview-srt",
+          "width": 320
+        },
+        {
+          "id": "preview-png",
+          "width": 320
+        },
+        {
+          "id": "preview-pdf",
+          "width": 320
+        },
+        {
+          "id": "preview-djvu",
+          "width": 320
+        },
+        {
+          "id": "preview-video",
+          "width": 320
+        }
+      ],
+      "openedTabs": 0,
+      "overflow": false,
+      "unsafeExecuted": false,
+      "pass": true
+    }
+  },
+  "limits": [
+    "별도 Chrome 화면의 문서 변환 대기가 끝나지 않아, Office·한글·전자책·DjVu는 같은 프로젝트 변환기로 미리 만든 읽기 사본을 사용했습니다. PDF·이미지 해석과 미리보기 생성은 실제 Chrome입니다.",
+    "실제 앱 검사는 임시 Chrome 프로필의 OPFS 테스트 폴더를 사용했습니다. 개인 문서·실제 사용자 폴더를 사용하지 않았습니다.",
+    "전체 로컬 npm run test:browser 및 실제 Android 기기 검사는 수행하지 않았습니다."
+  ],
+  "deployment": "pending"
+}

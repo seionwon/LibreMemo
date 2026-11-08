@@ -1652,7 +1652,7 @@ test('real Chrome: compact library shares titles and sources, keeps dense views 
     assert.deepEqual(await state(),before);assert.deepEqual(chrome.errors,[]);
   }finally{await chrome?.close();await new Promise(resolve=>server.close(resolve));await rm(folder,{recursive:true,force:true});}
 });
-test('real Chrome: large library and annotation autosave never deserialize book bodies',{timeout:60000},async()=>{
+test('real Chrome: large library list and annotation autosave never deserialize book bodies',{timeout:60000},async()=>{
  await prepareAssets();const folder=await mkdtemp(join(tmpdir(),'htmlmemo-library-test-'));await cp(join(root,'public'),folder,{recursive:true});
  const server=createServer(folder);let chrome;
  try{
@@ -1660,6 +1660,9 @@ test('real Chrome: large library and annotation autosave never deserialize book 
   const url=process.env.HTMLMEMO_JITTER_TEST_URL || `http://127.0.0.1:${server.address().port}/`;
   await page.send('Page.addScriptToEvaluateOnNewDocument',{source:`window.contentReads=0;const get=IDBObjectStore.prototype.get;IDBObjectStore.prototype.get=function(...args){if(this.name==='contents')window.contentReads++;return get.apply(this,args);};`});
   await page.navigate(url);await page.waitFor(`document.querySelector('#status-left').textContent.includes('개의 문서')`);
+  // Card previews intentionally read visible sources; this check isolates the
+  // metadata-only list and autosave paths. Preview caching has its own test.
+  await page.click('#library-list-view');
   await page.evaluate(`(async()=>{const {putDocumentRevision}=await import('./src/storage.js'),{parseHTML}=await import('./src/document.js');const metadata=parseHTML('<html><head><title>Large book</title></head><body>Source</body></html>').metadata;const html='<html><head><title>Large book</title></head><body><p id=large>Large book text</p><!--'+'x'.repeat(4*1024*1024)+'--></body></html>';for(let i=0;i<6;i++)await putDocumentRevision({id:'large-'+i,title:'Large '+i,name:'large-'+i+'.html',html,metadata:structuredClone(metadata),created:Date.now(),modified:Date.now()});})()`);
   await page.navigate(url);await page.waitFor(`document.querySelectorAll('.document-card').length===6`);
   assert.equal(await page.evaluate('window.contentReads'),0);

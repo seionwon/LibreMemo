@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "status": 200,
+  "title": "LibreMemo 카드 미리보기 검증",
+  "url": "http://127.0.0.1:4173/preview-test.html",
+  "results": [
+    {
+      "type": "wait",
+      "selector": "#report:not([data-state=\"running\"])"
+    },
+    {
+      "type": "text",
+      "selector": "#report",
+      "text": "진행 위치: docx / []"
+    }
+  ],
+  "errors": [],
+  "screenshot": "test-results/card-previews-20261108/desktop.json.png"
+}

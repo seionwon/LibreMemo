@@ -96,6 +96,14 @@ export const listDocuments = async ({includeTrashed=false}={}) => {
   return includeTrashed?records:records.filter(record=>!record.trashedAt);
 };
 export const getDocument = async id => withContent(await transaction('documents', 'readonly', store => store.get(id)));
+/** Only visible cards ask for this bounded prefix; never fill the reader body cache. */
+export async function getDocumentPreview(id) {
+  const connection=await db();return new Promise((resolve,reject)=>{
+    const tx=connection.transaction(['documents','contents'],'readonly'),header=tx.objectStore('documents').get(id),body=tx.objectStore('contents').get(id);
+    tx.oncomplete=()=>{const record=header.result,content=body.result;if(!record){resolve(null);return;}const html=content?.html??record.html;resolve({...record,html:typeof html==='string'?html.slice(0,4*1024*1024):undefined,file:content?.file,originalFile:content?.originalFile});};
+    tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('미리보기 자료를 읽지 못했습니다.'));
+  });
+}
 export const putDocument = record => putDocumentRevision(record);
 export const getSetting = key => transaction('settings', 'readonly', store => store.get(key));
 export const setSetting = (key, value) => transaction('settings', 'readwrite', store => store.put(value, key));
@@ -223,11 +231,11 @@ export async function deleteTrashedDocuments(ids) {
   const selected=[...new Set(ids)];if(!selected.length)return;
   const connection=await db();
   await new Promise((resolve,reject)=>{
-    const tx=connection.transaction(['documents','contents','revisions','revisionHeaders'],'readwrite'),store=tx.objectStore('documents');let failure;
+    const tx=connection.transaction(['documents','contents','revisions','revisionHeaders','settings'],'readwrite'),store=tx.objectStore('documents');let failure;
     for(const id of selected){const request=store.get(id);request.onsuccess=()=>{try{
       if(!request.result)return;
       if(!request.result.trashedAt)throw Error('복원된 문서는 영구 삭제하지 않습니다. 휴지통을 다시 확인해주세요.');
-      store.delete(id);tx.objectStore('contents').delete(id);
+      store.delete(id);tx.objectStore('contents').delete(id);tx.objectStore('settings').delete('card-preview-v1:'+id);
       const revisions=tx.objectStore('revisions').index('documentId').openCursor(IDBKeyRange.only(id));
       revisions.onsuccess=()=>{const cursor=revisions.result;if(cursor){tx.objectStore('revisionHeaders').delete(cursor.primaryKey);cursor.delete();cursor.continue();}};
     }catch(error){failure=error;tx.abort();}};}

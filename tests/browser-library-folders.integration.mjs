@@ -1,12 +1,15 @@
 // Runs only in the trusted/CI Chrome environment, never in the agent's macOS sandbox.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,cp,rm,mkdir,writeFile} from 'node:fs/promises';
+import {mkdtemp,cp,rm,mkdir,writeFile,readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {root,prepareAssets} from '../scripts/assets.mjs';
 import {createServer} from '../scripts/server.mjs';
 import {launchChrome} from './chrome.mjs';
+import {officeFixtures} from './office-fixtures.mjs';
+import {ebookFixtures} from './ebook-fixtures.mjs';
+import {seedCardPreviewFixtures} from './card-preview-fixture.mjs';
 const stableFolders=folders=>[...folders].sort((a,b)=>a.id.localeCompare(b.id));
 
 test('real Chrome: Pages-only library trash restores documents and portable notes, and purges only confirmed trash',{timeout:180000},async()=>{
@@ -154,4 +157,40 @@ test('real Chrome: Pages-only optimized library batches a large restore and reus
     await writeFile(join(root,'test-results/pages-only-optimization-library.json'),JSON.stringify({seeded,initial,oneBatchedRender:true,cardViewSwitchReusesDOM:true,filterReusesFolderTree:true,documentOpens:true},null,2));assert.deepEqual(browser.errors,[]);
   }catch(error){if(browser){await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,'test-results/pages-only-optimization-failure.png'),await browser.page.screenshot());}throw error;}
   finally{await browser?.close();await new Promise(resolve=>server.close(resolve));await rm(temporary,{recursive:true,force:true});}
+});
+
+test('real Chrome: compact library previews cover local document formats without opening tabs, changing notes or fetching remote content',{timeout:180000},async()=>{
+ await prepareAssets();const server=createServer();let browser;
+ try{
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const url=process.env.HTMLMEMO_SIDEBAR_TEST_URL||`http://127.0.0.1:${server.address().port}/`;
+  browser=await launchChrome();const page=browser.page,remote=[];await page.send('Network.enable');page.on('Network.requestWillBeSent',event=>{if(event.request.url.includes('preview-forbidden.invalid'))remote.push(event.request.url);});
+  await page.send('Emulation.setDeviceMetricsOverride',{width:1280,height:1000,deviceScaleFactor:1,mobile:false});await page.navigate(url);await page.waitFor('document.querySelector("#status-left").textContent.includes("개의 문서")');await page.click('#library-list-view');
+  const office=await officeFixtures(),ebooks=await ebookFixtures(),bytes=text=>Array.from(new TextEncoder().encode(text));
+  const samples=['docx','pptx','xlsx','hml','md','txt','csv'].map(format=>({format,bytes:Array.from(office[format])}));
+  samples.push({format:'epub',bytes:Array.from(ebooks.epub)},{format:'srt',bytes:bytes('1\n00:00:01,000 --> 00:00:03,000\n한국어 자막의 미리보기입니다.\n\n2\n00:00:04,000 --> 00:00:06,000\n영상을 열지 않고도 내용을 확인합니다.')});
+  for(const [format,path,type] of [['png','images/reading.png','image/png'],['pdf','unified-reader.pdf','application/pdf'],['djvu','djvu/second.djv','image/vnd.djvu']])samples.push({format,type,bytes:Array.from(await readFile(join(root,'tests/fixtures',path)))});
+  const ids=await page.evaluate(`(${seedCardPreviewFixtures.toString()})(${JSON.stringify(samples)})`);
+  await page.waitFor(`document.querySelectorAll('.document-card').length===${ids.length}`);await page.waitFor('document.querySelector("#data-folder-status").textContent==="폴더 저장 완료"');
+  const state=()=>page.evaluate(`(async()=>{const s=await import('./src/storage.js'),rows=await s.listDocuments();return Promise.all(rows.map(async r=>({id:r.id,modified:r.modified,annotations:r.metadata.annotations,bookmarks:r.metadata.bookmarks,revisions:(await s.listRevisions(r.id)).length})));})()`);
+  const before=await state();
+  await page.send('Page.addScriptToEvaluateOnNewDocument',{source:`window.previewSourceReads=0;const originalPreviewGet=IDBObjectStore.prototype.get;IDBObjectStore.prototype.get=function(...args){if(this.name==='contents'&&new Error().stack.includes('getDocumentPreview'))window.previewSourceReads++;return originalPreviewGet.apply(this,args);};`});
+  await page.evaluate(`window.previewSourceReads=0;const get=IDBObjectStore.prototype.get;IDBObjectStore.prototype.get=function(...args){if(this.name==='contents'&&new Error().stack.includes('getDocumentPreview'))window.previewSourceReads++;return get.apply(this,args);};`);
+  await new Promise(resolve=>setTimeout(resolve,200));assert.equal(await page.evaluate('window.previewSourceReads'),0,'list view never reads source bodies for previews');
+  await page.click('#library-card-view');await page.evaluate(`window.previewGrid=document.querySelector('.document-card');window.previewGridRebuilds=0;new MutationObserver(changes=>{window.previewGridRebuilds+=changes.filter(c=>c.target.id==='document-grid').length;}).observe(document.querySelector('#document-grid'),{childList:true});`);
+  for(const id of ids){
+   await page.evaluate(`document.querySelector('[data-record="${id}"]').scrollIntoView({block:'center'})`);
+   await page.waitFor(`(()=>{const img=document.querySelector('[data-record="${id}"] .card-thumb img');return img?.complete&&img.naturalWidth===320&&img.naturalHeight===180;})()`,30000);
+  }
+  const result=await page.evaluate(`(async()=>{const s=await import('./src/storage.js');return Promise.all(${JSON.stringify(ids)}.map(async id=>({id,cached:!!(await s.getSetting('card-preview-v1:'+id))?.image,picture:document.querySelector('[data-record="'+id+'"] .card-thumb img').src})));})()`);
+  assert.ok(result.filter(r=>r.id!=='preview-video').every(r=>r.cached));assert.equal(await page.evaluate('document.querySelectorAll(".tab.document").length'),0);
+  assert.equal(await page.evaluate('window.cardPreviewUnsafe'),undefined);assert.deepEqual(remote,[]);assert.deepEqual(await state(),before);assert.equal(await page.evaluate('window.previewGridRebuilds'),0,'previews patch their image without rebuilding the card grid');
+  await page.evaluate('document.querySelector("[data-record]").scrollIntoView({block:"start"})');await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,'test-results/library-compact-previews-1280.png'),await page.screenshot());
+  await page.send('Emulation.setDeviceMetricsOverride',{width:320,height:700,deviceScaleFactor:1,mobile:true});assert.equal(await page.evaluate('document.querySelector("#library").scrollWidth>innerWidth'),false);await writeFile(join(root,'test-results/library-compact-previews-320.png'),await page.screenshot());
+  await page.click('#library-list-view');assert.equal(await page.evaluate('getComputedStyle(document.querySelector(".card-thumb")).display'),'none');await page.click('#library-card-view');
+  await page.waitFor('!!navigator.serviceWorker?.controller',30000);await page.send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:-1,uploadThroughput:-1});await page.navigate(url);await page.waitFor(`document.querySelectorAll('.document-card').length===${ids.length}`);
+  for(const id of ids){await page.evaluate(`document.querySelector('[data-record="${id}"]').scrollIntoView({block:'center'})`);await page.waitFor(`document.querySelector('[data-record="${id}"] .card-thumb img')?.naturalWidth===320`);}
+  assert.equal(await page.evaluate('window.previewSourceReads'),0,'a cached card reopens offline without reading its source');assert.deepEqual(await state(),before);assert.deepEqual(browser.errors,[]);
+  await writeFile(join(root,'test-results/library-compact-previews.json'),JSON.stringify({url,formats:samples.map(s=>s.format),web:true,youtube:true,previews:result.map(({id,cached})=>({id,cached})),notesPreserved:true,historyPreserved:true,noOpenedTabs:true,noRemoteRequests:true,offlineCache:true,widths:[1280,320],status:'pass'},null,2)+'\n');
+ }catch(error){if(browser){await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,'test-results/library-compact-previews-failure.png'),await browser.page.screenshot());await writeFile(join(root,'test-results/library-compact-previews-failure.json'),JSON.stringify(await browser.page.evaluate(`(async()=>{const s=await import('./src/storage.js');return {error:${JSON.stringify(String(error))},cards:[...document.querySelectorAll('.document-card')].map(c=>({id:c.dataset.record,picture:c.querySelector('img')?.src?.slice(0,60),width:c.querySelector('img')?.naturalWidth})),cache:await Promise.all((await s.listDocuments()).map(async r=>({id:r.id,cache:await s.getSetting('card-preview-v1:'+r.id)})))};})()`),null,2));}throw error;}
+ finally{await browser?.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });

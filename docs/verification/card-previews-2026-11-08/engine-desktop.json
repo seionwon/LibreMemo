@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "status": 200,
+  "title": "LibreMemo 카드 미리보기 검증",
+  "url": "http://127.0.0.1:4173/preview-test.html",
+  "results": [
+    {
+      "type": "wait",
+      "selector": "#report:not([data-state=\"running\"])"
+    },
+    {
+      "type": "text",
+      "selector": "#report",
+      "text": "{\n  \"version\": \"1.9.65\",\n  \"scope\": \"실제 미리보기 엔진·캐시와 지원 파일 변환기의 격리 화면; 전체 앱 검사는 CI에서 수행\",\n  \"results\": [\n    {\n      \"id\": \"preview-csv\",\n      \"width\": 320,\n      \"height\": 180,\n      \"ink\": 1059\n    },\n    {\n      \"id\": \"preview-djvu\",\n      \"width\": 320,\n      \"height\": 180,\n      \"ink\": 2325\n    },\n    {\n      \"id\": \"preview-docx\",\n      \"width\": 320,\n      \"height\": 180,\n      \"ink\": 2204\n    },\n    {\n      \"id\": \"preview-epub\",\n      \"width\": 320,\n      \"height\": 180,\n      \"ink\": 1586\n    },\n    {\n      \"id\": \"preview-hml\",\n      \"width\": 320,\n      \"height\": 180,\n      \"ink\": 78\n    },\n    {\n      \"id\": \"preview-md\",\n      \"width\": 320,\n      \"height\": 180,\n      \"ink\": 1826\n    },\n    {\n      \"id\": \"preview-pdf\",\n      \"width\": 320,\n      \"height\": 180,\n      \"ink\": 1259\n    },\n    {\n      \"id\": \"preview-png\",\n      \"width\": 320,\n      \"height\": 180,\n      \"ink\": 3356\n    },\n    {\n      \"id\": \"preview-pptx\",\n      \"width\": 320,\n      \"height\": 180,\n      \"ink\": 371\n    },\n    {\n      \"id\": \"preview-srt\",\n      \"width\": 320,\n      \"height\": 180,\n      \"ink\": 1883\n    },\n    {\n      \"id\": \"preview-txt\",\n      \"width\": 320,\n      \"height\": 180,\n      \"ink\": 707\n    },\n    {\n      \"id\": \"preview-video\",\n      \"width\": 320,\n      \"height\": 180,\n      \"ink\": 57053\n    },\n    {\n      \"id\": \"preview-web\",\n      \"width\": 320,\n      \"height\": 180,\n      \"ink\": 1996\n    },\n    {\n      \"id\": \"preview-xlsx\",\n      \"width\": 320,\n      \"height\": 180,\n      \"ink\": 2285\n    }\n  ],\n  \"errors\": [],\n  \"unsafeExecuted\": false,\n  \"pass\": true\n}"
+    }
+  ],
+  "errors": [],
+  "screenshot": "test-results/card-previews-20261108/desktop.json.png"
+}

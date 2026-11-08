@@ -32,7 +32,7 @@ function fixture(){
   }};
   class Clock extends Date{static now(){return control.now;}}
   const context=vm.createContext({connection,structuredClone,Blob,crypto,Date:Clock,IDBKeyRange:{only:id=>id},navigator:{storage:{getDirectory:async()=>({removeEntry:async name=>removed.push(name)})}}});
-  vm.runInContext(source+'\ndatabase=Promise.resolve(connection);this.api={listDocuments,getDocument,listRevisions,readLibrary,trashDocument,restoreDocument,deleteDocument,deleteTrashedDocuments};',context);
+  vm.runInContext(source+'\ndatabase=Promise.resolve(connection);this.api={listDocuments,getDocument,getDocumentPreview,listRevisions,readLibrary,trashDocument,restoreDocument,deleteDocument,deleteTrashedDocuments};',context);
   return {api:context.api,control,transactions,reads,writes,removed,get stores(){return stores;},get record(){return stores.get('documents').get('book');}};
 }
 
@@ -53,7 +53,11 @@ test('a failed trash or restore leaves the committed document and all content in
   f.control.fail=null;await f.api.trashDocument('book');const trashed=structuredClone(f.record);f.control.fail='documents';await assert.rejects(f.api.restoreDocument('book'),/Disk full/);assert.deepEqual(f.record,trashed);assert.equal(f.stores.get('contents').size,2);assert.equal(f.stores.get('revisions').size,3);
 });
 test('permanent deletion removes only a trashed document, its body and both history indexes',async()=>{
-  const f=fixture();await f.api.trashDocument('book');await f.api.deleteDocument('book');assert.equal(f.record,undefined);assert.equal(f.stores.get('contents').has('book'),false);assert.deepEqual([...f.stores.get('revisions').keys()],[3]);assert.deepEqual([...f.stores.get('revisionHeaders').keys()],[3]);assert.equal(f.stores.get('documents').has('other'),true);assert.deepEqual(f.removed,['book.html']);
+  const f=fixture();f.stores.get('settings').set('card-preview-v1:book',{image:'derived'});f.stores.get('settings').set('card-preview-v1:other',{image:'keep'});await f.api.trashDocument('book');await f.api.deleteDocument('book');assert.equal(f.record,undefined);assert.equal(f.stores.get('contents').has('book'),false);assert.deepEqual([...f.stores.get('revisions').keys()],[3]);assert.deepEqual([...f.stores.get('revisionHeaders').keys()],[3]);assert.equal(f.stores.get('documents').has('other'),true);assert.deepEqual(f.removed,['book.html']);assert.equal(f.stores.get('settings').has('card-preview-v1:book'),false);assert.equal(f.stores.get('settings').get('card-preview-v1:other').image,'keep');
+});
+test('card preview reads return a bounded prefix without reader caching, body rewrites or metadata edits',async()=>{
+  const f=fixture(),before=structuredClone(f.record),html='x'.repeat(5*1024*1024);f.stores.get('contents').set('book',{documentId:'book',html});
+  const preview=await f.api.getDocumentPreview('book');assert.equal(preview.html.length,4*1024*1024);assert.deepEqual(f.record,before);assert.deepEqual(f.writes,[]);assert.equal(f.stores.get('contents').get('book').html.length,html.length);assert.equal(await f.api.getDocumentPreview('missing'),null);
 });
 test('empty trash aborts atomically if a selected document was restored in another window',async()=>{
   const f=fixture();await f.api.trashDocument('book');await assert.rejects(f.api.deleteTrashedDocuments(['book','other']),/복원/);
