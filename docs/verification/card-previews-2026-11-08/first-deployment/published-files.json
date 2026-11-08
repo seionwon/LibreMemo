@@ -1,0 +1,87 @@
+{
+  "source": "aceeffb03882059852b024c128545c6801c89931",
+  "version": "1.9.65",
+  "url": "https://seionwon.github.io/LibreMemo/",
+  "files": [
+    {
+      "file": "index.html",
+      "status": 200,
+      "bytes": 20396,
+      "sha256": "ac88abcd72615c9c212afc3e8c7a2cad9cf84872ab5a7150ec7d746dfd37f24a",
+      "ciSha256": "ac88abcd72615c9c212afc3e8c7a2cad9cf84872ab5a7150ec7d746dfd37f24a",
+      "matchesCI": true
+    },
+    {
+      "file": "src/version.js",
+      "status": 200,
+      "bytes": 91,
+      "sha256": "afad17cabd555dbb69baa70d45c3f1b1bae6484a4ae81491af2248df6c63a23a",
+      "ciSha256": "afad17cabd555dbb69baa70d45c3f1b1bae6484a4ae81491af2248df6c63a23a",
+      "matchesCI": true
+    },
+    {
+      "file": "src/app.js",
+      "status": 200,
+      "bytes": 258443,
+      "sha256": "0313da3ee5b295154f1992a48ed8204ce2b142d90806fa63b6b90612dd767fa1",
+      "ciSha256": "0313da3ee5b295154f1992a48ed8204ce2b142d90806fa63b6b90612dd767fa1",
+      "matchesCI": true
+    },
+    {
+      "file": "src/card-previews.js",
+      "status": 200,
+      "bytes": 3134,
+      "sha256": "b07b9e50d0c1242beb0b19e14151d392772b28ff6d598be096169e5868579d91",
+      "ciSha256": "b07b9e50d0c1242beb0b19e14151d392772b28ff6d598be096169e5868579d91",
+      "matchesCI": true
+    },
+    {
+      "file": "src/thumbnails.js",
+      "status": 200,
+      "bytes": 12244,
+      "sha256": "5ee5c785f07d11b658c8798885d6ae0a0dafeadd5ee86bdbf87ea57940369179",
+      "ciSha256": "5ee5c785f07d11b658c8798885d6ae0a0dafeadd5ee86bdbf87ea57940369179",
+      "matchesCI": true
+    },
+    {
+      "file": "src/storage.js",
+      "status": 200,
+      "bytes": 35754,
+      "sha256": "0f815c3d69cb7d8d428fccab930367d409f860adbd398137682cdc4a2c253402",
+      "ciSha256": "0f815c3d69cb7d8d428fccab930367d409f860adbd398137682cdc4a2c253402",
+      "matchesCI": true
+    },
+    {
+      "file": "src/distribution.js",
+      "status": 200,
+      "bytes": 4707,
+      "sha256": "293ff31325f65d502692bdd1119b5e8d36b83df5baae7910ae8d4ae273a9298e",
+      "ciSha256": "293ff31325f65d502692bdd1119b5e8d36b83df5baae7910ae8d4ae273a9298e",
+      "matchesCI": true
+    },
+    {
+      "file": "src/help-content.js",
+      "status": 200,
+      "bytes": 125878,
+      "sha256": "f74643bd659fc08ff047ee0ad481dc57e743db21d37db43e84fcfbe51f208094",
+      "ciSha256": "f74643bd659fc08ff047ee0ad481dc57e743db21d37db43e84fcfbe51f208094",
+      "matchesCI": true
+    },
+    {
+      "file": "styles.css",
+      "status": 200,
+      "bytes": 147070,
+      "sha256": "31a61500110c1a460514357869c316ff6ebdaed83d611712770a95f7e7e828b8",
+      "ciSha256": "31a61500110c1a460514357869c316ff6ebdaed83d611712770a95f7e7e828b8",
+      "matchesCI": true
+    },
+    {
+      "file": "sw.js",
+      "status": 200,
+      "bytes": 33984,
+      "sha256": "887fb76d64e911ba566d21ea9af1fdb09b567696ab98c77ae7c69ae4ad9aacb4",
+      "ciSha256": "887fb76d64e911ba566d21ea9af1fdb09b567696ab98c77ae7c69ae4ad9aacb4",
+      "matchesCI": true
+    }
+  ]
+}

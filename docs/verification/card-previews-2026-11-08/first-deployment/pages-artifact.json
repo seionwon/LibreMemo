@@ -1,0 +1,19 @@
+{
+  "id": 13618194158,
+  "name": "github-pages",
+  "sizeBytes": 33281078,
+  "sha256": "b5432f9e47455d96c865d56a1d2b4323031bf329b38d70066d12fb6d90295979",
+  "digestVerified": true,
+  "selectedFiles": [
+    "index.html",
+    "src/version.js",
+    "src/app.js",
+    "src/card-previews.js",
+    "src/thumbnails.js",
+    "src/storage.js",
+    "src/distribution.js",
+    "src/help-content.js",
+    "styles.css",
+    "sw.js"
+  ]
+}

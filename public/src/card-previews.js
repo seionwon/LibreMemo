@@ -16,7 +16,7 @@ export class CardPreviewQueue{
     if(this.paused||savedCardPicture(record))return;
     const key=cardPreviewKey(record),cached=this.cache.get(record.id);
     if(cached?.key===key){if(cached.image)this.publish(record,cached.image);return;}
-    if(this.running?.id===record.id&&this.running.key===key)return;
+    if(this.running?.id===record.id&&this.running.key===key&&!this.running.controller.signal.aborted)return;
     this.pending.set(record.id,{record,key});this.schedule();
   }
   cancel(id){this.pending.delete(id);if(this.running?.id===id)this.running.controller.abort();}

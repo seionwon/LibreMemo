@@ -36,6 +36,12 @@ test('a replaced, deleted or no longer visible source never publishes a stale pr
  const a=queue({current:()=>current,generate:()=>new Promise(resolve=>finish=resolve)});a.q.request(record());await until(()=>!!finish);current=false;finish(image);await until(()=>!a.q.running);assert.equal(a.saved.size,0);assert.deepEqual(a.events,[]);
  const b=queue({load:async()=>record('a','replacement')});b.q.request(record());await until(()=>!b.q.running&&!b.q.timer);assert.deepEqual(b.made,[]);assert.equal(b.saved.size,0);a.q.pause();b.q.pause();
 });
+test('a card that reappears before its cancelled render finishes is queued again',async()=>{
+ let finish,attempts=0;
+ const a=queue({generate:async()=>{attempts++;if(attempts===1)await new Promise(resolve=>finish=resolve);return image;}});
+ a.q.request(record());await until(()=>!!finish);a.q.pause();a.q.resume();a.q.request(record());finish();
+ await until(()=>a.events.length===1&&!a.q.running);assert.equal(attempts,2);assert.equal(a.saved.size,1);a.q.pause();
+});
 test('full cache storage cannot block a preview, and empty files are checked only once',async()=>{
  const a=queue({write:async()=>{throw Error('QuotaExceededError');}});a.q.request(record());await until(()=>a.events.length===1&&!a.q.running);assert.deepEqual(a.events,[{id:'a',image}]);a.q.pause();
  const b=queue({generate:async()=>''});b.q.request(record());await until(()=>b.saved.size===1&&!b.q.running);b.q.request(record());await new Promise(resolve=>setTimeout(resolve,5));assert.deepEqual(b.loads,['a']);assert.equal(b.events.length,0);b.q.pause();

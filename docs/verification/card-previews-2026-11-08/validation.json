@@ -1,5 +1,5 @@
 {
-  "version": "1.9.65",
+  "version": "1.9.66",
   "local": {
     "check": {
       "javascript": 241,
@@ -7,8 +7,8 @@
       "status": "pass"
     },
     "unit": {
-      "total": 999,
-      "passed": 999,
+      "total": 1000,
+      "passed": 1000,
       "failed": 0,
       "skipped": 0
     },
@@ -281,5 +281,26 @@
     "실제 앱 검사는 임시 Chrome 프로필의 OPFS 테스트 폴더를 사용했습니다. 개인 문서·실제 사용자 폴더를 사용하지 않았습니다.",
     "전체 로컬 npm run test:browser 및 실제 Android 기기 검사는 수행하지 않았습니다."
   ],
-  "deployment": "pending"
+  "deployment": "pending",
+  "earlierLocalVersion": {
+    "version": "1.9.65",
+    "unit": {
+      "total": 999,
+      "passed": 999,
+      "failed": 0,
+      "skipped": 0
+    },
+    "build": "pass"
+  },
+  "followup": "취소한 렌더링이 아직 정리 중일 때 같은 카드가 다시 나타나도 재생성을 대기열에 넣도록 보완했습니다. 재현 단위 검사와 전체 1,000개를 통과했습니다. 기존 화면 자료의 버전은 1.9.65이며 최종 공개 검사는 1.9.66에서 이어갑니다.",
+  "firstDeployment": {
+    "version": "1.9.65",
+    "source": "aceeffb03882059852b024c128545c6801c89931",
+    "run": "https://github.com/seionwon/LibreMemo/actions/runs/42483475995",
+    "build": "success",
+    "deploy": "success",
+    "publishedFiles": 10,
+    "allMatchCI": true,
+    "browser": "보완판 push 전까지 진행 중; 최종 상태는 후속 기록에서 확인"
+  }
 }
