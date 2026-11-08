@@ -1,0 +1,167 @@
+{
+  "conclusion": "failure",
+  "created_at": "2026-11-08T13:17:25Z",
+  "head_sha": "43d46082e4d97cdff8da5a106ca60a06f0b90bec",
+  "html_url": "https://github.com/seionwon/LibreMemo/actions/runs/42484240502",
+  "id": 42484240502,
+  "status": "completed",
+  "updated_at": "2026-11-08T13:32:01Z",
+  "jobs": [
+    {
+      "completed_at": "2026-11-08T13:19:25Z",
+      "conclusion": "success",
+      "id": 128742593882,
+      "name": "build",
+      "started_at": "2026-11-08T13:17:44Z",
+      "status": "completed",
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/checkout@v6"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/setup-node@v6"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/configure-pages@v5"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run npm ci"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run npm test"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run npm run check"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run npm run build"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/upload-pages-artifact@v4"
+        },
+        {
+          "conclusion": "success",
+          "name": "Post Run actions/setup-node@v6"
+        },
+        {
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v6"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job"
+        }
+      ]
+    },
+    {
+      "completed_at": "2026-11-08T13:19:39Z",
+      "conclusion": "success",
+      "id": 128743014440,
+      "name": "deploy",
+      "started_at": "2026-11-08T13:19:28Z",
+      "status": "completed",
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job"
+        },
+        {
+          "conclusion": "success",
+          "name": "Publish LibreMemo"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job"
+        }
+      ]
+    },
+    {
+      "completed_at": "2026-11-08T13:32:01Z",
+      "conclusion": "failure",
+      "id": 128743071758,
+      "name": "verify",
+      "started_at": "2026-11-08T13:19:41Z",
+      "status": "completed",
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/checkout@v6"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/setup-node@v6"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run npm ci"
+        },
+        {
+          "conclusion": "success",
+          "name": "Install Korean fonts for realistic mobile layout checks"
+        },
+        {
+          "conclusion": "failure",
+          "name": "Verify the published URL-only app, sidebar, annotation tree and pen scaling in Chrome"
+        },
+        {
+          "conclusion": "success",
+          "name": "Keep published desktop and mobile verification screenshots"
+        },
+        {
+          "conclusion": "skipped",
+          "name": "Post Run actions/setup-node@v6"
+        },
+        {
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v6"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "created_at": "2026-11-08T13:31:58Z",
+      "digest": "sha256:10d49f2a283487187e716e3a9650e36297d303d0c6c5c76f1b655bf4528c0185",
+      "id": 13619113381,
+      "name": "published-sidebar-screenshots",
+      "size_in_bytes": 20879578,
+      "downloadedSHA256": "sha256:10d49f2a283487187e716e3a9650e36297d303d0c6c5c76f1b655bf4528c0185"
+    },
+    {
+      "created_at": "2026-11-08T13:19:19Z",
+      "digest": "sha256:1c8963a0c904bfc8fe9349f442a0be69ef96d948d0f16c96671cc5204596e83e",
+      "id": 13619106489,
+      "name": "github-pages",
+      "size_in_bytes": 33281109,
+      "downloadedSHA256": "sha256:1c8963a0c904bfc8fe9349f442a0be69ef96d948d0f16c96671cc5204596e83e"
+    }
+  ],
+  "browserResults": {
+    "total": 88,
+    "passed": 87,
+    "failed": 1,
+    "failedTests": [
+      "real Chrome: compact library shares titles and sources, keeps dense views usable and preserves notes"
+    ]
+  }
+}

@@ -281,7 +281,16 @@
     "실제 앱 검사는 임시 Chrome 프로필의 OPFS 테스트 폴더를 사용했습니다. 개인 문서·실제 사용자 폴더를 사용하지 않았습니다.",
     "전체 로컬 npm run test:browser 및 실제 Android 기기 검사는 수행하지 않았습니다."
   ],
-  "deployment": "pending",
+  "deployment": {
+    "status": "verified",
+    "version": "1.9.66",
+    "source": "09d37bd00f03694b6500ec06aba4a24952073a6b",
+    "run": "https://github.com/seionwon/LibreMemo/actions/runs/42485563243",
+    "url": "https://seionwon.github.io/LibreMemo/",
+    "publishedFiles": 10,
+    "allMatchCI": true,
+    "verifiedAt": "2026-11-08 22:50:37 +09:00"
+  },
   "earlierLocalVersion": {
     "version": "1.9.65",
     "unit": {
@@ -301,7 +310,7 @@
     "deploy": "success",
     "publishedFiles": 10,
     "allMatchCI": true,
-    "browser": "보완판 push 전까지 진행 중; 최종 상태는 후속 기록에서 확인"
+    "browser": "새 보완 커밋의 push로 자동 취소됨. 취소 전에 새 미리보기 시나리오는 실제 파일 변환·보존·오프라인까지 통과했습니다."
   },
   "first166PublishedBrowserAttempt": {
     "run": "https://github.com/seionwon/LibreMemo/actions/runs/42484240502",
@@ -310,6 +319,55 @@
     "failed": 1,
     "previewScenario": "pass",
     "failure": "기존 compact 서재 검사가 미리보기 생성의 정상 본문 읽기(2회)까지 0회로 가정했습니다.",
-    "correction": "카드 생성/레이아웃 검사와 목록 검색의 읽기 측정을 분리합니다. 목록 검색 0회 조건, 새 미리보기 지연 생성/캐시/보존 검사는 유지합니다. 앱 코드는 추가 수정하지 않았으며 공개 재검증 대기."
+    "correction": "카드 생성과 목록 검색의 측정 구간을 분리한 뒤 같은 앱 코드의 최종 공개 Chrome 88개 검사를 모두 통과했습니다."
+  },
+  "ciBuild": {
+    "status": "pass",
+    "javascript": 222,
+    "json": true,
+    "unit": {
+      "total": 1000,
+      "passed": 999,
+      "failed": 0,
+      "skipped": 1,
+      "skipReason": "Linux에서 macOS 실행 제한 검사 1개를 건너뜁니다."
+    },
+    "build": "pass"
+  },
+  "publishedChrome": {
+    "total": 88,
+    "passed": 88,
+    "failed": 0,
+    "skipped": 0,
+    "previewScenario": {
+      "formats": [
+        "docx",
+        "pptx",
+        "xlsx",
+        "hml",
+        "md",
+        "txt",
+        "csv",
+        "epub",
+        "srt",
+        "png",
+        "pdf",
+        "djvu",
+        "web",
+        "video"
+      ],
+      "notesAndHistoryPreserved": true,
+      "modifiedDatePreserved": true,
+      "noOpenedTabs": true,
+      "noRemoteDocumentRequests": true,
+      "listSourceReads": 0,
+      "offlineCachedSourceReads": 0,
+      "noGridRebuilds": true,
+      "widths": [
+        1280,
+        320
+      ]
+    },
+    "hardwareAndroidTested": false
   }
 }

@@ -1,0 +1,41 @@
+{
+  "conclusion": "cancelled",
+  "created_at": "2026-11-08T13:07:56Z",
+  "head_sha": "aceeffb03882059852b024c128545c6801c89931",
+  "html_url": "https://github.com/seionwon/LibreMemo/actions/runs/42483475995",
+  "id": 42483475995,
+  "status": "completed",
+  "updated_at": "2026-11-08T13:17:43Z",
+  "jobs": [
+    {
+      "completed_at": "2026-11-08T13:10:03Z",
+      "conclusion": "success",
+      "id": 128740201803,
+      "name": "build",
+      "started_at": "2026-11-08T13:07:58Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-11-08T13:10:15Z",
+      "conclusion": "success",
+      "id": 128740714517,
+      "name": "deploy",
+      "started_at": "2026-11-08T13:10:06Z",
+      "status": "completed"
+    },
+    {
+      "completed_at": "2026-11-08T13:17:42Z",
+      "conclusion": "cancelled",
+      "id": 128740766032,
+      "name": "verify",
+      "started_at": "2026-11-08T13:10:17Z",
+      "status": "completed"
+    }
+  ],
+  "browserArtifact": {
+    "id": 13618433272,
+    "sha256": "8679425115ca6d0e757d2f14b88fc6384d555db92b9f2c3128e99fde2ab96f1f",
+    "digestVerified": true
+  },
+  "completedPreviewCheck": "2026-11-08T13:17:07.6352212Z ✔ real Chrome: compact library previews cover local document formats without opening tabs, changing notes or fetching remote content (11498.993722ms)"
+}
