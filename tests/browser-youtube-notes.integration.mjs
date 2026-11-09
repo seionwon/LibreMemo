@@ -38,6 +38,8 @@ test('real Chrome: Pages-only YouTube scene notes save, seek, edit, undo, export
     // Both sidebar routing and the reader list address the same annotation ID.
     await page.evaluate(`(()=>{const d=document.querySelector('.document-host:not([hidden]) iframe').contentDocument,button=d.querySelector('[data-sidebar-view=annotations]')||document.querySelector('[data-sidebar-view=annotations]');button.click();const panel=button.closest('section,aside');panel.querySelector('[data-annotation-group=video-notes] summary').click();panel.querySelector('[data-annotation="${first}"]').click();})()`);assert.equal(await page.evaluate('window.__ytPlayers.at(-1).t'),83);
     await mkdir(root+'/test-results',{recursive:true});await writeFile(root+'/test-results/youtube-moments-desktop.png',await page.screenshot());
+    // Close the sidebar as a reader would before using the video controls on a phone.
+    await page.evaluate(`(()=>{const d=document.querySelector('.document-host:not([hidden]) iframe').contentDocument;const close=d.querySelector('[data-sidebar-close]')||document.querySelector('[data-sidebar-close]');close?.click();})()`);
     // Narrow portrait and landscape: composer keeps all controls inside the dialog.
     const layouts=[];
     for(const [width,height] of [[320,568],[568,320]]){
