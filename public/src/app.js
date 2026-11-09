@@ -25,7 +25,7 @@ import { DataFolder, supportsDataFolder, CHROME_REQUIRED_MESSAGE, createStorageS
 import {validateFolders,folderPath,folderDescendants,editLibraryFolders,LibraryIndex} from './library-folders.js';
 import {TEXT_STYLE_PRESETS,TEXT_SIZE_MIN,TEXT_SIZE_MAX,validTextStyle,stylePreview} from './text-style.js';
 import {parseYouTubeInput,parseChapters,cueTimes,clock,youtubeDocumentHTML,subtitleFormat,decodeSubtitle,matchSubtitleFiles,subtitlesFromZip,playlistFolderName,watchURL,SUBTITLE_EXTENSION,guideHTML,validateYouTube} from './youtube.js';
-import {isVideoNote,makeVideoNote} from './youtube-notes.js';
+import {isVideoNote,makeVideoNote,matchingVideoRecords,findVideoNote} from './youtube-notes.js';
 import {openVideoNoteDialog} from './youtube-note-dialog.js';
 
 const PUBLIC_APP_URL = publicAppURL(location);
@@ -1066,23 +1066,30 @@ function mountYouTube(tab){
 function youtubeDialog(initialURL=''){youtubeMomentDialog(null,0,null,typeof initialURL==='string'?initialURL:'');}
 function youtubeMomentDialog(tab=null,seconds=0,note=null,initialURL=''){
   let draft=note,savedRecord=null;
-  openVideoNoteDialog({modal,videoId:tab?.reader.metadata.youtube.videoId||'',seconds,note,title:tab?.title||'',records:youtubeRecords(),initialURL,onError:showError,
+  const folderId=tab?(tab.record.folderId||''):libraryFolderId||'',candidates=()=>youtubeRecords().filter(r=>(r.folderId||'')===folderId);
+  const target=(video,targetId)=>tab?.record||savedRecord||matchingVideoRecords(candidates(),video?.videoId,folderId).find(r=>r.id===targetId)||matchingVideoRecords(candidates(),video?.videoId,folderId)[0];
+  openVideoNoteDialog({modal,videoId:tab?.reader.metadata.youtube.videoId||'',seconds,note,title:tab?.title||'',records:candidates(),initialURL,onError:showError,
+    findNote:({video,seconds,targetId})=>{const record=target(video,targetId),opened=tabs.find(t=>t.record?.id===record?.id&&t.reader);return structuredClone(findVideoNote(opened?.reader.metadata||record?.metadata,video?.videoId,seconds));},
     ...(tab?{currentTime:()=>tab.youtube?.time()??seconds}:{onSubtitles:youtubeSubtitleDialog}),
-    save:async({video,seconds,text,targetId,signal})=>{
+    save:async({video,seconds,text,targetId,note:selectedNote,signal})=>{
       if(tab&&(!tabs.includes(tab)||tab.reader.disposed))throw Error('영상을 다시 열고 메모를 저장해주세요.');
       const duration=tab?.youtube?.player?.getDuration?.();if(duration>0&&seconds>duration)throw Error('영상 길이('+clock(duration)+') 안의 시점을 입력해주세요.');
-      draft=makeVideoNote(video.videoId,seconds,text,draft);
-      let record=tab?.record||savedRecord||youtubeRecords().find(r=>r.id===targetId)||youtubeRecords().find(r=>r.metadata.youtube.videoId===video.videoId);
+      draft=makeVideoNote(video.videoId,seconds,text,selectedNote);
+      let record=target(video,targetId);
       if(!record){
         const ui=await youtubeUI(),[info,thumbnail]=await Promise.all([ui.videoInfo(video.videoId),ui.thumbnailData(video.videoId)]);
         signal.throwIfAborted();
-        record=await saveYouTubeRecord({title:info.title||'YouTube 영상 '+video.videoId,youtube:{videoId:video.videoId,channel:info.channel,thumbnail},mediaTime:seconds,annotations:[draft]});savedRecord=record;
+        record=await saveYouTubeRecord({title:info.title||'YouTube 영상 '+video.videoId,youtube:{videoId:video.videoId,channel:info.channel,thumbnail},folderId,mediaTime:seconds,annotations:[draft]});savedRecord=record;
       }else{
         const opened=tabs.find(t=>t.record?.id===record.id&&t.reader);
         const current=await getDocument(record.id);signal.throwIfAborted();
         if(!current||current.trashedAt)throw Error('이 영상이 삭제되거나 휴지통으로 이동했습니다. 서재를 다시 확인해주세요.');
+        if((current.folderId||'')!==folderId||current.metadata.youtube?.videoId!==video.videoId)throw Error('영상의 폴더가 변경되었습니다. 서재에서 다시 열어주세요.');
+        const latest=opened?.reader.metadata||current.metadata,collision=findVideoNote(latest,video.videoId,seconds),previous=selectedNote&&latest.annotations.find(a=>a.id===selectedNote.id);
+        if(selectedNote&&!previous)throw Error('이 메모가 이미 삭제되었습니다. 새 메모를 남겨주세요.');
+        if(collision&&collision.id!==draft.id)throw Error('전후 3초 이내의 메모가 생겼습니다. 시간을 다시 선택해 기존 메모를 확인해주세요.');
+        if(previous&&(previous.text!==selectedNote.text||previous.modified!==selectedNote.modified))throw Error('메모가 다른 곳에서 변경되었습니다. 닫았다가 다시 열어주세요.');
         if(opened){
-          if(note&&!opened.reader.metadata.annotations.some(a=>a.id===note.id))throw Error('이 메모가 이미 삭제되었습니다. 새 메모를 남겨주세요.');
           const items=opened.reader.metadata.annotations,found=items.some(a=>a.id===draft.id);
           opened.reader.commit(found?items.map(a=>a.id===draft.id?draft:a):[...items,draft]);await opened.queue.flush();
         }else{

@@ -54,7 +54,29 @@ test('real Chrome: Pages-only YouTube scene notes save, seek, edit, undo, export
     await page.waitFor('document.querySelector(".document-host:not([hidden]) iframe")?.contentDocument.querySelectorAll(".subtitle-cue").length===2');
     await page.waitFor('document.querySelector(".document-host:not([hidden]) iframe").contentDocument.querySelectorAll("[data-scene-row]").length===3');
     assert.deepEqual((await state()).annotations.map(a=>a.videoAnchor.seconds).sort((a,b)=>a-b),[10,83,95]);
-    await writeFile(root+'/test-results/youtube-moments-verification.json',JSON.stringify({layouts,annotations:3,singleDocument:true,sourceUnchanged:true,reload:true,exportRoundTrip:true,deleteUndo:true,captionAttachmentPreservesTimes:true,playerBoundary:'deterministic YouTube API fixture; no external playback assertion'},null,2));assert.deepEqual(browser.errors,[]);
+    // A link within three seconds edits the existing record; another folder gets an independent video.
+    await page.send('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false});
+    await page.click('#library-tab');await page.click('#youtube-button');await fill('[data-youtube-url]','https://youtu.be/M7lc1UVf-VE?t=86');
+    assert.equal(await page.evaluate('document.querySelector("[data-scene-time]").value'),'1:23');
+    assert.match(await page.evaluate('document.querySelector("[data-scene-text]").value'),/첫 장면의 핵심/);
+    assert.equal(await page.evaluate('document.querySelector("[data-scene-save]").textContent'),'변경 저장');
+    await fill('[data-scene-text]','첫 장면의 핵심 + 덧붙인 내용');await page.click('[data-scene-save]');await page.waitFor('!document.querySelector("#dialog").open');
+    const rootId=saved.id;
+    const rootNotes=await page.evaluate(`(async()=> (await(await import('./src/storage.js')).getDocument(${JSON.stringify(rootId)})).metadata.annotations)()`);
+    assert.equal(rootNotes.length,3);assert.equal(rootNotes.find(a=>a.id===first).text,'첫 장면의 핵심 + 덧붙인 내용');
+    await page.evaluate(`(async()=>{const s=await import('./src/storage.js');await s.updateLibraryFolders(f=>({folders:[...f,{id:'scene-folder',parentId:'',name:'시점 시험 폴더'}],documents:[]}));})()`);
+    await page.click('#library-tab');await page.waitFor('!!document.querySelector("#library-folder-tree [data-library-folder=scene-folder]")');await page.click('#library-folder-tree [data-library-folder=scene-folder]');
+    for(const [time,body] of [[83,'폴더의 첫 메모'],[95,'폴더의 두 번째 메모']]){
+      await page.click('#youtube-button');await fill('[data-youtube-url]','https://youtu.be/M7lc1UVf-VE?t='+time);
+      assert.equal(await page.evaluate('document.querySelector("[data-scene-text]").value'),'');
+      await fill('[data-scene-text]',body);await page.click('[data-scene-save]');await page.waitFor('!document.querySelector("#dialog").open');await page.click('#library-tab');
+    }
+    await page.click('#youtube-button');await fill('[data-youtube-url]','https://youtu.be/M7lc1UVf-VE?t=83');assert.equal(await page.evaluate('document.querySelector("[data-scene-text]").value'),'폴더의 첫 메모');
+    await fill('[data-scene-text]','폴더의 첫 메모 + 보충');await writeFile(root+'/test-results/youtube-moments-existing.png',await page.screenshot());await page.click('[data-scene-save]');await page.waitFor('!document.querySelector("#dialog").open');
+    const scoped=await page.evaluate(`(async()=>{const s=await import('./src/storage.js'),r=(await s.listDocuments()).filter(r=>r.metadata.youtube);return r.map(r=>({id:r.id,folder:r.folderId||'',notes:r.metadata.annotations.map(a=>({id:a.id,seconds:a.videoAnchor.seconds,text:a.text}))}));})()`);
+    assert.equal(scoped.length,2);assert.equal(scoped.find(r=>r.id===rootId).notes.length,3);
+    const sub=scoped.find(r=>r.folder==='scene-folder');assert.equal(sub.notes.length,2);assert.equal(sub.notes.find(a=>a.seconds===83).text,'폴더의 첫 메모 + 보충');assert.equal(sub.notes.find(a=>a.seconds===95).text,'폴더의 두 번째 메모');
+    await writeFile(root+'/test-results/youtube-moments-verification.json',JSON.stringify({layouts,annotations:3,singleDocument:true,sourceUnchanged:true,reload:true,exportRoundTrip:true,deleteUndo:true,captionAttachmentPreservesTimes:true,withinThreeSecondsEditsExisting:true,folderScopedVideos:true,folderSecondTimeAddsNote:true,playerBoundary:'deterministic YouTube API fixture; no external playback assertion'},null,2));assert.deepEqual(browser.errors,[]);
   }catch(error){if(browser)await writeFile(root+'/test-results/youtube-moments-failure.png',await browser.page.screenshot()).catch(()=>{});throw error;}
   finally{await browser?.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });

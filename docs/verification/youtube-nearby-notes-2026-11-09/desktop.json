@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "status": 200,
+  "title": "LibreMemo · 나만의 앱 서재",
+  "url": "http://127.0.0.1:4173/scene-test.html",
+  "results": [
+    {
+      "type": "wait",
+      "selector": "#test-report[data-state]"
+    },
+    {
+      "type": "text",
+      "selector": "#test-report",
+      "text": "{\"pass\":true,\"folderScoped\":true,\"withinThreeSecondsEdits\":true,\"otherTimeAdds\":true,\"idPreserved\":true,\"draftsPreserved\":true,\"documents\":2,\"notes\":[2,2],\"dialogFits\":true,\"overflow\":false,\"errors\":[]}"
+    }
+  ],
+  "errors": [],
+  "screenshot": "test-results/youtube-same-time-20261109/desktop.json.png"
+}

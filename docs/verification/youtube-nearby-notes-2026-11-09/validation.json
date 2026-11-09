@@ -1,0 +1,20 @@
+{
+  "version": "1.9.69",
+  "local": {
+    "unit": {
+      "total": 1014,
+      "passed": 1014,
+      "failed": 0,
+      "skipped": 0
+    },
+    "syntaxFiles": 247,
+    "build": true
+  },
+  "trustedChrome": {
+    "desktop": true,
+    "mobile320": true,
+    "physicalDevice": false,
+    "externalVideoPlayback": false
+  },
+  "deployment": "pending"
+}

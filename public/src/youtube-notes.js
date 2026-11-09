@@ -8,6 +8,18 @@ export function validVideoAnchor(value){
   return !!value&&typeof value==='object'&&typeof value.videoId==='string'&&/^[A-Za-z0-9_-]{11}$/.test(value.videoId)&&Number.isInteger(value.seconds)&&value.seconds>=0&&value.seconds<=MAX_VIDEO_TIME;
 }
 export const isVideoNote=note=>note?.type==='note'&&validVideoAnchor(note.videoAnchor);
+export const matchingVideoRecords=(records,videoId,folderId='')=>records.filter(r=>!r.trashedAt&&(r.folderId||'')===folderId&&r.metadata?.youtube?.videoId===videoId);
+export const VIDEO_NOTE_TIME_TOLERANCE=3;
+export function findVideoNote(metadata,videoId,seconds){
+  if(!Number.isInteger(seconds)||seconds<0)return null;
+  let nearest=null,distance=Infinity;
+  for(const note of metadata?.annotations||[]){
+    if(!isVideoNote(note)||note.videoAnchor.videoId!==videoId)continue;
+    const gap=Math.abs(note.videoAnchor.seconds-seconds);
+    if(gap<=VIDEO_NOTE_TIME_TOLERANCE&&(gap<distance||(gap===distance&&note.videoAnchor.seconds<nearest.videoAnchor.seconds))){nearest=note;distance=gap;}
+  }
+  return nearest;
+}
 export const videoNotes=metadata=>(metadata?.annotations||[]).filter(isVideoNote).sort((a,b)=>a.videoAnchor.seconds-b.videoAnchor.seconds||(a.created||0)-(b.created||0));
 /** Explicit time fields reject typos instead of silently saving them at 0:00. */
 export function parseVideoTime(value,videoId=''){

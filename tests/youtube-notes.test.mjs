@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {installDOM} from './dom.mjs';
 import {parseYouTubeInput,youtubeDocumentHTML} from '../public/src/youtube.js';
-import {parseVideoTime,makeVideoNote,isVideoNote,videoNotes,videoNotesHTML} from '../public/src/youtube-notes.js';
+import {parseVideoTime,makeVideoNote,isVideoNote,videoNotes,videoNotesHTML,matchingVideoRecords,findVideoNote} from '../public/src/youtube-notes.js';
 import {validateAnnotations,History} from '../public/src/model.js';
 import {parseHTML,serializeHTML,textIndex} from '../public/src/document.js';
 import {YouTubePane} from '../public/src/youtube-ui.js';
@@ -71,4 +71,23 @@ test('scene notes do not enter caption text indexes or produce spatial annotatio
   const pane=Object.create(YouTubePane.prototype);Object.assign(pane,{reader:{doc,metadata:{annotations:[makeVideoNote(id,83,'시점 메모')]},measure(){}},callbacks:{}});
   pane.renderNotes();assert.equal(textIndex(doc).text,before);const box=pane.notes;pane.renderNotes();assert.equal(pane.notes,box);
   pane.reader.metadata.annotations=[];pane.renderNotes();assert.equal(doc.querySelectorAll('[data-scene-row]').length,0);assert.match(pane.notes.textContent,/현재 시점 메모/);
+});
+
+
+test('scene matching stays inside the exact folder, including root, and excludes trash',()=>{
+  const records=[{id:'root',metadata:{youtube:{videoId:id}}},{id:'a',folderId:'a',metadata:{youtube:{videoId:id}}},{id:'child',folderId:'a/child',metadata:{youtube:{videoId:id}}},{id:'trash',folderId:'a',trashedAt:1,metadata:{youtube:{videoId:id}}},{id:'other',folderId:'a',metadata:{youtube:{videoId:'dQw4w9WgXcQ'}}}];
+  assert.deepEqual(matchingVideoRecords(records,id,'a').map(r=>r.id),['a']);
+  assert.deepEqual(matchingVideoRecords(records,id).map(r=>r.id),['root']);
+  assert.deepEqual(matchingVideoRecords(records,id,'missing'),[]);
+  const note=makeVideoNote(id,83,'기존 메모'),metadata={annotations:[note,makeVideoNote(id,84,'다음 초')]};
+  assert.equal(findVideoNote(metadata,id,83),note);assert.equal(findVideoNote(metadata,id,79),null);assert.equal(findVideoNote(metadata,'dQw4w9WgXcQ',83),null);
+});
+
+
+test('nearby time notes include both 3-second boundaries, choose the nearest and break ties by earlier time',()=>{
+  const a=makeVideoNote(id,83,'앞 메모'),b=makeVideoNote(id,87,'뒤 메모');
+  for(const seconds of [80,81,82,83,84,85,86])assert.equal(findVideoNote({annotations:[a]},id,seconds),a);
+  for(const seconds of [79,87,null,undefined,NaN,-1])assert.equal(findVideoNote({annotations:[a]},id,seconds),null);
+  const metadata={annotations:[b,a]};assert.equal(findVideoNote(metadata,id,85),a);assert.equal(findVideoNote(metadata,id,86),b);assert.equal(findVideoNote(metadata,id,87),b);
+  const start=makeVideoNote(id,0,'처음');assert.equal(findVideoNote({annotations:[start]},id,3),start);assert.equal(findVideoNote({annotations:[start]},id,4),null);
 });
