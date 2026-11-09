@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "status": 200,
+  "title": "시점 메모 연습 영상 · LibreMemo",
+  "url": "http://127.0.0.1:4173/scene-test.html?dialog=1",
+  "results": [
+    {
+      "type": "wait",
+      "selector": "#test-report[data-state]"
+    },
+    {
+      "type": "text",
+      "selector": "#test-report",
+      "text": "{\"pass\":true,\"records\":1,\"notes\":3,\"linkedTime\":true,\"capturePaused\":true,\"edit\":true,\"seek\":true,\"deleteUndo\":true,\"export\":true,\"sidebar\":true,\"errors\":[],\"overflow\":false}"
+    }
+  ],
+  "errors": [],
+  "screenshot": "test-results/youtube-moments-20261109/mobile.json.png"
+}

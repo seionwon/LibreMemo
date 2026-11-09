@@ -1,6 +1,7 @@
 // LibreMemo document archive v1: an ordinary ZIP, immutable source + current state.
 // Stored entries are Blobs. A gigabyte source is never made into one JS array/string.
 import {validateAnnotations,validateOutlineEdits,validPDFPosition,cleanSourceStorage,normalizeReadingFontFamily} from './model.js';
+import {validateYouTube} from './youtube.js';
 const encoder=new TextEncoder(),decoder=new TextDecoder('utf-8',{fatal:true});
 export const ARCHIVE_FORMAT='librememo-document';
 export const ARCHIVE_VERSION=1;
@@ -35,6 +36,7 @@ export function archiveMetadata(value){
   if(value.view?.layout)result.view.layout=value.view.layout;
   if(validPDFPosition(value.view?.pdfPosition))result.view.pdfPosition=structuredClone(value.view.pdfPosition);
   if(value.view?.sourceStorage)result.view.sourceStorage=cleanSourceStorage(value.view.sourceStorage);
+  const youtube=validateYouTube(value.youtube);if(youtube){result.youtube=youtube;if(Number.isFinite(value.view?.mediaTime)&&value.view.mediaTime>=0&&value.view.mediaTime<360000)result.view.mediaTime=Math.round(value.view.mediaTime*10)/10;}
   if(value.format==='pdf'){result.format='pdf';result.execution.allowScripts=false;if(value.pdf)result.pdf=structuredClone(value.pdf);}
   result.warnings=(Array.isArray(value.warnings)?value.warnings:[]).filter(v=>typeof v==='string').slice(0,5000).map(v=>v.slice(0,10000));
   return result;

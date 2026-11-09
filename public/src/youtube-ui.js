@@ -4,6 +4,7 @@
 // cross-origin reads; the playlist's video IDs come from the embedded player.
 import {cueTimes,cueAt,clock,thumbnailURL,watchURL,playlistURL} from './youtube.js';
 import {icon,escapeHTML as esc} from './utils.js';
+import {videoNotes,videoNotesHTML,VIDEO_NOTES_CSS,isVideoNote,videoNoteURL} from './youtube-notes.js';
 
 const PLAYER_HOST='https://www.youtube-nocookie.com';
 let apiPromise=null;
@@ -22,7 +23,7 @@ export function loadYouTubeAPI(){
   return apiPromise;
 }
 async function oembed(url){
-  const response=await fetch('https://www.youtube.com/oembed?format=json&url='+encodeURIComponent(url),{credentials:'omit',referrerPolicy:'no-referrer'});
+  const response=await fetch('https://www.youtube.com/oembed?format=json&url='+encodeURIComponent(url),{credentials:'omit',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(6000)});
   if(!response.ok)throw Error('oEmbed '+response.status);
   const data=await response.json();
   return {title:String(data.title||'').slice(0,500),channel:String(data.author_name||'').slice(0,300)};
@@ -33,7 +34,7 @@ export const playlistInfo=playlistId=>oembed(playlistURL(playlistId)).catch(()=>
 /** The 320×180 thumbnail as a data URL, so library cards also show it offline. */
 export async function thumbnailData(videoId){
   try{
-    const response=await fetch(thumbnailURL(videoId),{credentials:'omit',referrerPolicy:'no-referrer'});
+    const response=await fetch(thumbnailURL(videoId),{credentials:'omit',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(6000)});
     if(!response.ok)return '';
     const blob=await response.blob();if(blob.size>300000||!/^image\//.test(blob.type))return '';
     return await new Promise(resolve=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>resolve('');reader.readAsDataURL(blob);});
@@ -109,6 +110,7 @@ export class YouTubePane {
         <button type="button" class="youtube-button" data-yt="follow" aria-pressed="true" title="재생 중인 자막을 따라 화면을 움직입니다">${icon('list',15)}<span>따라가기</span></button>
         <span class="youtube-clock" data-yt="clock">0:00</span>
         <select class="youtube-rate" data-yt="rate" title="재생 속도" aria-label="재생 속도">${RATES.map(r=>`<option value="${r}" ${r===rate?'selected':''}>${r}×</option>`).join('')}</select>
+        <button type="button" class="youtube-button" data-yt="note" title="현재 시점에 메모 남기기" aria-label="현재 시점 메모">${icon('video-note',15)}<span>시점 메모</span></button>
         <button type="button" class="youtube-button" data-yt="mark" title="지금 장면을 북마크">${icon('bookmark',15)}<span>북마크</span></button>
         <button type="button" class="youtube-button" data-yt="chapters" title="영상 설명란의 챕터를 붙여넣어 목차로 쓰기">${icon('list',15)}<span>목차</span></button>
         <button type="button" class="youtube-button" data-yt="attach" title="자막 파일(.srt, .vtt 등) 붙이기">${icon('subtitles',15)}<span>${this.hasCues()?'자막 바꾸기':'자막 붙이기'}</span></button>
@@ -136,6 +138,8 @@ export class YouTubePane {
     $('rate').onchange=event=>{const value=Number(event.target.value);savePref('rate',value);this.player?.setPlaybackRate?.(value);};
     $('follow').onclick=()=>{this.follow=!this.follow;$('follow').setAttribute('aria-pressed',String(this.follow));this.quietUntil=0;if(this.follow)this.reveal(true);};
     $('mark').onclick=()=>this.bookmark();
+    $('note').onclick=()=>this.addSceneNote();
+    $('open').onclick=()=>{$('open').href=watchURL(this.youtube.videoId,this.youtube.playlistId)+'&t='+Math.floor(this.time())+'s';};
     $('chapters').onclick=()=>callbacks.onChapters();$('attach').onclick=()=>callbacks.onAttach();
     $('prev').onclick=()=>callbacks.onNavigate(-1);$('next').onclick=()=>callbacks.onNavigate(1);
     this.bindResize();
@@ -166,10 +170,46 @@ export class YouTubePane {
     this.visibility=new MutationObserver(()=>{if(tab.host.hidden)this.player?.pauseVideo?.();});
     this.visibility.observe(tab.host,{attributes:true,attributeFilter:['hidden']});
     this.indexCues();
+    this.renderNotes();
     this.timer=setInterval(()=>this.tick(),250);
     void this.mount();
   }
   hasCues(){return !!this.reader.doc?.querySelector?.('.subtitle-cue .subtitle-time');}
+  addSceneNote(note=null){
+    const seconds=note?.videoAnchor.seconds??Math.floor(this.time());
+    this.player?.pauseVideo?.();
+    this.callbacks.onNote?.(seconds,note);
+  }
+  renderNotes(){
+    const doc=this.reader.doc;if(!doc?.body||this.disposed)return;
+    const notes=videoNotes(this.reader.metadata),key=JSON.stringify(notes);
+    if(this.notesKey===key&&this.notes?.isConnected)return;this.notesKey=key;
+    let box=this.notes;
+    if(!box?.isConnected){
+      box=doc.createElement('div');box.setAttribute('data-htmlmemo-ui','');box.setAttribute('data-htmlmemo-preview','');
+      const article=doc.querySelector('[data-subtitles],[data-youtube-empty]');if(article)article.before(box);else doc.body.append(box);this.notes=box;
+      const style=doc.createElement('style');style.setAttribute('data-htmlmemo-ui','');style.setAttribute('data-htmlmemo-preview','');style.textContent=VIDEO_NOTES_CSS+'[data-youtube-empty]{display:none}';box.append(style);this.notesStyle=style;
+    }
+    box.innerHTML=videoNotesHTML(this.reader.metadata,{interactive:true});box.prepend(this.notesStyle);
+    box.onclick=event=>{
+      const control=event.target.closest('button,a');if(!control||!box.contains(control))return;
+      if(control.hasAttribute('data-scene-add')){event.preventDefault();this.addSceneNote();return;}
+      const id=control.dataset.scenePlay||control.dataset.sceneEdit||control.dataset.sceneDelete,note=this.reader.metadata.annotations.find(a=>a.id===id&&isVideoNote(a));if(!note)return;
+      if(control.hasAttribute('data-scene-play')){if(note.videoAnchor.videoId!==this.youtube.videoId){window.open(videoNoteURL(note),'_blank','noopener,noreferrer');return;}event.preventDefault();this.revealNote(note,true);}
+      else if(control.hasAttribute('data-scene-edit'))this.addSceneNote(note);
+      else if(control.hasAttribute('data-scene-delete'))this.callbacks.onDeleteNote?.(note);
+    };
+    this.reader.measure?.();
+  }
+  revealNote(note,play=true){
+    this.renderNotes();
+    const row=[...this.notes.querySelectorAll('[data-scene-row]')].find(el=>el.dataset.sceneRow===note.id);
+    this.notes.querySelectorAll('[aria-current]').forEach(el=>el.removeAttribute('aria-current'));row?.setAttribute('aria-current','true');row?.scrollIntoView({block:'center',behavior:'smooth'});
+    if(note.videoAnchor.videoId===this.youtube.videoId){
+      this.quietUntil=Date.now()+8000;this.pane.classList.remove('youtube-collapsed');this.$('size').setAttribute('aria-pressed','false');this.$('size').title='영상 접기';this.seek(note.videoAnchor.seconds,play);
+    }
+    return true;
+  }
   indexCues(){
     const doc=this.reader.doc;if(!doc)return;
     if(!doc.getElementById('htmlmemo-youtube-style')){const style=doc.createElement('style');style.id='htmlmemo-youtube-style';style.textContent=DOC_STYLE;doc.head.append(style);}
@@ -181,8 +221,8 @@ export class YouTubePane {
   async mount(){
     let YT;try{YT=await loadYouTubeAPI();}catch(error){this.message(error.message);return;}
     if(this.disposed)return;
-    this.player=new YT.Player(this.pane.querySelector('.youtube-frame'),{host:PLAYER_HOST,videoId:this.youtube.videoId,playerVars:{playsinline:1,rel:0,fs:0,iv_load_policy:3,cc_load_policy:0,start:Math.floor(this.savedAt>3?this.savedAt-2:0),origin:location.origin},events:{
-      onReady:()=>{this.ready=true;this.player.setPlaybackRate?.(Number(this.$('rate').value));},
+    this.player=new YT.Player(this.pane.querySelector('.youtube-frame'),{host:PLAYER_HOST,videoId:this.youtube.videoId,playerVars:{playsinline:1,rel:0,fs:0,iv_load_policy:3,cc_load_policy:0,start:Math.floor(this.savedAt),origin:location.origin},events:{
+      onReady:()=>{if(this.disposed)return;this.ready=true;this.player.setPlaybackRate?.(Number(this.$('rate').value));if(this.pendingSeek){const {seconds,play}=this.pendingSeek;this.pendingSeek=null;this.seek(seconds,play);}},
       onStateChange:event=>{
         const playing=event.data===1;this.playing=playing;if(playing)this.resumeZones();
         this.$('play').setAttribute('aria-label',playing?'일시정지':'재생');
@@ -254,12 +294,14 @@ export class YouTubePane {
   // "current / total"; the total is left out until the player reports a duration.
   clockText(t){let total=0;try{total=this.player?.getDuration?.()||0;}catch{}return total>0?clock(t)+' / '+clock(total):clock(t);}
   time(){
+    if(this.pendingSeek)return this.pendingSeek.seconds;
+    if(!this.ready)return this.savedAt||0;
     let t=0;try{t=this.player?.getCurrentTime?.()||0;}catch{}
     if(this.target){if(Math.abs(t-this.target.t)<1.5||Date.now()>this.target.until)this.target=null;else return this.target.t;}
     return t;
   }
   toggle(){if(!this.player?.getPlayerState)return;if(this.player.getPlayerState()===1)this.player.pauseVideo();else this.player.playVideo();}
-  seek(seconds,play=false){if(!this.player?.seekTo)return;seconds=Math.max(0,seconds);this.target={t:seconds,until:Date.now()+2500};this.player.seekTo(seconds,true);if(play)this.player.playVideo();this.tick(true);}
+  seek(seconds,play=false){if(!Number.isFinite(seconds)||this.disposed)return;seconds=Math.max(0,seconds);if(!this.ready||!this.player?.seekTo){this.pendingSeek={seconds,play};this.savedAt=seconds;return;}this.target={t:seconds,until:Date.now()+2500};this.player.seekTo(seconds,true);if(play)this.player.playVideo();this.tick(true);}
   seekBy(delta){this.seek(this.time()+delta);}
   setSiblings(prev,next){this.$('prev').hidden=!prev;this.$('next').hidden=!next;this.$('prev').title=prev?'이전 영상: '+prev:'';this.$('next').title=next?'다음 영상: '+next:'';}
   tick(force=false){
@@ -413,6 +455,7 @@ export class YouTubePane {
     handle?.setAttribute('aria-valuenow',String(now));handle?.setAttribute('aria-valuetext',this.videoShare?'영상 높이 '+now+'px':'기본 크기');
   }
   dispose(){
+    this.notes?.remove();
     if(this.disposed)return;this.disposed=true;this.sizeObserver?.disconnect();window.removeEventListener('resize',this.onWindowResize);window.removeEventListener('blur',this.onWindowBlur);window.removeEventListener('focus',this.onWindowFocus);clearInterval(this.timer);clearTimeout(this.tapTimer);document.removeEventListener('keydown',this.onFullscreenKey);this.visibility.disconnect();document.removeEventListener('click',this.onOutlineClick,true);
     if(this.ready)this.remember(true);
     try{this.player?.destroy?.();}catch{}

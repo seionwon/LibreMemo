@@ -46,6 +46,8 @@ const paths = {
   'file-transfer': '<path d="M10 3H3v15h5M7 7h10v14H7zM14 7V3h7v12h-4M10 13h4m-2-2 2 2-2 2"/>',
   'area-underline': '<path d="M3 5h18v12H3z" stroke-dasharray="3 3"/><path d="M3 21h18"/>',
   note: '<path d="M21 14V3H3v18h11zM14 21v-7h7M7 8h10M7 12h5"/>',
+  'video-note': '<rect x="3" y="3" width="14" height="17" rx="2"/><path d="M6 7h7M6 11h4"/><circle cx="17" cy="16" r="5"/><path d="M17 13v3l2 1"/>',
+  'video-pin': '<path d="M12 21s8-7 8-12A8 8 0 0 0 4 9c0 5 8 12 8 12Z"/><path d="m10 6 5 3-5 3Z"/>',
   text: '<path d="M3 5h18M12 5v16M8 21h8M3 5v3M21 5v3"/>',
   shapes: '<rect x="3" y="3" width="11" height="11" rx="1"/><circle cx="16" cy="16" r="6"/>',
   rect: '<rect x="3" y="5" width="18" height="14" rx="1"/>', ellipse: '<ellipse cx="12" cy="12" rx="9" ry="7"/>',

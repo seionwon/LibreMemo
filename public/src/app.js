@@ -25,6 +25,8 @@ import { DataFolder, supportsDataFolder, CHROME_REQUIRED_MESSAGE, createStorageS
 import {validateFolders,folderPath,folderDescendants,editLibraryFolders,LibraryIndex} from './library-folders.js';
 import {TEXT_STYLE_PRESETS,TEXT_SIZE_MIN,TEXT_SIZE_MAX,validTextStyle,stylePreview} from './text-style.js';
 import {parseYouTubeInput,parseChapters,cueTimes,clock,youtubeDocumentHTML,subtitleFormat,decodeSubtitle,matchSubtitleFiles,subtitlesFromZip,playlistFolderName,watchURL,SUBTITLE_EXTENSION,guideHTML,validateYouTube} from './youtube.js';
+import {isVideoNote,makeVideoNote} from './youtube-notes.js';
+import {openVideoNoteDialog} from './youtube-note-dialog.js';
 
 const PUBLIC_APP_URL = publicAppURL(location);
 for(const template of $$('#about-content,#export-guide-content'))template.innerHTML=template.innerHTML.replaceAll('https://seionwon.github.io/LibreMemo/',PUBLIC_APP_URL);
@@ -607,7 +609,8 @@ async function openRecord(record, prepared = null, {deferReady = false, sourceId
   tabs.splice(wake?.position??tabs.length,0,tab);activate(tab.id);
   tab.reader=new Reader(tab.host,parsed,{
     sourceKey:record.contentKey||record.sourceIdentity?.digest||record.id,
-    onChange:()=>{tab.queue.schedule();tab.checkpoints.schedule();if(activeId===tab.id){renderToolbar();if(['annotations','bookmarks','outline'].includes(sidebarMode))renderSidebar(sidebarMode);else updateSidebarCounts($('#sidebar'),tab.reader);tab.reader?.refreshDocumentSidebar();}},
+    onChange:()=>{tab.queue.schedule();tab.checkpoints.schedule();tab.youtube?.renderNotes();if(activeId===tab.id){renderToolbar();if(['annotations','bookmarks','outline'].includes(sidebarMode))renderSidebar(sidebarMode);else updateSidebarCounts($('#sidebar'),tab.reader);tab.reader?.refreshDocumentSidebar();}},
+    onVideoNote:note=>tab.youtube?.revealNote(note,true)||false,
     onAnnotationInput:()=>tab.checkpoints.activity(),
     onPosition:()=>{tab.queue.schedule({background:true});renderFolderState();},onSourceSettings:()=>{tab.queue.schedule({background:true});void tab.queue.flush().catch(showError);},onView:()=>{for(const panel of [$('#sidebar'),tab.reader?.doc?.querySelector?.('[data-htmlmemo-doc-sidebar-ui]')])if(panel&&panel.annotationReader===tab.reader)youtubeOutlineStyle(panel,tab.reader);if(activeId===tab.id){updateChrome();updateToolbarState();updateOutlineLocation($('#sidebar'),tab.reader);}},
     onPreferenceChange:()=>dataFolder?.schedule({settingsOnly:true}),
@@ -911,10 +914,11 @@ async function readSubtitleFiles(files){
   }
   return {subtitles:out,skipped};
 }
-async function saveYouTubeRecord({title,youtube,subtitle=null,folderId=libraryFolderId,created=Date.now(),mediaTime=0}){
+async function saveYouTubeRecord({title,youtube,subtitle=null,folderId=libraryFolderId,created=Date.now(),mediaTime=0,annotations=[]}){
   const warnings=[],html=youtubeDocumentHTML(title,subtitle,warnings,{chapters:youtube.chapters||[]});
   const parsed=parseHTML(html,{title,source:watchURL(youtube.videoId,youtube.playlistId),warnings},{includeMetadata:true,allowScripts:false});
   parsed.metadata.youtube=validateYouTube({...youtube,...(subtitle?{subtitle:{name:subtitle.name}}:{})});
+  parsed.metadata.annotations=annotations;
   if(mediaTime>0)parsed.metadata.view.mediaTime=mediaTime;
   const record={id:uid(),title,name:subtitle?.name||filename(title),source:parsed.metadata.source,created,modified:created,folderId,fileHandle:null,originalHandle:null,metadata:parsed.metadata};
   if(subtitle)record.originalFile=new File([subtitle.text],subtitle.name,{type:'text/plain'});
@@ -951,7 +955,8 @@ async function rebuildYouTubeDocument(old,{subtitle,chapters}={}){
   if(tab){await tab.reader?.ready;await tab.queue.flush();await tab.checkpoints.flush({force:true});}
   const current=await getDocument(old.id);if(!current||current.trashedAt)throw Error(`「${old.title}」 문서를 찾지 못했습니다.`);
   const metadata=structuredClone(tab?.reader?.metadata||current.metadata),annotations=metadata.annotations||[],bookmarks=metadata.bookmarks||[],marks=annotations.length+bookmarks.length;
-  if(marks&&newSubtitle&&!await confirmDialog('자막을 바꿀까요?',`「${old.title}」의 주석·북마크 ${marks}개를 새 자막의 같은 문장으로 옮깁니다. 찾지 못한 것은 목록에 남겨 두고, 바꾸기 전 문서는 사본으로 휴지통에 보관합니다(복원 가능).`,'자막 바꾸기'))return null;
+  const sceneCount=annotations.filter(isVideoNote).length,subtitleAction=metadata.youtube?.subtitle?'바꾸기':'붙이기';
+  if(marks&&newSubtitle&&!await confirmDialog('자막을 '+(metadata.youtube?.subtitle?'바꿀까요?':'붙일까요?'),`「${old.title}」${sceneCount?`의 시점 메모 ${sceneCount}개는 영상의 시점을 그대로 유지합니다. `:'의 '}${marks>sceneCount?`주석·북마크 ${marks-sceneCount}개는 새 자막의 같은 문장으로 옮기며, 찾지 못한 것은 목록에 남깁니다. `:''}기존 문서는 사본으로 휴지통에 보관합니다(복원 가능).`,'자막 '+subtitleAction))return null;
   if(!subtitle&&current.originalFile&&metadata.youtube?.subtitle)subtitle={name:current.originalFile.name||current.name,text:await current.originalFile.text(),format:subtitleFormat(current.originalFile.name||current.name)||'srt'};
   chapters??=metadata.youtube?.chapters||[];
   const warnings=[],parsed=parseHTML(youtubeDocumentHTML(old.title,subtitle||null,warnings,{chapters}),{title:old.title,source:metadata.source,warnings},{includeMetadata:true,allowScripts:false});
@@ -960,10 +965,10 @@ async function rebuildYouTubeDocument(old,{subtitle,chapters}={}){
     const probe=await openEditionProbe({html:parsed.html,allowScripts:false});let oldProbe=null;
     try{
       const oldDoc=tab?.reader?.doc||(oldProbe=await openEditionProbe({html:current.html,allowScripts:false})).doc;
-      const result=await migrateAnnotations({annotations,bookmarks,oldDoc,probe});
+      const result=await migrateAnnotations({annotations:annotations.filter(a=>!isVideoNote(a)),bookmarks,oldDoc,probe});
       const missing=report=>[...report.deleted,...report.unplaceable,...report.unchecked];
       const scenes=sceneBookmarks(probe.doc,missing(result.bookmarkReport));
-      moved={annotations:result.annotations,bookmarks:[...result.bookmarks,...scenes.placed]};
+      moved={annotations:[...result.annotations,...annotations.filter(isVideoNote)],bookmarks:[...result.bookmarks,...scenes.placed]};
       lost={annotations:missing(result.report),bookmarks:scenes.left};
     }finally{probe.dispose();oldProbe?.dispose();}
     if(newSubtitle){
@@ -1034,6 +1039,8 @@ function mountYouTube(tab){
     if(!tabs.includes(tab)||tab.closing||!tab.reader||tab.youtube)return;
     const record=()=>records.find(r=>r.id===tab.record.id)||tab.record;
     tab.youtube=new YouTubePane(tab,{
+      onNote:(seconds,note)=>youtubeMomentDialog(tab,seconds,note),
+      onDeleteNote:safely(async note=>{if(await confirmDialog('시점 메모를 삭제할까요?',clock(note.videoAnchor.seconds)+' · '+note.text.slice(0,160),'삭제')){tab.reader.remove(note.id);await tab.queue.flush();toast('시점 메모를 삭제했습니다. 실행 취소로 되돌릴 수 있습니다.');}}),
       // Playback position is a reading position: saved quietly, never as an annotation edit.
       onTime:now=>{tab.queue.schedule({background:true});if(now)void tab.queue.flush().catch(()=>{});},
       onBookmark:title=>{tab.reader.addBookmark(title);if(reader()===tab.reader){if(tab.reader.documentSidebarUI?.isConnected&&tab.reader.documentSidebarMode==='bookmarks')tab.reader.showDocumentSidebarView('bookmarks');else if(sidebarMode==='bookmarks')renderSidebar('bookmarks');}toast('이 장면을 북마크했습니다.');},
@@ -1051,13 +1058,54 @@ function mountYouTube(tab){
     });
     const self=record(),list=self.metadata?.youtube?.playlistId?playlistRecords(self.metadata.youtube.playlistId):[],at=list.findIndex(r=>r.id===self.id);
     if(at>=0)tab.youtube.setSiblings(list[at-1]?.title||'',list[at+1]?.title||'');
+    if(tab.pendingVideoNote){tab.youtube.revealNote(tab.pendingVideoNote,false);tab.pendingVideoNote=null;}
     // On a phone the sidebar would cover the video; the learner opens it when needed.
     if(innerWidth<=760&&activeId===tab.id&&!$('#sidebar').hidden)closeSidebar({remember:false});
   }).catch(showError);
 }
-function youtubeDialog(){
+function youtubeDialog(initialURL=''){youtubeMomentDialog(null,0,null,typeof initialURL==='string'?initialURL:'');}
+function youtubeMomentDialog(tab=null,seconds=0,note=null,initialURL=''){
+  let draft=note,savedRecord=null;
+  openVideoNoteDialog({modal,videoId:tab?.reader.metadata.youtube.videoId||'',seconds,note,title:tab?.title||'',records:youtubeRecords(),initialURL,onError:showError,
+    ...(tab?{currentTime:()=>tab.youtube?.time()??seconds}:{onSubtitles:youtubeSubtitleDialog}),
+    save:async({video,seconds,text,targetId,signal})=>{
+      if(tab&&(!tabs.includes(tab)||tab.reader.disposed))throw Error('영상을 다시 열고 메모를 저장해주세요.');
+      const duration=tab?.youtube?.player?.getDuration?.();if(duration>0&&seconds>duration)throw Error('영상 길이('+clock(duration)+') 안의 시점을 입력해주세요.');
+      draft=makeVideoNote(video.videoId,seconds,text,draft);
+      let record=tab?.record||savedRecord||youtubeRecords().find(r=>r.id===targetId)||youtubeRecords().find(r=>r.metadata.youtube.videoId===video.videoId);
+      if(!record){
+        const ui=await youtubeUI(),[info,thumbnail]=await Promise.all([ui.videoInfo(video.videoId),ui.thumbnailData(video.videoId)]);
+        signal.throwIfAborted();
+        record=await saveYouTubeRecord({title:info.title||'YouTube 영상 '+video.videoId,youtube:{videoId:video.videoId,channel:info.channel,thumbnail},mediaTime:seconds,annotations:[draft]});savedRecord=record;
+      }else{
+        const opened=tabs.find(t=>t.record?.id===record.id&&t.reader);
+        const current=await getDocument(record.id);signal.throwIfAborted();
+        if(!current||current.trashedAt)throw Error('이 영상이 삭제되거나 휴지통으로 이동했습니다. 서재를 다시 확인해주세요.');
+        if(opened){
+          if(note&&!opened.reader.metadata.annotations.some(a=>a.id===note.id))throw Error('이 메모가 이미 삭제되었습니다. 새 메모를 남겨주세요.');
+          const items=opened.reader.metadata.annotations,found=items.some(a=>a.id===draft.id);
+          opened.reader.commit(found?items.map(a=>a.id===draft.id?draft:a):[...items,draft]);await opened.queue.flush();
+        }else{
+          const metadata=structuredClone(current.metadata),found=metadata.annotations.some(a=>a.id===draft.id);
+          metadata.annotations=found?metadata.annotations.map(a=>a.id===draft.id?draft:a):[...metadata.annotations,draft];
+          metadata.view={...metadata.view,mediaTime:seconds};
+          record=await putDocumentRevision({...current,metadata,modified:Date.now()},{mustExist:true,checkpoint:false});cacheLibraryDocument(record);
+          const sleeping=tabs.find(t=>t.asleep&&t.record?.id===record.id);if(sleeping)sleeping.history=null;
+        }
+      }
+      return async()=>{
+        await refreshLibrary();const opened=await openRecord(record);await opened.reader.ready;
+        // Module mounting is asynchronous; keep the exact scene until the pane is ready.
+        if(opened.youtube){opened.youtube.renderNotes();opened.youtube.revealNote(draft,false);}else opened.pendingVideoNote=draft;
+        toast('시점 메모를 저장했습니다. 시간을 누르면 해당 장면부터 재생합니다.');
+      };
+    },
+  });
+}
+function youtubeSubtitleDialog(initialURL=''){
   const firstTime=!localStorage.getItem('librememo-youtube-guide-seen');
   modal(`<section data-youtube-dialog class="youtube-dialog"><div class="dialog-heading"><h2>${icon('youtube',20)} 유튜브 영상에 주석 달기</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>
+    <div class="youtube-modes" role="group" aria-label="주석 방식"><button type="button" data-youtube-mode="moments" aria-pressed="false">${icon('video-note',17)} 시점 메모</button><button type="button" aria-pressed="true">${icon('subtitles',17)} 자막에 주석</button></div>
     <p class="dialog-description">YouTube 영상이나 재생목록 주소를 넣고, 받아 둔 자막 파일을 고르세요. 영상은 위에서 재생되고, 아래 자막에 형광펜·메모·북마크를 달 수 있습니다.</p>
     <label class="youtube-field"><span>YouTube 주소</span><input type="url" data-youtube-url inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=… 또는 재생목록 주소"></label>
     <p class="youtube-detect" data-youtube-detect aria-live="polite"></p>
@@ -1132,7 +1180,8 @@ function youtubeDialog(){
       }catch(error){say(error.message||String(error));throw error;}
       finally{busy=false;if(create.isConnected)update();}
     });
-    requestAnimationFrame(()=>url.focus());
+    $d('[data-youtube-mode="moments"]').onclick=()=>{const link=url.value;dialog.close();youtubeDialog(link);};
+    if(initialURL){url.value=initialURL;update();}requestAnimationFrame(()=>url.focus());
   });
 }
 function duplicateImportDialog(local, matches) {
@@ -1987,7 +2036,7 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
     const when=value=>Number.isFinite(value)?new Date(value).toLocaleString('ko-KR',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}):'';
     // Type alone ("펜 그림") says nothing about where an annotation is. Show the text it marks or was
     // drawn on, then the kind · the heading above it · when it was made.
-    const row=a=>{const c=contexts.get(a.id)||{quote:a.textAnchor?.quote||a.anchorTarget?.quote||'',heading:''};const main=a.text||c.quote;const meta=[ANNOTATION_LABELS[a.type]||'주석',c.heading,when(a.created)].filter(Boolean).join(' · '),metaHtml=[esc(ANNOTATION_LABELS[a.type]||'주석'),c.heading?formatOutlineTitle(c.heading):'',esc(when(a.created))].filter(Boolean).join(' · ');return `<div class="annotation-row"><button class="annotation-item" data-annotation="${esc(a.id)}" title="${esc([main,meta].filter(Boolean).join('\n'))}"><span class="annotation-type" style="color:${a.color}">${icon(a.type==='pen'?'pen':a.type==='note'?'note':a.type==='highlight'?'highlight':a.type==='underline'?'underline':'shapes',16)}</span><span class="annotation-text">${main?`<span class="annotation-main">${esc(main)}</span>`:''}${a.text&&c.quote?`<span class="annotation-context">“${esc(c.quote)}”</span>`:''}<span class="annotation-meta">${metaHtml}</span></span></button><button class="icon-button" data-delete-annotation="${esc(a.id)}" aria-label="주석 삭제">${icon('trash',14)}</button></div>`;};
+    const row=a=>{const c=contexts.get(a.id)||{quote:a.textAnchor?.quote||a.anchorTarget?.quote||'',heading:''};const main=a.text||c.quote;const meta=[(isVideoNote(a)?'시점 메모':ANNOTATION_LABELS[a.type])||'주석',c.heading,when(a.created)].filter(Boolean).join(' · '),metaHtml=[esc((isVideoNote(a)?'시점 메모':ANNOTATION_LABELS[a.type])||'주석'),c.heading?formatOutlineTitle(c.heading):'',esc(when(a.created))].filter(Boolean).join(' · ');return `<div class="annotation-row"><button class="annotation-item" data-annotation="${esc(a.id)}" title="${esc([main,meta].filter(Boolean).join('\n'))}"><span class="annotation-type" style="color:${a.color}">${icon(a.type==='pen'?'pen':a.type==='note'?'note':a.type==='highlight'?'highlight':a.type==='underline'?'underline':'shapes',16)}</span><span class="annotation-text">${main?`<span class="annotation-main">${esc(main)}</span>`:''}${a.text&&c.quote?`<span class="annotation-context">“${esc(c.quote)}”</span>`:''}<span class="annotation-meta">${metaHtml}</span></span></button><button class="icon-button" data-delete-annotation="${esc(a.id)}" aria-label="주석 삭제">${icon('trash',14)}</button></div>`;};
     const tree=r.annotationTree?.(contexts)||[{id:'document',title:'문서 전체',count:r.metadata.annotations.length,annotations:r.metadata.annotations,children:[]}];
     const branch=group=>`<details class="annotation-group" data-annotation-group="${esc(group.id)}"${r.annotationTreeOpen.get(group.id)?' open':''}><summary><span class="annotation-group-title">${formatOutlineTitle(group.title)}</span><span class="annotation-group-count" aria-label="${group.count}개 주석">${group.count}</span></summary><div class="annotation-group-body">${group.children.map(branch).join('')}${group.annotations.map(row).join('')}</div></details>`;
     content.innerHTML=r.metadata.annotations.length?`<div class="annotation-tree" aria-label="목차별 주석">${tree.map(branch).join('')}</div>`:'<p class="panel-empty">아직 주석이 없어요.<br>툴바에서 도구를 골라 생각을 남겨보세요.</p>';
@@ -2048,6 +2097,7 @@ function renderWholeSearch(panel,r,content){
 }
 function annotationDialog(tab,id) {
   const a=tab.reader.metadata.annotations.find(a=>a.id===id);if(!a)return;
+  if(isVideoNote(a)){tab.youtube?.addSceneNote(a);return;}
   const dialogColors=[...new Set([...PRESET_COLORS,...(preferences.annotation.customColors||[])])];
   modal(`<div class="dialog-heading"><h2>주석 편집</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p class="annotation-quote">${esc(a.text||a.textAnchor?.quote||'선택한 주석')}</p><div class="swatches preset-swatches">${dialogColors.map(c=>`<button type="button" data-dialog-color="${c}" style="--swatch:${c}" aria-label="색상 ${c}" class="swatch ${a.color.toLowerCase()===c?'chosen':''}"></button>`).join('')}</div><label class="select-label">색상 직접 선택 <span class="palette-actions"><input id="annotation-color-hex" class="annotation-hex-input" type="text" maxlength="7" value="${a.color.toUpperCase()}" aria-label="주석 HEX 색상 코드"><input type="color" id="annotation-color" value="${a.color}"></span></label><div class="dialog-actions">${['note','text'].includes(a.type)?'<button id="edit-note" class="secondary-button">내용 편집</button>':''}<button id="delete-selected" class="secondary-button">${icon('trash',15)} 삭제</button><button class="primary-button" data-dialog-close>완료</button></div>`,()=>{
     const setAnnotationColor=raw=>{
@@ -2171,7 +2221,7 @@ async function migrateEdition(tab) {
   const {report,bookmarkReport,outlineReport={same:0,changed:0,deleted:[],unplaceable:[],unchecked:[]}}=result,movedOutline=result.outlineEdits||[];
   const lost=[...report.deleted,...report.unplaceable,...report.unchecked],lostBookmarks=[...bookmarkReport.deleted,...bookmarkReport.unplaceable,...bookmarkReport.unchecked],lostOutline=[...(outlineReport.deleted||[]),...(outlineReport.unplaceable||[]),...(outlineReport.unchecked||[])];
   const where=a=>{const key=a.section||a.textAnchor?.section||a.anchorTarget?.section;return key?result.oldSections.get(key)?.title||'':'';};
-  const row=a=>`<li><strong>${esc(ANNOTATION_LABELS[a.type]||'주석')}</strong> ${esc((a.text||a.textAnchor?.quote||a.anchorTarget?.quote||'').slice(0,80))}${where(a)?` <span class="migrate-where">— ${esc(where(a))}</span>`:''}</li>`;
+  const row=a=>`<li><strong>${esc((isVideoNote(a)?'시점 메모':ANNOTATION_LABELS[a.type])||'주석')}</strong> ${esc((a.text||a.textAnchor?.quote||a.anchorTarget?.quote||'').slice(0,80))}${where(a)?` <span class="migrate-where">— ${esc(where(a))}</span>`:''}</li>`;
   modal(`<form method="dialog"><div class="dialog-heading"><h2>새 판으로 주석/북마크 옮기기</h2><button type="button" class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>
     <p class="dialog-description">주석 ${annotations.length}개 가운데 <strong>${result.annotations.length}개</strong>를 새 판에서 찾았습니다.</p>
     <ul class="migrate-summary"><li>그대로 있는 자리: ${report.same}개</li><li>문장이 고쳐졌거나 옮겨진 자리: ${report.changed}개</li><li>새 판에서 지워진 내용: ${report.deleted.length}개 — 옮기지 않습니다</li>${report.unplaceable.length?`<li>위치 정보가 없는 예전 메모: ${report.unplaceable.length}개 — 옮기지 않습니다</li>`:''}${report.unchecked.length?`<li>새 판의 장을 열지 못해 확인하지 못한 주석: ${report.unchecked.length}개 — 옮기지 않습니다 (${esc(report.failedSections.slice(0,3).join(' '))})</li>`:''}</ul>

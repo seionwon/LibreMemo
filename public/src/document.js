@@ -1,6 +1,7 @@
 import {normalizeReadingLayout} from './reading-layout.js';
 import { FORMAT_VERSION, validateAnnotations, validateOutlineEdits, cleanSourceStorage,validPDFPosition, normalizeReadingFontFamily, validThumbnail } from './model.js';
 import {validateYouTube} from './youtube.js';
+import {videoNotes,videoNotesHTML,VIDEO_NOTES_CSS} from './youtube-notes.js';
 
 export const LAYER_ID = 'htmlmemo-annotation-layer';
 export const DATA_ID = 'htmlmemo-data';
@@ -62,6 +63,7 @@ export async function serializeBookSource(source, metadata) {
   return new Blob(parts, {type:'text/html;charset=utf-8'});
 }
 export function cleanAnnotations(doc) {
+  doc.querySelectorAll('[data-htmlmemo-video-notes],#htmlmemo-video-notes-style').forEach(node=>node.remove());
   doc.getElementById(LAYER_ID)?.remove();
   doc.getElementById(DATA_ID)?.remove();
   doc.getElementById('htmlmemo-annotation-style')?.remove();
@@ -332,6 +334,11 @@ export function serializeHTML(doc, metadata) {
   // Interactive editor-only styles should never change the standalone file.
   clone.querySelector('#htmlmemo-editor-style')?.remove();
   clone.querySelector('head').append(metadataElement(doc, metadata));
+  clone.querySelectorAll('[data-htmlmemo-video-notes],#htmlmemo-video-notes-style').forEach(node=>node.remove());
+  if(videoNotes(metadata).length){
+    const style=doc.createElement('style');style.id='htmlmemo-video-notes-style';style.textContent=VIDEO_NOTES_CSS;clone.querySelector('head').append(style);
+    const holder=doc.createElement('div');holder.innerHTML=videoNotesHTML(metadata);clone.querySelector('body').append(holder.firstElementChild);
+  }
   return '<!doctype html>\n' + clone.outerHTML;
 }
 function textWalker(doc,root) {

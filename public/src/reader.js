@@ -1,4 +1,6 @@
 import { createReadAloud } from './read-aloud.js';
+import {isVideoNote} from './youtube-notes.js';
+import {clock} from './youtube.js';
 import { PdfReader } from './pdf-reader.js';
 import {bookmarkTextAnchor,captureBookmarkLocations,findBookmarkText} from './bookmark-location.js';
 import { SearchIndexCache } from './search-index.js';
@@ -3921,7 +3923,7 @@ export class Reader {
     const scrollHost=this.ensureAnnotationLayerHost();
     const hostParent=scrollHost||this.doc.body;
     let layer=this.doc.getElementById(LAYER_ID);
-    const drawings=this.metadata.annotations.filter(a=>!TEXT_TOOLS.includes(a.type));
+    const drawings=this.metadata.annotations.filter(a=>!TEXT_TOOLS.includes(a.type)&&!isVideoNote(a));
     // These measurements are shared only within this synchronous pass. Never
     // retain boxes across reflow, zoom, chapter replacement or font changes.
     const layout=drawings.length?{...this.drawingTargetContext(),origin:this.layerOrigin(scrollHost),boxes:new WeakMap()}:null;
@@ -4029,6 +4031,8 @@ export class Reader {
     }catch(error){if(!this.disposed&&generation===this.annotationJumpGeneration)this.callbacks.onError?.(error);return false;}
   }
   async jumpAnnotation(id) {
+    const timed=this.metadata.annotations.find(a=>a.id===id&&isVideoNote(a));
+    if(timed){this.selectedId=id;return this.callbacks.onVideoNote?.(timed)??false;}
     if(this.pdf){const a=this.metadata.annotations.find(item=>item.id===id);if(!a)return false;try{return await this.pdf.jumpAnnotation(a);}catch(error){this.callbacks.onError?.(error);return false;}}
     this.cancelAnnotationJump?.();
     const generation=this.annotationJumpGeneration=(this.annotationJumpGeneration||0)+1;
@@ -4228,6 +4232,7 @@ export class Reader {
     const paths=this.annotationBookPaths();
     const preamble=this.outline().some(item=>!this.isInsideTocOrTopbar(item.node))?'목차 밖 주석':'문서 전체';
     return this.locationTree(this.metadata.annotations,'annotations',annotation=>{
+      if(isVideoNote(annotation))return [{id:'video-notes',title:'시점 메모',order:-2,kind:'other'}];
       const section=annotation.textAnchor?.section||annotation.anchorTarget?.section;
       let path=this.annotationLocation(annotation)?.path;
       if(!path?.length){
@@ -4320,6 +4325,7 @@ export class Reader {
       if(node.hasAttribute('data-htmlmemo-mark')&&!markedNodes.has(id))markedNodes.set(id,node);
     }
     for (const annotation of this.metadata.annotations) {
+      if(isVideoNote(annotation)){result.set(annotation.id,{quote:'',heading:clock(annotation.videoAnchor.seconds),path:[]});continue;}
       const marked = TEXT_TOOLS.includes(annotation.type);
       const node = marked ? markedNodes.get(annotation.id) : this.resolveDrawingTarget(annotation,context);
       let index = node?.isConnected && node !== this.doc.body ? headingBefore(node) : -1;

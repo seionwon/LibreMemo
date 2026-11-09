@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "status": 200,
+  "title": "시점 메모 연습 영상 · LibreMemo",
+  "url": "http://127.0.0.1:4173/scene-test.html",
+  "results": [
+    {
+      "type": "wait",
+      "selector": "#test-report[data-state]"
+    },
+    {
+      "type": "text",
+      "selector": "#test-report",
+      "text": "Error: capture time\n    at assert (http://127.0.0.1:4173/scene-fixture.mjs:24:42)\n    at http://127.0.0.1:4173/scene-fixture.mjs:31:161"
+    }
+  ],
+  "errors": [],
+  "screenshot": "test-results/youtube-moments-20261109/desktop.json.png"
+}

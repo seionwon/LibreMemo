@@ -165,6 +165,7 @@ export function validateAnnotations(value) {
     }
     if (!TEXT_TOOLS.includes(item.type) && item.textAnchor != null && (typeof item.textAnchor?.quote !== 'string' || item.textAnchor.quote.length > 200000)) throw new Error('메모의 대상 문장이 손상되었습니다.');
     if (item.text != null && (typeof item.text !== 'string' || item.text.length > 10000)) throw new Error('메모가 너무 길거나 올바르지 않습니다.');
+    if(item.videoAnchor!=null&&(item.type!=='note'||!item.videoAnchor||typeof item.videoAnchor!=='object'||typeof item.videoAnchor.videoId!=='string'||!/^[A-Za-z0-9_-]{11}$/.test(item.videoAnchor.videoId)||!Number.isInteger(item.videoAnchor.seconds)||item.videoAnchor.seconds<0||item.videoAnchor.seconds>359999))throw Error('주석의 영상 시점이 올바르지 않습니다.');
     if (item.style != null && (!['note','text'].includes(item.type) || !validTextStyle(item.style))) throw new Error('메모 상자 스타일이 올바르지 않습니다.');
     if (item.textScale != null && (!['note','text'].includes(item.type) || !Number.isFinite(item.textScale) || item.textScale < .3 || item.textScale > 4)) throw new Error('메모의 글자 배율이 올바르지 않습니다.');
     return structuredClone(item);

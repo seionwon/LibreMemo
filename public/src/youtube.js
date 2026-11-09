@@ -24,6 +24,7 @@ export function parseYouTubeInput(value){
   const text=String(value??'').trim();if(!text)return null;
   if(ID.test(text))return {videoId:text,playlistId:'',start:0};
   let url;try{url=new URL(/^[a-z]+:\/\//i.test(text)?text:'https://'+text);}catch{return null;}
+  if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.port)return null;
   const host=url.hostname.replace(/^(?:www|m|music)\./,'');
   if(!['youtube.com','youtu.be','youtube-nocookie.com'].includes(host))return null;
   let videoId='';
@@ -34,7 +35,9 @@ export function parseYouTubeInput(value){
   const playlistId=LIST.test(list)&&!/^(?:RD|UL|LL|WL)/.test(list)?list:'';
   if(!ID.test(videoId))videoId='';
   if(!videoId&&!playlistId)return null;
-  return {videoId,playlistId,start:parseStart(url.searchParams.get('t')||url.searchParams.get('start'))};
+  const rawTime=url.searchParams.get('t')||url.searchParams.get('start')||new URLSearchParams(url.hash.slice(1)).get('t')||'',start=parseStart(rawTime);
+  if(rawTime&&(!/^(?:\d+|(?:\d+h)?(?:\d+m)?(?:\d+s?)?)$/i.test(rawTime)||!Number.isInteger(start)||start>359999))return null;
+  return {videoId,playlistId,start};
 }
 export const watchURL=(videoId,playlistId='')=>'https://www.youtube.com/watch?v='+videoId+(playlistId?'&list='+playlistId:'');
 export const playlistURL=playlistId=>'https://www.youtube.com/playlist?list='+playlistId;

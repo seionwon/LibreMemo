@@ -1585,7 +1585,7 @@ test('real Chrome: compact library shares titles and sources, keeps dense views 
     assert.equal(await page.evaluate('document.querySelectorAll("#web-help-button").length===1&&!!document.querySelector("#library #web-help-button")'),true);
     assert.deepEqual(await page.evaluate('[...document.querySelectorAll("#library .hero-actions button")].map(button=>button.id)'),['hero-import','paste-button','image-paste-button','youtube-button']);
     assert.equal(await page.evaluate('document.querySelectorAll("#paste-button").length'),1);
-    await page.click('#youtube-button');await page.waitFor('document.querySelector("#dialog").open&&document.querySelector(".youtube-guide-extension")');
+    await page.click('#youtube-button');await page.click('[data-youtube-mode="subtitles"]');await page.waitFor('document.querySelector("#dialog").open&&document.querySelector(".youtube-guide-extension")');
     assert.equal(await page.evaluate(`(()=>{const box=document.querySelector('.youtube-guide-extension'),link=box.querySelector('a'),r=box.getBoundingClientRect();return box.closest('details').open&&r.width>0&&r.height>0&&box.textContent.includes('같은 이름의 확장 프로그램이 여럿')&&link.textContent===link.href&&link.href==='https://chromewebstore.google.com/detail/ognjcegpcoafidcfbepkfgnolnnibcjp';})()`),true,'the YouTube guide shows the exact subtitle extension address');
     await page.click('#dialog [data-dialog-close]');await page.waitFor('!document.querySelector("#dialog").open');
     // YouTube subtitle rows: start time (to the second) beside the text on one row.
