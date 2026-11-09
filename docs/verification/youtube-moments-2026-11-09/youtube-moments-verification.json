@@ -1,0 +1,24 @@
+{
+  "layouts": [
+    {
+      "width": 320,
+      "height": 568,
+      "fit": true,
+      "overflow": false
+    },
+    {
+      "width": 568,
+      "height": 320,
+      "fit": true,
+      "overflow": false
+    }
+  ],
+  "annotations": 3,
+  "singleDocument": true,
+  "sourceUnchanged": true,
+  "reload": true,
+  "exportRoundTrip": true,
+  "deleteUndo": true,
+  "captionAttachmentPreservesTimes": true,
+  "playerBoundary": "deterministic YouTube API fixture; no external playback assertion"
+}

@@ -1,0 +1,50 @@
+{
+  "version": "1.9.68",
+  "local": {
+    "unit": {
+      "total": 1008,
+      "passed": 1008,
+      "failed": 0,
+      "skipped": 0
+    },
+    "syntaxFiles": 246,
+    "build": true
+  },
+  "ciBuild": {
+    "run": 42615229726,
+    "job": 129153350631,
+    "unit": {
+      "total": 1008,
+      "passed": 1007,
+      "failed": 0,
+      "skipped": 1
+    },
+    "syntaxFiles": 227,
+    "build": true,
+    "skipReason": "macOS-specific environment test on Linux"
+  },
+  "publishedFiles": 16,
+  "browserCI": {
+    "run": 42615229726,
+    "job": 129154646340,
+    "total": 89,
+    "passed": 89,
+    "failed": 0,
+    "skipped": 0,
+    "completedAt": "2026-11-09T12:29:16Z"
+  },
+  "externalPlayback": "Not asserted; deterministic official-player API boundary fixture",
+  "sourceCommit": "1681e0edf975253d9344e10003f7e44af74243df",
+  "deployment": {
+    "url": "https://seionwon.github.io/LibreMemo/",
+    "version": "1.9.68",
+    "completedAt": "2026-11-09T12:16:25Z",
+    "verifiedPublicFiles": 16
+  },
+  "screenshotsReviewed": [
+    "youtube-moments-desktop.png",
+    "youtube-moments-320.png",
+    "youtube-moments-568.png"
+  ],
+  "mobilePhysicalDeviceTest": false
+}

@@ -1,0 +1,24 @@
+{
+  "run": 42615229726,
+  "artifactId": 13672257233,
+  "sha256": "sha256:27417794529c3220aa8a8bb556e280047547fcddfc6c02ebf8eb2361efb446e4",
+  "verified": true,
+  "selectedFiles": [
+    "index.html",
+    "src/version.js",
+    "src/app.js",
+    "src/youtube.js",
+    "src/youtube-ui.js",
+    "src/youtube-notes.js",
+    "src/youtube-note-dialog.js",
+    "src/model.js",
+    "src/reader.js",
+    "src/document.js",
+    "src/document-archive.js",
+    "src/help-content.js",
+    "src/utils.js",
+    "src/distribution.js",
+    "styles.css",
+    "sw.js"
+  ]
+}

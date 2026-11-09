@@ -1,4 +1,4 @@
-# YouTube 시점 메모 검증 (1.9.67)
+# YouTube 시점 메모 검증 (1.9.68)
 
 내 서재 → 유튜브 → 시점 메모, 또는 영상 막대의 시점 메모에서 사용합니다. 영상 ID·초 단위 시간과 메모를 일반 주석 레코드로 함께 보관합니다. 자막 텍스트/화면 좌표와 독립되어 자막 교체에도 보존합니다.
 
@@ -27,3 +27,15 @@
 로컬 검증 완료. GitHub Pages 게시·공개 CI 결과 확인 후 같은 문서에 보충합니다.
 
 1.9.68 보완: 공식 API의 `seekTo`는 cued/unstarted 상태에서 재생을 시작합니다. 메모 저장은 `cueVideoById`로 분리하고 실제 재생 클릭만 `seekTo`/`playVideo`를 사용합니다. 준비된 시간은 플레이어가 실제 재생 상태로 바뀔 때까지 유지합니다. 이 보완의 브라우저 결과는 최종 CI에서 확인하며 앞의 별도 Chrome 화면은 1.9.67 단계의 검증입니다.
+
+
+## 최종 게시·공개 검증 (2026-11-09 21:31:42 +09:00)
+
+- 최종 소스/검사 커밋 `1681e0edf975253d9344e10003f7e44af74243df`의 [Actions 42615229726](https://github.com/seionwon/LibreMemo/actions/runs/42615229726) build·deploy·verify가 모두 성공했습니다. [LibreMemo](https://seionwon.github.io/LibreMemo/)에 **1.9.68**이 게시됐습니다. [최종 실행 상태](final-run.json).
+- 로컬 단위 **1,008개 통과**, 문법/JSON 246개·빌드 성공. Linux CI 단위는 **1,007개 통과·실패 0개·macOS 조건 검사 1개 생략**, 문법/JSON 227개·빌드 성공입니다. [검증 요약](validation.json).
+- 공개 Chrome 결과는 **89개 통과·실패 0개·생략 0개**입니다. [결과 XML](published-browser-results.xml), [시점 메모 시나리오 결과](youtube-moments-verification.json).
+- 새 시나리오는 시간 링크 입력, 안전한 메모 표시, 저장 시 자동 재생 없음, 재생 중 시점 포착/정지, 편집/취소, 시간으로 재생, 문서 탭 추가 없음, 삭제/실행 취소, 같은 영상의 기존 문서 재사용, 원본 본문 보존, HTML·보관 파일 왕복, 사이드바 이동, 재실행 후 복원, 나중에 자막을 붙여도 시점 3개 유지까지 확인했습니다.
+- 실제 공개 앱의 [1280px 데스크톱](youtube-moments-desktop.png)·[320×568 세로](youtube-moments-320.png)·[568×320 가로](youtube-moments-568.png)를 직접 확인했습니다. 입력창은 화면 안에 들어오고 가로 넘침이 없습니다. 낮은 가로 화면에서는 창 안을 세로로 스크롤해 아래 입력/저장 버튼을 사용합니다. 실물 Android 기기 검사는 아니며 플레이어는 결정적인 시험 API 응답을 사용합니다. 실제 YouTube 스트리밍 성공을 의미하지 않습니다.
+- [핵심 공개 파일 16개](published-files.json)가 모두 HTTP 200이고 실제 CI Pages 아티팩트와 바이트 단위로 일치합니다. [Pages ZIP](pages-artifact.json)과 [화면 ZIP](browser-artifact.json)의 SHA-256을 GitHub 아티팩트 메타데이터와 대조했습니다.
+- [첫 1.9.67 실행](first-run.json)은 빌드·게시 성공 뒤 후속 push로 공개 검사가 취소됐습니다. [두 번째 실행](second-run.json)은 빌드 성공 뒤 최종 모바일 검사 준비 수정 push로 게시/검사가 취소됐습니다. 취소를 실패 또는 전체 통과로 기록하지 않습니다. 마지막 커밋은 휴대폰 검사에서 사이드바를 닫고 영상 막대를 조작하도록 검사 준비만 보완했으며 1.9.68 제품 코드는 같습니다.
+- 임시 검증 서버는 종료했고 샌드박스에서 데스크톱 Chrome이나 로컬 전체 `npm run test:browser`를 실행하지 않았습니다. 마지막 GitHub 기록 보충은 문서만 커밋하며 이미 검증한 배포 제품 파일을 바꾸지 않습니다.
