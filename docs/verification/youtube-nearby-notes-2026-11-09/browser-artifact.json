@@ -1,0 +1,14 @@
+{
+  "run": 42632532943,
+  "artifactId": 13682811530,
+  "sha256": "sha256:f42dbeba33e517d1434f3390ddf4bcdd1b93d05fd54fcad43c2acfe21cfe4805",
+  "verified": true,
+  "selectedFiles": [
+    "published-browser-results.xml",
+    "youtube-moments-320.png",
+    "youtube-moments-568.png",
+    "youtube-moments-desktop.png",
+    "youtube-moments-existing.png",
+    "youtube-moments-verification.json"
+  ]
+}

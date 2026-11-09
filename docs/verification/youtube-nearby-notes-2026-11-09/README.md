@@ -19,3 +19,12 @@
 ## 게시
 
 로컬 검증 완료. GitHub Actions의 Pages 게시·공개 Chrome·온라인 파일 대조 결과를 같은 항목에 보충합니다.
+
+
+## 최종 게시·공개 확인 (2026-11-09 23:31:22 +09:00)
+
+- `0cb4241a93e07db266f34a738335e7fd76e79f18`의 [Actions 42632532943](https://github.com/seionwon/LibreMemo/actions/runs/42632532943) build·deploy·verify가 모두 성공했습니다. [LibreMemo 1.9.69](https://seionwon.github.io/LibreMemo/)에 게시됐습니다. [실행 상태](final-run.json).
+- Linux 단위 **1,013개 통과·실패 0개·macOS 조건 검사 1개 생략**, 문법/JSON 228개·빌드 성공입니다. 로컬 단위 1,014개 통과와 구분합니다.
+- 공개 Chrome **89개 통과·실패 0개·생략 0개**를 [결과 XML](published-browser-results.xml)과 로그로 확인했습니다. [시점 메모 검증 결과](youtube-moments-verification.json)는 기존 기록/재생/편집/삭제·실행 취소/복원/자막 보존/내보내기에 더해 **3초 차이 링크의 기존 메모 편집, 원래 시점·ID 유지, 폴더별 독립 문서, 같은 폴더의 다른 시점 추가**를 확인합니다.
+- 공개 [데스크톱 목록](youtube-moments-desktop.png)·[기존 메모 편집](youtube-moments-existing.png)·[320×568](youtube-moments-320.png)·[568×320](youtube-moments-568.png) 캡처를 직접 확인했습니다. 실제 스트리밍과 실물 휴대폰 검증의 범위 제한은 위와 같습니다.
+- [핵심 공개 파일 16개](published-files.json)의 HTTP 200·CI Pages 산출물 바이트 일치를 확인했고 [배포 ZIP](pages-artifact.json)·[화면 ZIP](browser-artifact.json)의 SHA-256을 GitHub 아티팩트 메타데이터와 대조했습니다. 마지막 기록 보충은 문서만 커밋하며 검증한 앱 파일은 바꾸지 않습니다.

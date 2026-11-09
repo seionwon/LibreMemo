@@ -16,5 +16,39 @@
     "physicalDevice": false,
     "externalVideoPlayback": false
   },
-  "deployment": "pending"
+  "deployment": {
+    "version": "1.9.69",
+    "url": "https://seionwon.github.io/LibreMemo/",
+    "sourceCommit": "0cb4241a93e07db266f34a738335e7fd76e79f18",
+    "publishedFiles": 16,
+    "filesMatch": true,
+    "browser": {
+      "run": 42632532943,
+      "job": 129214043891,
+      "total": 89,
+      "passed": 89,
+      "failed": 0,
+      "skipped": 0
+    },
+    "completedAt": "2026-11-09T14:16:31Z"
+  },
+  "ciBuild": {
+    "run": 42632532943,
+    "job": 129212194721,
+    "unit": {
+      "total": 1014,
+      "passed": 1013,
+      "failed": 0,
+      "skipped": 1
+    },
+    "skipReason": "macOS-specific environment check on Linux",
+    "syntaxFiles": 228,
+    "build": true
+  },
+  "screenshotsReviewed": [
+    "youtube-moments-desktop.png",
+    "youtube-moments-existing.png",
+    "youtube-moments-320.png",
+    "youtube-moments-568.png"
+  ]
 }

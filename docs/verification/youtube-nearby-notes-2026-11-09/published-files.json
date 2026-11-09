@@ -1,0 +1,137 @@
+{
+  "commit": "0cb4241a93e07db266f34a738335e7fd76e79f18",
+  "version": "1.9.69",
+  "url": "https://seionwon.github.io/LibreMemo/",
+  "checkedAt": "2026-11-09T14:17:36.539Z",
+  "pass": true,
+  "files": [
+    {
+      "file": "index.html",
+      "status": 200,
+      "bytes": 20396,
+      "sha256": "ac88abcd72615c9c212afc3e8c7a2cad9cf84872ab5a7150ec7d746dfd37f24a",
+      "expected": "ac88abcd72615c9c212afc3e8c7a2cad9cf84872ab5a7150ec7d746dfd37f24a",
+      "matches": true
+    },
+    {
+      "file": "src/version.js",
+      "status": 200,
+      "bytes": 91,
+      "sha256": "70e476fa505b792518a779683c825608f8c9947aace02def6a3564b0ccea708c",
+      "expected": "70e476fa505b792518a779683c825608f8c9947aace02def6a3564b0ccea708c",
+      "matches": true
+    },
+    {
+      "file": "src/app.js",
+      "status": 200,
+      "bytes": 264736,
+      "sha256": "f17769730202bf5e28e467bb496ceb3c103a9953b7c7c831f51311b426889ab5",
+      "expected": "f17769730202bf5e28e467bb496ceb3c103a9953b7c7c831f51311b426889ab5",
+      "matches": true
+    },
+    {
+      "file": "src/youtube.js",
+      "status": 200,
+      "bytes": 16708,
+      "sha256": "c9053eb9c9bf5f74f62ee4eee96e1b95a2b8350c2195bb28c904ce0c51a3da14",
+      "expected": "c9053eb9c9bf5f74f62ee4eee96e1b95a2b8350c2195bb28c904ce0c51a3da14",
+      "matches": true
+    },
+    {
+      "file": "src/youtube-ui.js",
+      "status": 200,
+      "bytes": 38787,
+      "sha256": "f88e499984d6a89b3de15689e5729e259115b7f27c7430d5d53275510b3e38fb",
+      "expected": "f88e499984d6a89b3de15689e5729e259115b7f27c7430d5d53275510b3e38fb",
+      "matches": true
+    },
+    {
+      "file": "src/youtube-notes.js",
+      "status": 200,
+      "bytes": 6367,
+      "sha256": "5258cbea3a0c89bf14ad5561ac384c6443f95b1eb1cc4763b9b4c28b5d755c1c",
+      "expected": "5258cbea3a0c89bf14ad5561ac384c6443f95b1eb1cc4763b9b4c28b5d755c1c",
+      "matches": true
+    },
+    {
+      "file": "src/youtube-note-dialog.js",
+      "status": 200,
+      "bytes": 7386,
+      "sha256": "8cfbab27f9a10b700d06d9fd1106e6841149f74130f8348ce19629caa22be9bd",
+      "expected": "8cfbab27f9a10b700d06d9fd1106e6841149f74130f8348ce19629caa22be9bd",
+      "matches": true
+    },
+    {
+      "file": "src/model.js",
+      "status": 200,
+      "bytes": 23516,
+      "sha256": "2860bbfae8d8546d41c0013ae9adfa0b507a0f1d3fa1ef6e2f59842d560f442b",
+      "expected": "2860bbfae8d8546d41c0013ae9adfa0b507a0f1d3fa1ef6e2f59842d560f442b",
+      "matches": true
+    },
+    {
+      "file": "src/reader.js",
+      "status": 200,
+      "bytes": 336599,
+      "sha256": "4264d182a52ab8de4b4bade510d5d96889953ace94d3511c177c1b079b2378c2",
+      "expected": "4264d182a52ab8de4b4bade510d5d96889953ace94d3511c177c1b079b2378c2",
+      "matches": true
+    },
+    {
+      "file": "src/document.js",
+      "status": 200,
+      "bytes": 38409,
+      "sha256": "d889456fdf3d5aba3eed41b507949559d110127b95ba41a3f50c5f9c8fbac783",
+      "expected": "d889456fdf3d5aba3eed41b507949559d110127b95ba41a3f50c5f9c8fbac783",
+      "matches": true
+    },
+    {
+      "file": "src/document-archive.js",
+      "status": 200,
+      "bytes": 14163,
+      "sha256": "fad520e5e9d04d7580c8b52468dcb4be2b92c00f8ef19ddcbd589f61f5659120",
+      "expected": "fad520e5e9d04d7580c8b52468dcb4be2b92c00f8ef19ddcbd589f61f5659120",
+      "matches": true
+    },
+    {
+      "file": "src/help-content.js",
+      "status": 200,
+      "bytes": 127813,
+      "sha256": "446568620113b7637315552e2aed748c7289005e425f5184ee28a318e364c190",
+      "expected": "446568620113b7637315552e2aed748c7289005e425f5184ee28a318e364c190",
+      "matches": true
+    },
+    {
+      "file": "src/utils.js",
+      "status": 200,
+      "bytes": 11469,
+      "sha256": "c93f24b821ffd811afc5dbbdbb3f42b6cd185a437f3060cf0e840895feae6162",
+      "expected": "c93f24b821ffd811afc5dbbdbb3f42b6cd185a437f3060cf0e840895feae6162",
+      "matches": true
+    },
+    {
+      "file": "src/distribution.js",
+      "status": 200,
+      "bytes": 4759,
+      "sha256": "7039de7b8a40c57b28d6e0a49c7ecdb2c9e932895cbe70fec2ddb1f0c39060d2",
+      "expected": "7039de7b8a40c57b28d6e0a49c7ecdb2c9e932895cbe70fec2ddb1f0c39060d2",
+      "matches": true
+    },
+    {
+      "file": "styles.css",
+      "status": 200,
+      "bytes": 148299,
+      "sha256": "716ce6f087404867381fd7ab96c1c9899541c379f980418580ea115b7e32e2b1",
+      "expected": "716ce6f087404867381fd7ab96c1c9899541c379f980418580ea115b7e32e2b1",
+      "matches": true
+    },
+    {
+      "file": "sw.js",
+      "status": 200,
+      "bytes": 34114,
+      "sha256": "f32fe8ee76851eef06a548869f9314aa8ea5075a21129904ad35ed193b3a673c",
+      "expected": "f32fe8ee76851eef06a548869f9314aa8ea5075a21129904ad35ed193b3a673c",
+      "matches": true
+    }
+  ]
+}
