@@ -9,9 +9,10 @@ export function installYouTubeFixture(){
     return fetchOriginal(url,options);
   };
   window.YT={Player:class{
-    constructor(node,options){this.options=options;this.t=options.playerVars?.start||0;this.state=2;this.calls=[];window.__ytPlayers.push(this);node.innerHTML='<div style="display:grid;place-content:center;height:100%;color:#cbd5e1;font:16px system-ui">YouTube 플레이어 시험 화면</div>';setTimeout(()=>{this.fixtureReady=true;options.events.onReady({target:this});},30);}
+    constructor(node,options){this.options=options;this.t=options.playerVars?.start||0;this.state=5;this.calls=[];window.__ytPlayers.push(this);node.innerHTML='<div style="display:grid;place-content:center;height:100%;color:#cbd5e1;font:16px system-ui">YouTube 플레이어 시험 화면</div>';setTimeout(()=>{this.fixtureReady=true;options.events.onReady({target:this});},30);}
     getCurrentTime(){return this.t;}getDuration(){return 900;}getPlayerState(){return this.state;}
-    seekTo(t){this.t=t;this.calls.push(['seek',t]);}
+    cueVideoById({startSeconds}){this.t=startSeconds;this.state=5;this.calls.push(['cue',startSeconds]);this.options.events.onStateChange({data:5});}
+    seekTo(t){this.t=t;if(this.state!==2)this.state=1;this.calls.push(['seek',t]);}
     playVideo(){this.state=1;this.calls.push(['play']);this.options.events.onStateChange({data:1});}
     pauseVideo(){this.state=2;this.calls.push(['pause']);this.options.events.onStateChange({data:2});}
     setPlaybackRate(){}destroy(){this.dead=true;}

@@ -206,7 +206,7 @@ export class YouTubePane {
     const row=[...this.notes.querySelectorAll('[data-scene-row]')].find(el=>el.dataset.sceneRow===note.id);
     this.notes.querySelectorAll('[aria-current]').forEach(el=>el.removeAttribute('aria-current'));row?.setAttribute('aria-current','true');row?.scrollIntoView({block:'center',behavior:'smooth'});
     if(note.videoAnchor.videoId===this.youtube.videoId){
-      this.quietUntil=Date.now()+8000;this.pane.classList.remove('youtube-collapsed');this.$('size').setAttribute('aria-pressed','false');this.$('size').title='영상 접기';this.seek(note.videoAnchor.seconds,play);
+      this.quietUntil=Date.now()+8000;this.pane.classList.remove('youtube-collapsed');this.$('size').setAttribute('aria-pressed','false');this.$('size').title='영상 접기';if(play)this.seek(note.videoAnchor.seconds,true);else this.prepareScene(note.videoAnchor.seconds);
     }
     return true;
   }
@@ -222,9 +222,11 @@ export class YouTubePane {
     let YT;try{YT=await loadYouTubeAPI();}catch(error){this.message(error.message);return;}
     if(this.disposed)return;
     this.player=new YT.Player(this.pane.querySelector('.youtube-frame'),{host:PLAYER_HOST,videoId:this.youtube.videoId,playerVars:{playsinline:1,rel:0,fs:0,iv_load_policy:3,cc_load_policy:0,start:Math.floor(this.savedAt),origin:location.origin},events:{
-      onReady:()=>{if(this.disposed)return;this.ready=true;this.player.setPlaybackRate?.(Number(this.$('rate').value));if(this.pendingSeek){const {seconds,play}=this.pendingSeek;this.pendingSeek=null;this.seek(seconds,play);}},
+      onReady:()=>{if(this.disposed)return;this.ready=true;this.player.setPlaybackRate?.(Number(this.$('rate').value));if(this.pendingSeek){const {seconds,play,prepare}=this.pendingSeek;this.pendingSeek=null;if(prepare)this.prepareScene(seconds);else this.seek(seconds,play);}},
       onStateChange:event=>{
+        if(event.data===1)this.preparedTime=null;
         const playing=event.data===1;this.playing=playing;if(playing)this.resumeZones();
+        if(event.data===5)this.player?.setPlaybackRate?.(Number(this.$('rate').value));
         this.$('play').setAttribute('aria-label',playing?'일시정지':'재생');
         if(!playing&&this.ready)this.remember(true);
         if(event.data===0)this.callbacks.onEnded?.();
@@ -295,13 +297,22 @@ export class YouTubePane {
   clockText(t){let total=0;try{total=this.player?.getDuration?.()||0;}catch{}return total>0?clock(t)+' / '+clock(total):clock(t);}
   time(){
     if(this.pendingSeek)return this.pendingSeek.seconds;
+    if(this.preparedTime!=null)return this.preparedTime;
     if(!this.ready)return this.savedAt||0;
     let t=0;try{t=this.player?.getCurrentTime?.()||0;}catch{}
     if(this.target){if(Math.abs(t-this.target.t)<1.5||Date.now()>this.target.until)this.target=null;else return this.target.t;}
     return t;
   }
   toggle(){if(!this.player?.getPlayerState)return;if(this.player.getPlayerState()===1)this.player.pauseVideo();else this.player.playVideo();}
-  seek(seconds,play=false){if(!Number.isFinite(seconds)||this.disposed)return;seconds=Math.max(0,seconds);if(!this.ready||!this.player?.seekTo){this.pendingSeek={seconds,play};this.savedAt=seconds;return;}this.target={t:seconds,until:Date.now()+2500};this.player.seekTo(seconds,true);if(play)this.player.playVideo();this.tick(true);}
+  // seekTo from an unstarted/cued video starts playback. Saving a note must
+  // instead cue the scene, which loads only a preview until the user plays.
+  prepareScene(seconds){
+    if(!Number.isFinite(seconds)||this.disposed)return;
+    this.preparedTime=seconds;this.savedAt=seconds;this.target=null;
+    if(!this.ready||!this.player?.cueVideoById){this.pendingSeek={seconds,play:false,prepare:true};return;}
+    this.player.cueVideoById({videoId:this.youtube.videoId,startSeconds:seconds});this.tick(true);
+  }
+  seek(seconds,play=false){if(!Number.isFinite(seconds)||this.disposed)return;this.preparedTime=null;seconds=Math.max(0,seconds);if(!this.ready||!this.player?.seekTo){this.pendingSeek={seconds,play};this.savedAt=seconds;return;}this.target={t:seconds,until:Date.now()+2500};this.player.seekTo(seconds,true);if(play)this.player.playVideo();this.tick(true);}
   seekBy(delta){this.seek(this.time()+delta);}
   setSiblings(prev,next){this.$('prev').hidden=!prev;this.$('next').hidden=!next;this.$('prev').title=prev?'이전 영상: '+prev:'';this.$('next').title=next?'다음 영상: '+next:'';}
   tick(force=false){

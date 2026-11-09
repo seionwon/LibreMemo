@@ -58,6 +58,14 @@ test('current scene capture pauses and freezes the exact time even while the pla
   pane.ready=true;pane.pendingSeek=null;pane.player={getCurrentTime:()=>33.9,pauseVideo:()=>calls.push('pause')};pane.addSceneNote();assert.equal(calls.at(-1)[0],33);
 });
 
+test('saving a scene cues it without seekTo autoplay, and retains its time until play',()=>{
+  const calls=[],pane=Object.create(YouTubePane.prototype);Object.assign(pane,{youtube:{videoId:id},ready:false,tick(){}});
+  pane.prepareScene(83);assert.deepEqual(pane.pendingSeek,{seconds:83,play:false,prepare:true});assert.equal(pane.time(),83);
+  pane.ready=true;pane.pendingSeek=null;pane.player={cueVideoById:args=>calls.push(['cue',args]),seekTo:t=>calls.push(['seek',t]),playVideo:()=>calls.push(['play']),getCurrentTime:()=>0};
+  pane.prepareScene(83);assert.deepEqual(calls,[['cue',{videoId:id,startSeconds:83}]]);assert.equal(pane.time(),83,'a cued player reporting 0 does not lose the chosen time');
+  pane.seek(83,true);assert.deepEqual(calls.slice(1),[['seek',83],['play']]);assert.equal(pane.preparedTime,null);
+});
+
 test('scene notes do not enter caption text indexes or produce spatial annotation errors',()=>{
   const parsed=parseHTML(youtubeDocumentHTML('시점')),doc=new DOMParser().parseFromString(parsed.html,'text/html'),before=textIndex(doc).text;
   const pane=Object.create(YouTubePane.prototype);Object.assign(pane,{reader:{doc,metadata:{annotations:[makeVideoNote(id,83,'시점 메모')]},measure(){}},callbacks:{}});
