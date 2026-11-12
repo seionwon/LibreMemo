@@ -10,7 +10,7 @@ import {OFFICE_MIMES,OFFICE_FORMATS} from './office-formats.js';
 import {IMAGE_MIMES,IMAGE_EXTENSIONS,pastedImages,clipboardImageFile,isImagePasteTarget} from './image-formats.js';
 import {canSleep,cancelTabSleep,scheduleTabSleep} from './tab-sleep.js';
 import {AI_TEXT_LIMIT,aiSearchRequest,aiSearchURL} from './ai-search.js';
-import { listDocuments, getDocument, getDocumentPreview, trashDocument, restoreDocument, deleteDocument, deleteTrashedDocuments, getSetting, setSetting, saveDocumentHTML, listRevisionPeriods, listRevisionDay, adjacentRevisionDay, getRevision, putDocumentRevision, checkpointAnnotations, putDocumentView, replaceDocumentBody, putDocumentSourceIdentity, writeExternalHTML, updateLibraryFolders, onStorageChange, readLibrary } from './storage.js';
+import { listDocuments, getDocument, getDocumentPreview, trashDocument, restoreDocument, deleteDocument, deleteTrashedDocuments, getSetting, setSetting, saveDocumentHTML, listRevisionPeriods, listRevisionDay, adjacentRevisionDay, getRevision, putDocumentRevision, checkpointAnnotations, putDocumentView, putDocumentStar, replaceDocumentBody, putDocumentSourceIdentity, writeExternalHTML, updateLibraryFolders, onStorageChange, readLibrary } from './storage.js';
 import {CardPreviewQueue,cardPreviewKey,savedCardPicture} from './card-previews.js';
 import {readWebPage,pastedPage,PASTE_LIMIT,isWebSearch,BrowserTabs} from './web.js';
 import { readLocalHTML, droppedHTMLFiles, findLocalDuplicates, identifyLocalFile, htmlExportName } from './local-files.js';
@@ -22,7 +22,7 @@ import {UpdateController} from './updates.js';
 import { openDeviceSync } from './sync-ui.js';
 import {openHelp} from './help.js';
 import { DataFolder, supportsDataFolder, CHROME_REQUIRED_MESSAGE, createStorageSubfolder, storageFolderName } from './data-folder.js';
-import {validateFolders,folderPath,folderDescendants,editLibraryFolders,LibraryIndex} from './library-folders.js';
+import {validateFolders,folderPath,folderDescendants,editLibraryFolders,nextStarredAt,LibraryIndex} from './library-folders.js';
 import {TEXT_STYLE_PRESETS,TEXT_SIZE_MIN,TEXT_SIZE_MAX,validTextStyle,stylePreview} from './text-style.js';
 import {parseYouTubeInput,parseChapters,cueTimes,clock,youtubeDocumentHTML,subtitleFormat,decodeSubtitle,matchSubtitleFiles,subtitlesFromZip,playlistFolderName,watchURL,SUBTITLE_EXTENSION,guideHTML,validateYouTube} from './youtube.js';
 import {isVideoNote,makeVideoNote,matchingVideoRecords,findVideoNote} from './youtube-notes.js';
@@ -324,7 +324,11 @@ function renderLibrary() {
   $('#empty-icon').innerHTML=icon(libraryTrash?'trash':'file');
   // A theme/tool change or a repeated input event must not rebuild identical cards.
   if(libraryGridState!==result){
-  grid.innerHTML=shownFolders.map(item=>`<article class="library-folder-card" data-library-item="folder" data-library-id="${item.id}" data-folder-target="${item.id}" draggable="true"><button class="library-folder-open" data-library-folder="${item.id}" title="${esc(libraryPathLabel(item.id))}">${icon('folder',22)}<span><strong>${esc(item.name)}</strong><small>${folderDocumentCount(item.id)}개 문서 · ${libraryFolderChildren.get(item.id)?.length||0}개 하위 폴더</small></span></button><button class="icon-button card-menu" data-folder-menu="${item.id}" aria-label="${esc(item.name)} 폴더 메뉴">${icon('more',17)}</button></article>`).join('')+shown.map(record=>{
+  const renderFolderCard=item=>{
+    const name=esc(item.name),starred=!!item.starredAt,starLabel=starred?'별표 해제':'별표 추가';
+    return `<article class="library-folder-card${starred?' is-starred':''}" data-library-item="folder" data-library-id="${item.id}" data-folder-target="${item.id}" draggable="true"><button class="library-folder-open" data-library-folder="${item.id}" title="${esc(libraryPathLabel(item.id))}">${icon('folder',22)}<span><strong>${name}</strong><small>${folderDocumentCount(item.id)}개 문서 · ${libraryFolderChildren.get(item.id)?.length||0}개 하위 폴더</small></span></button><button class="icon-button card-star${starred?' active':''}" type="button" data-folder-star="${item.id}" aria-pressed="${starred}" aria-label="${name} 폴더 ${starLabel}" title="${starLabel}">${icon(starred?'star-filled':'star',15)}</button><button class="icon-button card-menu" data-folder-menu="${item.id}" aria-label="${name} 폴더 메뉴">${icon('more',17)}</button></article>`;
+  };
+  const renderDocumentCard=record=>{
     const count=record.metadata?.annotations?.length||0,bookmarkCount=record.metadata?.bookmarks?.length||0;const progress=record.metadata?.view?.scrollTop||0;
     const host=esc(displayHost(record.source)), title=esc(record.title), originalName=record.metadata?.youtube?esc(record.metadata.youtube.channel||''):typeof record.name==='string'?esc(record.name):'', size=record.byteSize?formatBytes(record.byteSize):'HTML';
     const date=formatDate(record[dateField]),dateTitle=esc(dateLabel+': '+formatDate(record[dateField],true));
@@ -332,8 +336,11 @@ function renderLibrary() {
     // Both layouts share one title/source. A decorative preview used to repeat
     // them above the details, and list mode kept a third hidden copy.
     const place=esc(libraryPathLabel(record.folderId||'')),progressLabel=libraryTrash||filter?place:progress?'이어서 읽기':'새 문서';
-    return `<article class="document-card" data-record="${record.id}" ${libraryTrash?'':`data-library-item="document" data-library-id="${record.id}"`} draggable="${!libraryTrash}"><button class="card-open" ${libraryTrash?'data-trash-menu':'data-open'}="${record.id}" ${libraryTrash?`aria-label="${title} 복원 또는 영구 삭제"`:''}>${cardThumb(record)}<div class="card-details"><span class="list-file-icon" aria-hidden="true">${icon(libraryTrash?'trash':'file',16)}</span><div class="library-title"><h3 class="list-title" title="${title}">${title}</h3>${originalName?`<span class="list-filename" title="${originalName}">${originalName}</span>`:''}</div><p class="card-source"><span class="list-host" title="${host}">${host}</span><span class="list-date" title="${dateTitle}" aria-label="${dateTitle}">${date}<span class="card-time"> ${time}</span></span></p><div class="card-meta"><span class="list-mark-counts"><span class="list-annotations" title="주석 ${count}개" aria-label="주석 ${count}개">${icon('highlight',13)} <span>${count}</span></span><span class="list-bookmarks" title="북마크 ${bookmarkCount}개" aria-label="북마크 ${bookmarkCount}개">${icon('bookmark',13)} <span>${bookmarkCount}</span></span></span><span class="list-size">${size}</span><span class="list-progress" title="${progressLabel}">${progressLabel} ${icon(libraryTrash?'undo':'forward',13)}</span></div></div></button><button class="card-menu icon-button" ${libraryTrash?'data-trash-menu':'data-card-menu'}="${record.id}" aria-label="${title} ${libraryTrash?'휴지통':'문서'} 메뉴">${icon('more',17)}</button></article>`;
-  }).join('');
+    const starred=!libraryTrash&&!!record.starredAt,starLabel=starred?'별표 해제':'별표 추가';
+    return `<article class="document-card${starred?' is-starred':''}" data-record="${record.id}" ${libraryTrash?'':`data-library-item="document" data-library-id="${record.id}"`} draggable="${!libraryTrash}"><button class="card-open" ${libraryTrash?'data-trash-menu':'data-open'}="${record.id}" ${libraryTrash?`aria-label="${title} 복원 또는 영구 삭제"`:''}>${cardThumb(record)}<div class="card-details"><span class="list-file-icon" aria-hidden="true">${icon(libraryTrash?'trash':'file',16)}</span><div class="library-title"><h3 class="list-title" title="${title}">${title}</h3>${originalName?`<span class="list-filename" title="${originalName}">${originalName}</span>`:''}</div><p class="card-source"><span class="list-host" title="${host}">${host}</span><span class="list-date" title="${dateTitle}" aria-label="${dateTitle}">${date}<span class="card-time"> ${time}</span></span></p><div class="card-meta"><span class="list-mark-counts"><span class="list-annotations" title="주석 ${count}개" aria-label="주석 ${count}개">${icon('highlight',13)} <span>${count}</span></span><span class="list-bookmarks" title="북마크 ${bookmarkCount}개" aria-label="북마크 ${bookmarkCount}개">${icon('bookmark',13)} <span>${bookmarkCount}</span></span></span><span class="list-size">${size}</span><span class="list-progress" title="${progressLabel}">${progressLabel} ${icon(libraryTrash?'undo':'forward',13)}</span></div></div></button>${libraryTrash?'':`<button class="card-star icon-button${starred?' active':''}" type="button" data-card-star="${record.id}" aria-pressed="${starred}" aria-label="${title} ${starLabel}" title="${starLabel}">${icon(starred?'star-filled':'star',15)}</button>`}<button class="card-menu icon-button" ${libraryTrash?'data-trash-menu':'data-card-menu'}="${record.id}" aria-label="${title} ${libraryTrash?'휴지통':'문서'} 메뉴">${icon('more',17)}</button></article>`;
+  };
+  const ordered=result.items||[...shownFolders.map(item=>({kind:'folder',item})),...shown.map(item=>({kind:'document',item}))];
+  grid.innerHTML=ordered.map(entry=>entry.kind==='folder'?renderFolderCard(entry.item):renderDocumentCard(entry.item)).join('');
   libraryGridState=result;
   }
   renderLibraryFolders();
@@ -404,6 +411,29 @@ async function changeLibraryFolder(change) {
   try{await dataFolder?.flush();}catch(error){showError(error);return;}
   toast(folder?'폴더와 문서 위치를 전용 폴더에 저장했습니다.':'서재에 저장했습니다. 데이터 폴더를 연결하면 폴더 구조도 함께 보관됩니다.');
 }
+let starQueue=Promise.resolve();
+function runStarChange(task){starQueue=starQueue.then(task,task);return starQueue;}
+function toggleDocumentStar(id) {
+  return runStarChange(async()=>{
+    const current=records.find(r=>r.id===id);if(!current||current.trashedAt)return;
+    const starredAt=current.starredAt?null:nextStarredAt(records,libraryFolders);
+    const saved=await putDocumentStar(id,starredAt);
+    const openTab=tabs.find(tab=>tab.record?.id===id);
+    if(openTab?.record){if(saved.starredAt)openTab.record.starredAt=saved.starredAt;else delete openTab.record.starredAt;}
+    cacheLibraryDocument(saved);
+    renderLibrary();
+    void dataFolder?.flush().catch(showError);
+  });
+}
+function toggleFolderStar(id) {
+  return runStarChange(async()=>{
+    const current=libraryFolderById.get(id);if(!current)return;
+    const starredAt=current.starredAt?null:nextStarredAt(records,libraryFolders);
+    await updateLibraryFolders((folders,documents)=>editLibraryFolders(folders,documents,{type:'star',id,starredAt}));
+    await refreshLibrary();
+    void dataFolder?.flush().catch(showError);
+  });
+}
 function libraryFolderNameDialog(item=null) {
   const parentId=libraryFolderId;
   modal(`<form id="library-folder-form"><div class="dialog-heading"><h2>${item?'폴더 이름 변경':'새 폴더'}</h2><button class="icon-button" type="button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p class="dialog-description small">위치: ${esc(libraryPathLabel(item?item.parentId:parentId))}</p><label class="paste-label" for="library-folder-name">폴더 이름</label><input id="library-folder-name" class="paste-title" maxlength="100" required value="${esc(item?.name||'')}" autocomplete="off"><p class="dialog-description small">전용 폴더 아래에 실제 하위 폴더를 만듭니다. 같은 위치의 이름은 겹칠 수 없습니다.</p><p id="library-folder-error" class="folder-form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary-button" data-dialog-close>취소</button><button id="library-folder-save" class="primary-button" type="submit">${item?'변경':'만들기'}</button></div></form>`,dialog=>{
@@ -415,9 +445,9 @@ function libraryFolderNameDialog(item=null) {
 }
 function libraryFolderMenu(id) {
   const item=libraryFolderById.get(id);if(!item)return;
-  const occupied=(libraryFolderChildren.get(id)?.length||0)||records.some(r=>r.folderId===id);
-  modal(`<div class="dialog-heading"><h2>${esc(item.name)}</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p class="dialog-description small">${esc(libraryPathLabel(id))}</p><div class="document-actions"><button id="folder-menu-open" class="menu-button">${icon('folder')} 폴더 열기</button><button id="folder-menu-rename" class="menu-button">${icon('pen')} 이름 변경</button><button id="folder-menu-move" class="menu-button">${icon('forward')} 다른 폴더로 이동</button><button id="folder-menu-delete" class="menu-button danger" ${occupied?'disabled':''} title="${occupied?'문서와 하위 폴더를 먼저 옮기세요.':'비어 있는 폴더 삭제'}">${icon('trash')} 빈 폴더 삭제</button></div><p class="dialog-description small">비어 있는 폴더만 삭제할 수 있습니다. 앱에 등록되지 않은 외부 파일은 이동·삭제하지 않습니다.</p>`,dialog=>{
-    $('#folder-menu-open').onclick=()=>{dialog.close();navigateLibraryFolder(id);};$('#folder-menu-rename').onclick=()=>libraryFolderNameDialog(item);$('#folder-menu-move').onclick=()=>libraryMoveDialog('folder',item);
+  const occupied=(libraryFolderChildren.get(id)?.length||0)||records.some(r=>r.folderId===id),starred=!!item.starredAt;
+  modal(`<div class="dialog-heading"><h2>${esc(item.name)}</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p class="dialog-description small">${esc(libraryPathLabel(id))}</p><div class="document-actions"><button id="folder-menu-open" class="menu-button">${icon('folder')} 폴더 열기</button><button id="folder-menu-star" class="menu-button${starred?' starred':''}">${icon(starred?'star-filled':'star')} ${starred?'별표 해제':'별표 추가'}</button><button id="folder-menu-rename" class="menu-button">${icon('pen')} 이름 변경</button><button id="folder-menu-move" class="menu-button">${icon('forward')} 다른 폴더로 이동</button><button id="folder-menu-delete" class="menu-button danger" ${occupied?'disabled':''} title="${occupied?'문서와 하위 폴더를 먼저 옮기세요.':'비어 있는 폴더 삭제'}">${icon('trash')} 빈 폴더 삭제</button></div><p class="dialog-description small">비어 있는 폴더만 삭제할 수 있습니다. 앱에 등록되지 않은 외부 파일은 이동·삭제하지 않습니다.</p>`,dialog=>{
+    $('#folder-menu-open').onclick=()=>{dialog.close();navigateLibraryFolder(id);};$('#folder-menu-star').onclick=safely(async()=>{dialog.close();await toggleFolderStar(id);});$('#folder-menu-rename').onclick=()=>libraryFolderNameDialog(item);$('#folder-menu-move').onclick=()=>libraryMoveDialog('folder',item);
     $('#folder-menu-delete').onclick=safely(async()=>{if(!await confirmDialog('빈 폴더를 삭제할까요?',libraryPathLabel(id)+' · 문서와 주석은 삭제하지 않습니다.','삭제'))return;await changeLibraryFolder({type:'delete',id});});
   });
 }
@@ -435,7 +465,9 @@ function libraryMoveDialog(type,item) {
 function bindLibraryFolderDrag() {
   const library=$('#library'),mime='application/x-htmlmemo-library-item';let dragged=null;
   library.addEventListener('click',safely(event=>{
-    const button=event.target.closest('[data-open],[data-card-menu],[data-trash-menu],[data-folder-menu],[data-library-folder],[data-folder-toggle]');if(!button)return;
+    const button=event.target.closest('[data-card-star],[data-folder-star],[data-open],[data-card-menu],[data-trash-menu],[data-folder-menu],[data-library-folder],[data-folder-toggle]');if(!button)return;
+    if(button.hasAttribute('data-card-star'))return toggleDocumentStar(button.dataset.cardStar);
+    if(button.hasAttribute('data-folder-star'))return toggleFolderStar(button.dataset.folderStar);
     if(button.hasAttribute('data-trash-menu'))return trashDocumentMenu(trashRecords.find(r=>r.id===button.dataset.trashMenu));
     if(button.hasAttribute('data-open'))return openRecord(records.find(r=>r.id===button.dataset.open));
     if(button.hasAttribute('data-card-menu'))return documentMenu(records.find(r=>r.id===button.dataset.cardMenu));
@@ -444,7 +476,7 @@ function bindLibraryFolderDrag() {
     const id=button.dataset.folderToggle;if(libraryCollapsed.has(id))libraryCollapsed.delete(id);else libraryCollapsed.add(id);libraryTreeVersion++;renderLibraryFolders();
   }));
   const clear=()=>$$('.folder-drop-target',library).forEach(el=>el.classList.remove('folder-drop-target'));
-  library.addEventListener('dragstart',event=>{const item=event.target.closest('[data-library-item]');if(!item)return;dragged={type:item.dataset.libraryItem,id:item.dataset.libraryId};event.dataTransfer.setData(mime,JSON.stringify(dragged));event.dataTransfer.effectAllowed='move';});
+  library.addEventListener('dragstart',event=>{if(event.target?.closest?.('.card-star,.card-menu')){event.preventDefault();return;}const item=event.target.closest('[data-library-item]');if(!item)return;dragged={type:item.dataset.libraryItem,id:item.dataset.libraryId};event.dataTransfer.setData(mime,JSON.stringify(dragged));event.dataTransfer.effectAllowed='move';});
   library.addEventListener('dragover',event=>{const target=event.target.closest('[data-folder-target]');if(!target||!dragged||![...event.dataTransfer.types].includes(mime))return;
     if(dragged.type==='folder'&&folderDescendants(libraryFolders,dragged.id).has(target.dataset.folderTarget))return;
     event.preventDefault();event.dataTransfer.dropEffect='move';clear();target.classList.add('folder-drop-target');
@@ -2308,7 +2340,9 @@ function documentMenu(record) {
     $('#menu-migrate').onclick=safely(async()=>{$('#dialog').close();await migrateEdition(await openRecord(record));});
     $('#menu-remove').onclick=safely(()=>moveLibraryDocumentToTrash(record));
   });
-  const actions=$('#dialog .document-actions'),button=document.createElement('button');button.className='menu-button';button.id='menu-folder-move';button.innerHTML=icon('folder')+' 폴더로 이동';actions.insertBefore(button,$('#menu-remove'));button.onclick=()=>libraryMoveDialog('document',record);
+  const actions=$('#dialog .document-actions'),starred=!!record.starredAt;
+  const starButton=document.createElement('button');starButton.className='menu-button'+(starred?' starred':'');starButton.id='menu-star';starButton.innerHTML=icon(starred?'star-filled':'star')+(starred?' 별표 해제':' 별표 추가');actions.insertBefore(starButton,$('#menu-export'));starButton.onclick=safely(async()=>{$('#dialog').close();await toggleDocumentStar(record.id);});
+  const button=document.createElement('button');button.className='menu-button';button.id='menu-folder-move';button.innerHTML=icon('folder')+' 폴더로 이동';actions.insertBefore(button,$('#menu-remove'));button.onclick=()=>libraryMoveDialog('document',record);
   const location=document.createElement('p');location.className='dialog-description small';location.textContent='위치: '+libraryPathLabel(record.folderId||'');actions.before(location);
 }
 function handleKey(event) {

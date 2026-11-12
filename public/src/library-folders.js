@@ -1,6 +1,13 @@
 /** The empty ID is the dedicated data folder itself; it cannot be moved or deleted. */
 export const LIBRARY_FOLDERS_KEY = 'library-folders-v1';
 const validId = value => typeof value === 'string' && /^[\w-]{1,80}$/.test(value);
+export const validStarredAt = value => Number.isFinite(value) && value > 0 && value <= 8640000000000000;
+export function nextStarredAt(records = [], folders = [], now = Date.now()) {
+  let latest = Number.isFinite(now) && now > 0 ? Math.trunc(now) : Date.now();
+  for (const item of folders) if (validStarredAt(item?.starredAt) && item.starredAt >= latest) latest = Math.trunc(item.starredAt) + 1;
+  for (const record of records) if (!record?.trashedAt && validStarredAt(record?.starredAt) && record.starredAt >= latest) latest = Math.trunc(record.starredAt) + 1;
+  return Math.min(latest, 8640000000000000);
+}
 export function folderName(value) {
   if(typeof value !== 'string')throw Error('폴더 이름을 입력해주세요.');
   if(/[\u0000-\u001f\u007f]/.test(value))throw Error('폴더 이름에 제어 문자를 사용할 수 없습니다.');
@@ -13,8 +20,8 @@ const nameKey = name => name.normalize('NFC').toLocaleLowerCase('en-US');
 export function validateFolders(value = []) {
   if(!Array.isArray(value) || value.length>10000)throw Error('서재 폴더 목록이 손상되었거나 폴더 수 한도(10,000개)를 넘었습니다.');
   const folders=value.map(item=>{
-    if(!item || !validId(item.id) || typeof item.parentId!=='string' || item.parentId && !validId(item.parentId) || folderName(item.name)!==item.name)throw Error('서재 폴더 정보가 올바르지 않습니다.');
-    return {id:item.id,parentId:item.parentId,name:item.name};
+    if(!item || !validId(item.id) || typeof item.parentId!=='string' || item.parentId && !validId(item.parentId) || folderName(item.name)!==item.name || item.starredAt!==undefined && !validStarredAt(item.starredAt))throw Error('서재 폴더 정보가 올바르지 않습니다.');
+    return {id:item.id,parentId:item.parentId,name:item.name,...(item.starredAt!==undefined?{starredAt:item.starredAt}:{})};
   });
   const ids=new Map(),siblings=new Set();
   for(const item of folders){const key=item.parentId+'\0'+nameKey(item.name);if(ids.has(item.id)||siblings.has(key))throw Error('같은 위치에 중복된 서재 폴더가 있습니다.');ids.set(item.id,item);siblings.add(key);}
@@ -61,6 +68,10 @@ export function editLibraryFolders(current,records,change) {
       requireFolder(change.parentId);if(folderDescendants(folders,change.id).has(change.parentId))throw Error('폴더를 자기 자신이나 하위 폴더로 옮길 수 없습니다.');
       folders=folders.map(f=>f.id===change.id?{...f,parentId:change.parentId}:f);
     }else if(change.type==='rename')folders=folders.map(f=>f.id===change.id?{...f,name:folderName(change.name)}:f);
+    else if(change.type==='star'){
+      if(change.starredAt!==null&&change.starredAt!==undefined&&!validStarredAt(change.starredAt))throw Error('별표 시각이 올바르지 않습니다.');
+      folders=folders.map(f=>{if(f.id!==change.id)return f;const next={...f};if(change.starredAt)next.starredAt=change.starredAt;else delete next.starredAt;return next;});
+    }
     else throw Error('지원하지 않는 폴더 작업입니다.');
   }
   return {folders:validateFolders(folders),documents:updates};
@@ -71,7 +82,7 @@ export function mergeLibraryFolders(local,incoming,newId) {
   const ids=new Set(folders.map(f=>f.id)),siblings=new Map(folders.map(f=>[f.parentId+'\0'+nameKey(f.name),f]));
   for(const item of ordered){
     const parentId=mapping.get(item.parentId),key=parentId+'\0'+nameKey(item.name),exact=siblings.get(key);
-    if(exact){mapping.set(item.id,exact.id);continue;}
+    if(exact){if(item.starredAt&&(!exact.starredAt||item.starredAt>exact.starredAt))exact.starredAt=item.starredAt;mapping.set(item.id,exact.id);continue;}
     const id=ids.has(item.id)?newId():item.id;
     if(!validId(id)||ids.has(id))throw Error('새 폴더 ID가 올바르지 않습니다.');
     const added={...item,id,parentId};folders.push(added);ids.add(id);siblings.set(key,added);mapping.set(item.id,id);
@@ -79,13 +90,15 @@ export function mergeLibraryFolders(local,incoming,newId) {
   return {folders:validateFolders(folders),mapping};
 }
 const libraryCollator=new Intl.Collator('ko');
+const starRank=item=>validStarredAt(item?.starredAt)?item.starredAt:0;
+const compareFolders=(a,b)=>(starRank(b)-starRank(a))||libraryCollator.compare(a.name,b.name)||a.id.localeCompare(b.id);
 /** Metadata only: no document bodies, persistent text index or unbounded query cache. */
 export class LibraryIndex {
   update(records,folders,root='전용 폴더') {
     if(this.records===records&&this.folders===folders&&this.root===root)return false;
     this.records=records;this.folders=folders;this.root=root;
     Object.assign(this,indexFolders(folders));
-    for(const children of this.children.values())children.sort((a,b)=>libraryCollator.compare(a.name,b.name));
+    for(const children of this.children.values())children.sort(compareFolders);
     this.paths=new Map([['',root]]);this.counts=new Map([['',records.length]]);this.documents=new Map();this.searchText=new Map();this.queries=new Map();
     for(const record of records){
       const parent=this.byId.has(record.folderId)?record.folderId:'';
@@ -107,9 +120,24 @@ export class LibraryIndex {
       return this.searchText.get(record).includes(filter);
     }):allFolders?[...this.records]:[...(this.documents.get(folderId)||[])];
     const order=direction==='asc'?1:-1;
-    documents.sort((a,b)=>order*(sort==='title'?libraryCollator.compare(a.title,b.title):a[sort]-b[sort]));
-    const folders=allFolders?[]:filter?this.folders.filter(f=>this.label(f.id).toLocaleLowerCase().includes(filter)).sort((a,b)=>libraryCollator.compare(a.name,b.name)):(this.children.get(folderId)||[]);
-    const result={documents,folders};this.queries.set(key,result);while(this.queries.size>8)this.queries.delete(this.queries.keys().next().value);return result;
+    const compareDocs=(a,b)=>order*(sort==='title'?libraryCollator.compare(a.title,b.title):a[sort]-b[sort]);
+    documents.sort(allFolders?compareDocs:(a,b)=>(starRank(b)-starRank(a))||compareDocs(a,b));
+    const folders=allFolders?[]:filter?this.folders.filter(f=>this.label(f.id).toLocaleLowerCase().includes(filter)).sort(compareFolders):(this.children.get(folderId)||[]);
+    const items=[];
+    if(allFolders){
+      for(const item of documents)items.push({kind:'document',item});
+    }else{
+      let fi=0,di=0;
+      while(fi<folders.length&&starRank(folders[fi])&&di<documents.length&&starRank(documents[di])){
+        if(starRank(folders[fi])>=starRank(documents[di]))items.push({kind:'folder',item:folders[fi++]});
+        else items.push({kind:'document',item:documents[di++]});
+      }
+      while(fi<folders.length&&starRank(folders[fi]))items.push({kind:'folder',item:folders[fi++]});
+      while(di<documents.length&&starRank(documents[di]))items.push({kind:'document',item:documents[di++]});
+      while(fi<folders.length)items.push({kind:'folder',item:folders[fi++]});
+      while(di<documents.length)items.push({kind:'document',item:documents[di++]});
+    }
+    const result={documents,folders,items};this.queries.set(key,result);while(this.queries.size>8)this.queries.delete(this.queries.keys().next().value);return result;
   }
 }
 /** IDs prevent identically named imports from overwriting each other or external files. */

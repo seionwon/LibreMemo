@@ -70,6 +70,8 @@ const paths = {
   grip: '<path d="M8 6h.01M16 6h.01M8 12h.01M16 12h.01M8 18h.01M16 18h.01" stroke-width="3"/>',
   download: '<path d="M12 3v12m-5-5 5 5 5-5M3 16v5h18v-5"/>',
   bookmark: '<path d="M6 3h12v18l-6-4-6 4z"/>',
+  star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/>',
+  'star-filled': '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z" fill="currentColor"/>',
   play: '<path d="M7 4v16l13-8z"/>', pause: '<path d="M7 4v16M17 4v16" stroke-width="3"/>',
   subtitles: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 12h4M12 12h6M6 16h8M16 16h2"/>',
   youtube: '<rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3z" fill="currentColor"/>', print: '<path d="M6 8V3h12v5M6 17H3V8h18v9h-3M6 14h12v7H6z"/>',

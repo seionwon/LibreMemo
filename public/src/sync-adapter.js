@@ -11,7 +11,7 @@ const idOK=id=>typeof id==='string'&&/^[\w-]{1,80}$/.test(id);
 const syncEligible=record=>!record.trashedAt;
 const sizeError=()=>Error('중계 서비스의 전송 용량을 넘습니다. 두 기기의 앱을 최신 버전으로 열고, 문서를 나누어 동기화해주세요.');
 const b64=bytes=>{let text='';for(let i=0;i<bytes.length;i+=32768)text+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(text);};
-const fingerprint=async record=>{const text=JSON.stringify({title:record.title,name:record.name,sourceIdentity:record.sourceIdentity,metadata:record.metadata,trashedAt:record.trashedAt});return [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))].map(n=>n.toString(16).padStart(2,'0')).join('');};
+const fingerprint=async record=>{const text=JSON.stringify({title:record.title,name:record.name,sourceIdentity:record.sourceIdentity,metadata:record.metadata,trashedAt:record.trashedAt,...(record.starredAt?{starredAt:record.starredAt}:{})});return [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))].map(n=>n.toString(16).padStart(2,'0')).join('');};
 async function pack(blob){if(blob.size>800000)throw sizeError();return {mime:blob.type,bytes:b64(new Uint8Array(await blob.arrayBuffer())),identity:await localFileIdentity(blob)};}
 async function unpack(body){
   if(!body||typeof body.bytes!=='string'||body.bytes.length>DEVICE_SYNC_LIMIT||!/^[A-Za-z0-9+/]*={0,2}$/.test(body.bytes))throw Error('받은 원본 파일이 손상되었습니다.');
@@ -288,7 +288,9 @@ export class DeviceSyncAdapter {
         if(resolution==='skip'){mirrored.push(previous.id);continue;}
         const marks=resolution==='merge'?mergeMarks(previous,value.record):markState(resolution==='local'?previous:value.record);
         const nextMeta={...previous.metadata,...marks};if(!marks.outlineEdits?.length)delete nextMeta.outlineEdits;
+        const starredAt=resolution==='remote'?value.record.starredAt:resolution==='merge'?(Math.max(previous.starredAt||0,value.record.starredAt||0)||undefined):previous.starredAt;
         const record={...portableRecord(previous),modified:Date.now(),metadata:nextMeta,syncSourceId:value.record.id,syncFingerprint:value.fingerprint};
+        if(starredAt)record.starredAt=starredAt;else delete record.starredAt;
         validateState({record,revisions:[]},record.id);
         if(!sameMarks(previous,record)){
           const history=await this.ops.listRevisions(previous.id),key=revision=>{const {id,documentId,...state}=revision;return stableJSON(state);},known=new Set(history.map(key));

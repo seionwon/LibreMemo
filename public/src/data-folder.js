@@ -75,7 +75,7 @@ export function applyFolderSettings(storage, settings) {
 }
 export function portableRecord(record) {
   const result={};
-  for(const key of ['id','title','name','source','created','modified','metadata','nativeScroll','byteSize','sourceIdentity','folderId','trashedAt','syncSourceId','syncFingerprint','bodyVersion'])if(record[key]!==undefined)result[key]=record[key];
+  for(const key of ['id','title','name','source','created','modified','metadata','nativeScroll','byteSize','sourceIdentity','folderId','trashedAt','starredAt','syncSourceId','syncFingerprint','bodyVersion'])if(record[key]!==undefined)result[key]=record[key];
   return result;
 }
 export function validateState(value, id) {
@@ -92,6 +92,7 @@ export function validateState(value, id) {
   validateMarks(record.metadata);
   if(record.folderId!==undefined&&record.folderId!==''&&!validId(record.folderId))throw Error('문서의 서재 폴더 위치가 손상되었습니다.');
   if(record.trashedAt!==undefined&&(!Number.isFinite(record.trashedAt)||record.trashedAt<=0||record.trashedAt>8640000000000000))throw Error('문서의 휴지통 삭제일이 손상되었습니다.');
+  if(record.starredAt!==undefined&&(!Number.isFinite(record.starredAt)||record.starredAt<=0||record.starredAt>8640000000000000))throw Error('문서의 별표 시각이 손상되었습니다.');
   for(const revision of value.revisions){if(!object(revision)||!Number.isFinite(revision.created))throw Error('폴더의 주석 이력이 손상되었습니다.');validateMarks(revision);}
   return {record:portableRecord(record),revisions:value.revisions.map(({id:oldId,documentId,...revision})=>revision)};
 }
@@ -292,7 +293,7 @@ export class DataFolder {
     const manifest={format:FORMAT,version:2,id:base?.manifest.id||uid(),revision:uid(),savedAt:new Date().toISOString(),settings,folders,documents};
     // Check every referenced file exists, without rereading large immutable sources on edits.
     for(const ref of new Map(references(manifest).map(ref=>[ref.name,ref])).values())if(!checked.has(ref.name))await objectFile(data,ref);
-    const treeShape=head=>JSON.stringify({folders:head?.folders||[],documents:(head?.documents||[]).map(e=>({id:e.id,copy:e.copy,original:e.original||e.source}))});
+    const treeShape=head=>JSON.stringify({folders:(head?.folders||[]).map(f=>({id:f.id,parentId:f.parentId,name:f.name})),documents:(head?.documents||[]).map(e=>({id:e.id,copy:e.copy,original:e.original||e.source}))});
     if(checkAll||treeShape(manifest)!==treeShape(base?.manifest))await syncFolderTree(this.handle,manifest,base?.manifest,{readOriginal:ref=>objectFile(data,ref),write:atomicWrite});
     if(!recovered&&base&&JSON.stringify({settings:base.manifest.settings,folders:base.manifest.folders,documents:base.manifest.documents})===JSON.stringify({settings,folders,documents})){
       this.head=base;await this.ops.setSetting(CHECKPOINT,{id:base.manifest.id,revision:base.manifest.revision});return;

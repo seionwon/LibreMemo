@@ -245,6 +245,47 @@ test('library trash keeps ordinary counts separate, shows original filenames and
   const filter=doc.querySelector('#library-filter');filter.value='원본';filter.oninput();assert.equal(doc.querySelectorAll('.document-card').length,1);filter.value='없는검색어';filter.oninput();assert.equal(doc.querySelectorAll('.document-card').length,0);
   doc.querySelector('#library-folder-up').onclick();assert.equal(doc.querySelector('#library-trash').getAttribute('aria-pressed'),'false');assert.equal(doc.querySelector('[data-open]').dataset.open,'active');assert.equal(doc.querySelector('#library-folder-tree').hidden,false);assert.deepEqual(trashed,before);
 });
+test('library star buttons toggle per folder, keep most recently starred items at the very top, and stay out of trash',async()=>{
+  const folders=[{id:'books',parentId:'',name:'책'},{id:'archive',parentId:'',name:'보관'}];
+  const docs=[
+    {id:'root-a',title:'루트 문서 A',name:'a.html',folderId:'',created:100,modified:300,metadata:{annotations:[]}},
+    {id:'root-b',title:'루트 문서 B',name:'b.html',folderId:'',created:100,modified:200,metadata:{annotations:[]}},
+    {id:'book-a',title:'책 안 문서 A',name:'ba.html',folderId:'books',created:100,modified:500,metadata:{annotations:[]}},
+    {id:'book-b',title:'책 안 문서 B',name:'bb.html',folderId:'books',created:100,modified:400,metadata:{annotations:[]}},
+    {id:'trashed',title:'삭제된 문서',name:'tr.html',folderId:'',trashedAt:900,metadata:{annotations:[]}},
+  ];
+  const {doc}=await fileApp({documents:docs,settings:[['library-folders-v1',folders]]});
+  const gridOrder=()=>[...doc.querySelectorAll('#document-grid>[data-library-id]')].map(el=>el.dataset.libraryItem+':'+el.dataset.libraryId);
+  assert.deepEqual(gridOrder(),['folder:archive','folder:books','document:root-a','document:root-b']);
+  doc.querySelector('[data-card-star="root-b"]').click();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(doc.querySelector('[data-card-star="root-b"]').getAttribute('aria-pressed'),'true');
+  assert.deepEqual(gridOrder(),['document:root-b','folder:archive','folder:books','document:root-a']);
+  doc.querySelector('[data-folder-star="books"]').click();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(doc.querySelector('[data-folder-star="books"]').getAttribute('aria-pressed'),'true');
+  assert.deepEqual(gridOrder(),['folder:books','document:root-b','folder:archive','document:root-a']);
+  doc.querySelector('[data-card-star="root-a"]').click();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(gridOrder(),['document:root-a','folder:books','document:root-b','folder:archive']);
+  // Open 'books' folder: per-folder star scope only shows 'books' items, initially unstarred.
+  doc.querySelector('#document-grid [data-library-folder="books"]').click();
+  assert.deepEqual(gridOrder(),['document:book-a','document:book-b']);
+  doc.querySelector('[data-card-star="book-b"]').click();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(gridOrder(),['document:book-b','document:book-a']);
+  // Unstar book-b restores normal sort order inside 'books'.
+  doc.querySelector('[data-card-star="book-b"]').click();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(doc.querySelector('[data-card-star="book-b"]').getAttribute('aria-pressed'),'false');
+  assert.deepEqual(gridOrder(),['document:book-a','document:book-b']);
+  // Return to root: root star order is untouched.
+  doc.querySelector('#library-folder-up').onclick();
+  assert.deepEqual(gridOrder(),['document:root-a','folder:books','document:root-b','folder:archive']);
+  // Trash has no star toggle buttons.
+  doc.querySelector('#library-trash').onclick();
+  assert.equal(doc.querySelectorAll('[data-card-star],[data-folder-star]').length,0);
+});
 test('empty trash offers no example or destructive action and keeps HTML import available',async()=>{
   const {doc}=await fileApp();doc.querySelector('#library-trash').onclick();assert.equal(doc.querySelector('#empty-library h3').textContent,'휴지통이 비어 있습니다.');assert.equal(doc.querySelector('#open-example').hidden,true);assert.equal(doc.querySelector('#library-empty-trash').disabled,true);assert.equal(doc.querySelector('#hero-import').hidden,false);assert.equal(doc.querySelector('#document-count').textContent,'0');
   doc.querySelector('#library-trash').onclick();assert.equal(doc.querySelector('#library-empty-trash').hidden,true);assert.equal(doc.querySelector('#empty-library h3').textContent,'첫 문서를 보관해보세요.');

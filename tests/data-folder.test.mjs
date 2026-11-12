@@ -209,3 +209,15 @@ test('PDF originals, page anchored notes and bookmarks survive folder backup and
   const receiver=library([]);await manager(t,receiver).connect(disk);const restored=receiver.records.get(record.id);assert.equal(restored.metadata.format,'pdf');assert.deepEqual(restored.metadata.view.pdfPosition,{page:2,y:.25});assert.deepEqual(new Uint8Array(await receiver.contents.get(record.id).file.arrayBuffer()),new Uint8Array(await raw.arrayBuffer()));
   const before=head.documents[0].source;record.metadata.annotations[0].text='Edited annotation only';lib.records.set(record.id,record);const backup=manager(t,lib);await backup.connect(disk);const next=await manifest(disk);assert.deepEqual(next.documents[0].source,before);
 });
+test('starred documents and folders persist to the connected data folder and restore without rewriting sources',async t=>{
+  const lib=library(),disk=memoryFolder();
+  const starredTree=editLibraryFolders(hierarchy(),[],{type:'star',id:'books',starredAt:7777}).folders;
+  lib.settings.set(LIBRARY_FOLDERS_KEY,starredTree);
+  lib.records.get('doc').starredAt=8888;
+  const backup=manager(t,lib);await backup.connect(disk);
+  const head=await manifest(disk);
+  assert.equal(head.folders.find(f=>f.id==='books').starredAt,7777);
+  const receiver=library([]);await manager(t,receiver).connect(disk);
+  assert.equal(receiver.records.get('doc').starredAt,8888);
+  assert.equal(receiver.settings.get(LIBRARY_FOLDERS_KEY).find(f=>f.id==='books').starredAt,7777);
+});

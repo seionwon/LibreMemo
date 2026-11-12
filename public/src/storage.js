@@ -120,9 +120,32 @@ export async function updateLibraryFolders(edit) {
   return new Promise((resolve,reject)=>{
     const tx=connection.transaction(['settings','documents'],'readwrite'),settings=tx.objectStore('settings'),documents=tx.objectStore('documents');
     const tree=settings.get('library-folders-v1'),rows=documents.getAll();let result,failure,ready=0;
-    const apply=()=>{if(++ready!==2)return;try{result=edit(tree.result||[],rows.result);settings.put(result.folders,'library-folders-v1');for(const record of result.documents)documents.put(record);}catch(error){failure=error;tx.abort();}};
+    const apply=()=>{if(++ready!==2)return;try{result=edit(tree.result||[],rows.result);settings.put(result.folders,'library-folders-v1');for(const record of result.documents)documents.put(record);}catch(error){failure=error;tx.abort?.();}};
     tree.onsuccess=apply;rows.onsuccess=apply;
-    tx.oncomplete=()=>{changed(null);resolve(result);};tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(failure||tx.error||new Error('서재 폴더 변경을 저장하지 못했습니다. 기존 폴더와 문서는 유지됩니다.'));
+    if(Object.prototype.hasOwnProperty.call(tree,'result'))apply();
+    if(Object.prototype.hasOwnProperty.call(rows,'result'))apply();
+    tx.oncomplete=()=>{if(failure)reject(failure);else{changed(null);resolve(result);}};tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(failure||tx.error||new Error('서재 폴더 변경을 저장하지 못했습니다. 기존 폴더와 문서는 유지됩니다.'));
+  });
+}
+const validStarredAt = value => Number.isFinite(value) && value > 0 && value <= 8640000000000000;
+/** Star toggles update only the document header, leaving modification dates and history untouched. */
+export async function putDocumentStar(id, starredAt) {
+  if(starredAt!==null&&starredAt!==undefined&&!validStarredAt(starredAt))throw Error('별표 시각이 올바르지 않습니다.');
+  const connection=await db();
+  return new Promise((resolve,reject)=>{
+    const tx=connection.transaction('documents','readwrite'),store=tx.objectStore('documents');
+    const request=store.get(id);let saved,failure,applied=false;
+    const apply=()=>{if(applied)return;applied=true;try{
+      saved=request.result;
+      if(!saved)throw new Error('별표를 변경할 문서를 찾지 못했습니다.');
+      if(starredAt)saved.starredAt=starredAt;else delete saved.starredAt;
+      store.put(saved);
+    }catch(error){failure=error;tx.abort?.();}};
+    request.onsuccess=apply;
+    if(Object.prototype.hasOwnProperty.call(request,'result'))apply();
+    tx.oncomplete=()=>{if(failure)reject(failure);else{changed(id);resolve(saved);}};
+    tx.onerror=()=>reject(tx.error);
+    tx.onabort=()=>reject(failure||tx.error||new Error('별표 상태를 저장하지 못했습니다.'));
   });
 }
 /** Cache a proven legacy source identity without reading/writing its body or history. */
@@ -369,6 +392,8 @@ export async function putDocumentRevision(record, {baseline = false, restoredFro
         if(old)value.folderId=old.folderId||'';
         else if(value.folderId&&(!Array.isArray(folders.result)||!folders.result.some(f=>f.id===value.folderId)))value.folderId='';
         if(old?.trashedAt)value.trashedAt=old.trashedAt;else delete value.trashedAt;
+        if(old){if(old.starredAt)value.starredAt=old.starredAt;else delete value.starredAt;}
+        else if(!validStarredAt(value.starredAt))delete value.starredAt;
         value.historyVersion=Number.isSafeInteger(old?.historyVersion)?old.historyVersion:0;
         let previousState=last?.value;
         const add=(metadata,kind)=>{addRevision(tx,{documentId:record.id,created:Date.now(),kind,restoredFrom:kind==='restore'?restoredFrom:null,...annotationState(metadata)});previousState=metadata;value.historyVersion++;};
@@ -431,7 +456,7 @@ export async function restoreFolderDocuments(entries, folders = null, expectedFo
 /** Optimistic, atomic device import. Incoming entries are validated before opening the transaction.
  * No file handle, root folder name or filesystem permission can enter this path.
  */
-export const syncRecordSnapshot = record => record ? JSON.stringify({id:record.id,title:record.title,name:record.name,modified:record.modified,metadata:record.metadata,folderId:record.folderId||'',trashedAt:record.trashedAt,historyVersion:record.historyVersion,sourceIdentity:record.sourceIdentity,syncEpoch:record.syncEpoch,contentKey:record.contentKey}) : null;
+export const syncRecordSnapshot = record => record ? JSON.stringify({id:record.id,title:record.title,name:record.name,modified:record.modified,metadata:record.metadata,folderId:record.folderId||'',trashedAt:record.trashedAt,starredAt:record.starredAt,historyVersion:record.historyVersion,sourceIdentity:record.sourceIdentity,syncEpoch:record.syncEpoch,contentKey:record.contentKey}) : null;
 export async function commitDeviceSync(entries, folders, expectedFolders) {
   const foldersChanged=JSON.stringify(folders)!==JSON.stringify(expectedFolders);
   if(!entries.length&&!foldersChanged)return;
@@ -473,5 +498,6 @@ export async function saveDocumentHTML(record, html, operations = {}) {
   if(saved?.byteSize)record.byteSize=saved.byteSize;
   if(saved?.folderId!==undefined)record.folderId=saved.folderId;
   if(saved?.trashedAt)record.trashedAt=saved.trashedAt;else delete record.trashedAt;
+  if(saved?.starredAt)record.starredAt=saved.starredAt;else delete record.starredAt;
   return record;
 }

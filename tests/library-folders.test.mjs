@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
-import {validateFolders,folderName,folderPath,folderDescendants,editLibraryFolders,mergeLibraryFolders,documentCopyName,LIBRARY_FOLDERS_KEY,LibraryIndex} from '../public/src/library-folders.js';
+import {validateFolders,folderName,folderPath,folderDescendants,editLibraryFolders,mergeLibraryFolders,documentCopyName,nextStarredAt,LIBRARY_FOLDERS_KEY,LibraryIndex} from '../public/src/library-folders.js';
 
 const tree=()=>[{id:'books',parentId:'',name:'책'},{id:'study',parentId:'books',name:'공부'},{id:'archive',parentId:'',name:'보관'}];
 test('library folders form a rooted, ordered path and include descendants without reading documents',()=>{
@@ -79,4 +79,41 @@ test('folder restoration rejects a concurrently changed local hierarchy instead 
 });
 test('library reads use one readonly transaction and return only document headers and the tree',async()=>{
   const f=storageFixture(),snapshot=await f.api.readLibrary();assert.deepEqual(snapshot.folders,tree());assert.deepEqual(snapshot.documents,[f.record]);assert.deepEqual(f.transactions,[['settings','documents']]);assert.deepEqual(f.writes,[]);
+});
+test('starred items appear at the top of each folder in most-recently-starred order while trash ignores stars',()=>{
+  let folders=editLibraryFolders(tree(),[],{type:'star',id:'archive',starredAt:2000}).folders;
+  assert.equal(folders.find(f=>f.id==='archive').starredAt,2000);
+  const unstarred=editLibraryFolders(folders,[],{type:'star',id:'archive',starredAt:null}).folders;
+  assert.equal('starredAt' in unstarred.find(f=>f.id==='archive'),false);
+  assert.throws(()=>validateFolders([{id:'bad',parentId:'',name:'잘못됨',starredAt:-5}]),/올바르지/);
+  const merged=mergeLibraryFolders([{id:'books',parentId:'',name:'책',starredAt:100}],[{id:'remote',parentId:'',name:'책',starredAt:500}],()=> 'x');
+  assert.equal(merged.folders[0].starredAt,500);
+  const t1=nextStarredAt([],folders,3000),t2=nextStarredAt([{id:'r1',starredAt:t1}],folders,3000);
+  assert.equal(t1,3000);assert.equal(t2,3001);
+  const records=[
+    {id:'root-old',folderId:'',title:'루트 문서 1',name:'1.html',modified:900,starredAt:1000},
+    {id:'root-unstarred',folderId:'',title:'루트 일반 문서',name:'2.html',modified:9999},
+    {id:'root-newest',folderId:'',title:'루트 문서 2',name:'3.html',modified:100,starredAt:3000},
+    {id:'books-unstarred',folderId:'books',title:'책 일반 문서',name:'4.html',modified:8000},
+    {id:'books-starred-1',folderId:'books',title:'책 별표 1',name:'5.html',modified:500,starredAt:4000},
+    {id:'books-starred-2',folderId:'books',title:'책 별표 2',name:'6.html',modified:400,starredAt:5000},
+  ];
+  const index=new LibraryIndex();index.update(records,folders);
+  const rootView=index.select({folderId:'',sort:'modified',direction:'desc'});
+  assert.deepEqual(rootView.items.map(e=>e.kind+':'+e.item.id),['document:root-newest','folder:archive','document:root-old','folder:books','document:root-unstarred']);
+  const booksView=index.select({folderId:'books',sort:'modified',direction:'desc'});
+  assert.deepEqual(booksView.items.map(e=>e.kind+':'+e.item.id),['document:books-starred-2','document:books-starred-1','folder:study','document:books-unstarred']);
+  const trash=new LibraryIndex();trash.update([{id:'t1',trashedAt:100,starredAt:9999},{id:'t2',trashedAt:500}],folders);
+  assert.deepEqual(trash.select({allFolders:true,sort:'trashedAt',direction:'desc'}).items.map(e=>e.item.id),['t2','t1']);
+});
+test('document star toggles keep modification dates and history intact and survive stale open-tab autosaves',async()=>{
+  const f=storageFixture(),stale=structuredClone(f.record);
+  const starred=await f.api.putDocumentStar('book',4321);
+  assert.equal(starred.starredAt,4321);assert.equal(f.record.starredAt,4321);assert.equal(f.record.modified,123);
+  assert.ok(!f.writes.includes('contents'));assert.ok(!f.writes.includes('revisions'));
+  stale.metadata.annotations.push({id:'from-tab'});
+  await f.api.saveDocumentHTML(stale,undefined,{revision:{checkpoint:false}});
+  assert.equal(f.record.starredAt,4321);assert.equal(stale.starredAt,4321);
+  await f.api.putDocumentStar('book',null);
+  assert.equal('starredAt' in f.record,false);
 });
