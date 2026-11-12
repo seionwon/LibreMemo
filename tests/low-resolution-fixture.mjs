@@ -35,7 +35,7 @@ export async function auditLowResolution(w=window,onProgress=()=>{}) {
   await click('#library-trash');await inspect('trash','#library');await click('#library-trash');
   await settings();await inspect('settings','#dialog');
   $('.settings-backup').open=true;await inspect('settings-backup','#dialog');
-  for(const [s,name] of [['#settings-folder','data-folder'],['#settings-about','about']]){await settings();await click(s);await inspect(name,'#dialog');await close();}
+  for(const [s,name] of [['#settings-design-theme','design-theme'],['#settings-folder','data-folder'],['#settings-about','about']]){await settings();await click(s);await inspect(name,'#dialog');if(name==='design-theme'){$('#theme-customizer').open=true;await inspect('design-theme-customizer','#dialog');}await close();}
   await settings();await click('#settings-sync');await inspect('sync-host','#dialog');await click('#sync-join-tab');await inspect('sync-join','#dialog');await close();
   await settings();await click('#settings-help');await inspect('help','#dialog');
   const pane=$('#help-content');if(pane.clientHeight<60)issue('help','reading pane too short: '+pane.clientHeight);

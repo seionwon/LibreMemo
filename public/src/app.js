@@ -15,18 +15,19 @@ import {CardPreviewQueue,cardPreviewKey,savedCardPicture} from './card-previews.
 import {readWebPage,pastedPage,PASTE_LIMIT,isWebSearch,BrowserTabs} from './web.js';
 import { readLocalHTML, droppedHTMLFiles, findLocalDuplicates, identifyLocalFile, htmlExportName } from './local-files.js';
 import { normalizePreferences, loadPreferences, storePreferences, serializeSettings, readSettingsFile, PRESET_COLORS, PRESET_PALETTES, normalizeHexColor, hexToRgb, rgbToHex, hexToHsv, hsvToHex } from './preferences.js';
-import {bundledExample} from './distribution.js';
+import {bundledExample,bundledFontBytes} from './distribution.js';
 import { InstallController, isIOS, installableLocation, installationURL, publicAppURL } from './install.js';
 import { APP_VERSION } from './version.js';
 import {UpdateController} from './updates.js';
 import { openDeviceSync } from './sync-ui.js';
 import {openHelp} from './help.js';
-import { DataFolder, supportsDataFolder, CHROME_REQUIRED_MESSAGE, createStorageSubfolder, storageFolderName } from './data-folder.js';
+import { DataFolder, supportsDataFolder, supportsIOSAppStorage, openIOSAppStorage, isIOSAppStorageHandle, CHROME_REQUIRED_MESSAGE, createStorageSubfolder, storageFolderName } from './data-folder.js';
 import {validateFolders,folderPath,folderDescendants,editLibraryFolders,nextStarredAt,LibraryIndex} from './library-folders.js';
 import {TEXT_STYLE_PRESETS,TEXT_SIZE_MIN,TEXT_SIZE_MAX,validTextStyle,stylePreview} from './text-style.js';
 import {parseYouTubeInput,parseChapters,cueTimes,clock,youtubeDocumentHTML,subtitleFormat,decodeSubtitle,matchSubtitleFiles,subtitlesFromZip,playlistFolderName,watchURL,SUBTITLE_EXTENSION,guideHTML,validateYouTube} from './youtube.js';
 import {isVideoNote,makeVideoNote,matchingVideoRecords,findVideoNote} from './youtube-notes.js';
 import {openVideoNoteDialog} from './youtube-note-dialog.js';
+import {THEME_CATEGORIES,APP_THEMES,THEME_SHAPE_OPTIONS,THEME_TEXTURE_OPTIONS,THEME_FONT_OPTIONS,THEME_FRAME_OPTIONS,THEME_ACCENT_PRESETS,DEFAULT_DESIGN_THEME,resolveDesignTheme,applyDesignThemeToDocument,describeDesignTheme} from './app-themes.js';
 
 const PUBLIC_APP_URL = publicAppURL(location);
 for(const template of $$('#about-content,#export-guide-content'))template.innerHTML=template.innerHTML.replaceAll('https://seionwon.github.io/LibreMemo/',PUBLIC_APP_URL);
@@ -190,14 +191,15 @@ function installGuide(kind) {
   let content;
   if(kind==='installed')content='<p class="dialog-description">앱 아이콘으로 실행 중입니다. 내 서재에서 문서·이미지·자막을 가져와 읽고 주석을 남겨보세요.</p>';
   else if(kind==='local')content=`<p class="dialog-description">직접 연 HTML도 읽고 주석을 남길 수 있습니다. 앱 설치는 선택 사항이며, 아래 배포 주소는 설치 없이 브라우저에서 바로 사용할 수 있습니다.</p><p><a class="primary-button" href="${esc(installationURL(location))}">설치할 LibreMemo 열기</a></p>`;
-  else if(kind==='ios')content='<p class="dialog-description">아이폰·아이패드의 Chrome에서 홈 화면 아이콘을 추가하는 순서입니다. 전용 저장 폴더 연결을 지원하지 않는 환경에서는 설치해도 문서 작업을 시작할 수 없습니다.</p><ol class="setup-steps"><li>Chrome 주소창의 <strong>공유</strong> 버튼을 누릅니다.</li><li><strong>홈 화면에 추가</strong>를 선택합니다.</li><li>이름을 확인하고 <strong>추가</strong>를 누릅니다.</li><li>홈 화면의 <strong>LibreMemo</strong> 아이콘으로 앱을 엽니다.</li></ol><p class="dialog-description small">폴더 기능을 지원하지 않는 기기에서는 지원되는 Chrome 환경으로 앱 주소를 열어주세요.</p>';
+  else if(kind==='ios')content='<p class="dialog-description">아이폰·아이패드의 Safari 또는 Chrome에서 홈 화면 아이콘을 추가하는 순서입니다. 앱 내부 전용 보관함에 문서·주석·테마 설정이 자동 저장됩니다.</p><ol class="setup-steps"><li>Safari 하단 또는 Chrome 주소창의 <strong>공유</strong> 버튼을 누릅니다.</li><li><strong>홈 화면에 추가</strong>를 선택합니다.</li><li>이름을 확인하고 <strong>추가</strong>를 누릅니다.</li><li>홈 화면의 <strong>LibreMemo</strong> 아이콘으로 앱을 엽니다.</li></ol><p class="dialog-description small">홈 화면 웹앱은 브라우저 탭과 보관함이 분리되므로, 기존 문서를 옮길 때는 설정의 기기 간 동기화나 보관 파일(.librememo)을 사용하세요.</p>';
   else if(/Android/.test(navigator.userAgent||''))content='<ol class="setup-steps"><li>Chrome의 <strong>메뉴(⋮)</strong>를 엽니다.</li><li><strong>홈 화면에 추가 → 설치</strong>를 선택합니다.</li><li>앱 아이콘으로 LibreMemo를 엽니다.</li></ol><p class="dialog-description small">설치 메뉴가 보이지 않으면 첫 로딩과 오프라인 준비가 끝난 뒤 다시 시도하세요.</p>';
   else content='<ol class="setup-steps"><li>Chrome 주소창 오른쪽의 <strong>설치</strong> 아이콘을 누릅니다.</li><li>아이콘이 없다면 Chrome 메뉴의 <strong>전송, 저장 및 공유 → 페이지를 앱으로 설치</strong>를 선택합니다.</li><li>설치를 확인하고 앱 아이콘으로 LibreMemo를 엽니다.</li></ol><p class="dialog-description small">설치 안내가 자동으로 열리는 환경에서는 앱 설치 버튼을 다시 누르면 됩니다.</p>';
   modal(`<div class="dialog-heading"><h2>${heading}</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>${content}<p class="local-only-note">${icon('check',15)} 문서·주석·설정은 기기에만 저장합니다.</p><div class="dialog-actions"><button class="primary-button" data-dialog-close>확인</button></div>`);
 }
+const usingIOSAppStorage=()=>!supportsDataFolder(window,navigator)&&supportsIOSAppStorage(window,navigator);
 function updateInstall(state) {
   const button=$('#execution-install'),label=state.busy?'설치 확인 중…':state.installed?'설치 완료':'앱 설치';button.disabled=state.busy;button.textContent=label;button.title=label;button.setAttribute('aria-label',label);
-  $('#install-message').textContent=state.installed?'앱으로 실행 중입니다. 문서·주석·설정은 이 기기에 저장됩니다.':!installableLocation(location)?'PWA 설치는 배포된 앱 주소에서 가능합니다. 문서 읽기와 주석 기능은 계속 사용할 수 있습니다.':isIOS(navigator)?'아이폰은 전용 저장 폴더 기능 지원이 필요하며, 홈 화면 아이콘 설치만으로 사용할 수 있게 되지는 않습니다.':'설치하지 않아도 앱의 URL에서 바로 사용할 수 있습니다.';
+  $('#install-message').textContent=state.installed?'앱으로 실행 중입니다. 문서·주석·설정은 이 기기에 저장됩니다.':!installableLocation(location)?'PWA 설치는 배포된 앱 주소에서 가능합니다. 문서 읽기와 주석 기능은 계속 사용할 수 있습니다.':isIOS(navigator)?(supportsDataFolder(window,navigator)||supportsIOSAppStorage(window,navigator)?'아이폰·아이패드에서는 Safari 또는 Chrome의 공유 메뉴 → 홈 화면에 추가로 설치하거나 브라우저에서 바로 사용할 수 있습니다.':'아이폰은 전용 저장 폴더 기능 지원이 필요하며, 홈 화면 아이콘 설치만으로 사용할 수 있게 되지는 않습니다.'):'설치하지 않아도 앱의 URL에서 바로 사용할 수 있습니다.';
 }
 function promptText(type, initial = '') {
   const inputTab=active();
@@ -235,23 +237,90 @@ function deviceSyncDialog() {
   const currentId=active()?.record?.id;let reopen=[],selected=currentId;
   openDeviceSync({modal,currentId,onError:showError,
     prepare:async()=>{await flushInternalDocuments();reopen=tabs.filter(t=>t.reader).map(t=>t.record.id);for(const tab of [...tabs])if(tab.reader)await closeTab(tab.id);},
-    afterCommit:async()=>{preferences=loadPreferences(localStorage);applyTheme(preferences.theme);dataFolder?.schedule({settingsOnly:true});if(dataFolder?.handle)await dataFolder.flush();await refreshLibrary();},
+    afterCommit:async()=>{preferences=loadPreferences(localStorage);applyTheme(preferences.theme,preferences.designTheme);dataFolder?.schedule({settingsOnly:true});if(dataFolder?.handle)await dataFolder.flush();await refreshLibrary();},
     onClose:async()=>{for(const id of reopen){const record=await getDocument(id);if(record&&!record.trashedAt)await openRecord(record);}const original=tabs.find(t=>t.record?.id===selected);if(original)activate(original.id);else activate('library');}
   });
 }
 function helpDialog(){openHelp({modal,onBack:()=>{settingsDialog();$('#settings-help').focus();},onClose:()=>$('#settings-button').focus({preventScroll:true})});}
+const currentBrightness=(theme=preferences.theme)=>theme==='system'?(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):theme;
+const loadedBundledFonts=new Set();
+function ensureBundledThemeFont(family){
+  if(!family||loadedBundledFonts.has(family)||!document.getElementById('htmlmemo-package-assets')||typeof window.FontFace!=='function'||!document.fonts)return;
+  loadedBundledFonts.add(family);
+  try{const bytes=bundledFontBytes(family);if(bytes)void new window.FontFace(family,bytes,{weight:'100 900'}).load().then(face=>document.fonts.add(face)).catch(()=>loadedBundledFonts.delete(family));}catch{loadedBundledFonts.delete(family);}
+}
+function designThemeDialog(initialCategory='all') {
+  let category=THEME_CATEGORIES.some(c=>c.id===initialCategory)?initialCategory:'all';
+  const hasCustomOverride=dt=>dt.shape!=='theme'||dt.texture!=='theme'||dt.font!=='theme'||dt.frame!=='theme'||!!dt.accent;
+  const optionItems=list=>list.map(item=>`<option value="${esc(item.id)}">${esc(item.label)}</option>`).join('');
+  const categoryCount=id=>id==='all'?APP_THEMES.length:APP_THEMES.filter(t=>t.category===id).length;
+  modal(`<section class="theme-studio" data-theme-studio><div class="dialog-heading"><div class="theme-heading-main"><button id="theme-back-settings" class="text-button theme-back-button" type="button" aria-label="설정으로 돌아가기">${icon('back',15)}<span>설정</span></button><h2>디자인 테마</h2></div><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p id="theme-studio-status" class="dialog-description small theme-studio-status" role="status"></p><div class="theme-quick-bar"><label class="theme-quick-select" for="theme-appearance"><span>밝기</span><select id="theme-appearance"><option value="light">밝게</option><option value="dark">어둡게</option><option value="system">시스템</option></select></label><button id="theme-random" type="button" class="secondary-button">분위기 추천</button><button id="theme-reset" type="button" class="secondary-button">기본값 복원</button></div><div class="theme-categories" role="group" aria-label="테마 분위기 분류">${THEME_CATEGORIES.map(item=>`<button type="button" class="theme-category-chip" data-theme-category="${esc(item.id)}" aria-pressed="${item.id===category}"><span>${esc(item.label)}</span><small>${categoryCount(item.id)}</small></button>`).join('')}</div><div id="theme-preset-grid" class="theme-preset-grid" role="group" aria-label="디자인 테마 목록"></div><details id="theme-customizer" class="theme-customizer"${hasCustomOverride(preferences.designTheme)?' open':''}><summary>세부 스타일 맞춤 조합 (모서리·질감·글꼴·윤곽·포인트색)</summary><div class="theme-custom-grid"><label for="theme-shape"><span>모서리 모양</span><select id="theme-shape">${optionItems(THEME_SHAPE_OPTIONS)}</select></label><label for="theme-texture"><span>배경 질감</span><select id="theme-texture">${optionItems(THEME_TEXTURE_OPTIONS)}</select></label><label for="theme-font"><span>앱 글꼴</span><select id="theme-font">${optionItems(THEME_FONT_OPTIONS)}</select></label><label for="theme-frame"><span>카드·윤곽선</span><select id="theme-frame">${optionItems(THEME_FRAME_OPTIONS)}</select></label></div><div class="theme-accent-box"><div class="theme-accent-head"><span>포인트 색상</span><button id="theme-accent-clear" type="button" class="palette-mini-btn">테마 기본색</button></div><div class="theme-accent-swatches">${THEME_ACCENT_PRESETS.map(hex=>`<button type="button" class="swatch" data-theme-accent="${hex}" style="--swatch:${hex}" aria-label="포인트 색상 ${hex}" aria-pressed="false"></button>`).join('')}<input id="theme-accent-picker" type="color" aria-label="포인트 색상 직접 선택" value="#334155"></div></div></details><p class="dialog-description small theme-studio-note">모든 테마는 그림 파일 없이 순수 스타일·절차적 질감·내장 가변 한글 글꼴로 작동해 오프라인에서도 가볍고 빠릅니다. 읽는 문서(PDF·전자책·웹·한글·Office)의 본문 서식은 건드리지 않습니다.</p><div class="dialog-actions"><button type="button" class="primary-button" data-dialog-close>완료</button></div></section>`,dialog=>{
+    const grid=$('#theme-preset-grid',dialog),status=$('#theme-studio-status',dialog);
+    const renderCards=()=>{
+      const mode=currentBrightness(),items=category==='all'?APP_THEMES:APP_THEMES.filter(t=>t.category===category);
+      grid.innerHTML=items.map(preset=>{
+        const resolved=resolveDesignTheme({id:preset.id,shape:'theme',texture:'theme',font:'theme',frame:'theme',accent:''},mode);
+        const v=resolved.variables,activePreset=preferences.designTheme.id===preset.id;
+        return `<button type="button" class="theme-preset-card${activePreset?' chosen':''}" data-theme-preset="${esc(preset.id)}" aria-pressed="${activePreset}"><span class="theme-card-preview" data-preview-texture="${esc(resolved.texture)}" data-preview-frame="${esc(resolved.frame)}" style="--p-bg:${v['--bg']};--p-surface:${v['--surface']};--p-muted:${v['--surface-muted']};--p-text:${v['--text']};--p-sub:${v['--muted']};--p-line:${v['--line']};--p-accent:${v['--green']};--p-soft:${v['--green-light']};--p-on:${v['--on-green']};--p-radius:${v['--radius-library']};--p-btn-radius:${v['--radius-button']};--p-font:${esc(v['--app-font'])}" aria-hidden="true"><span class="theme-mini-bar"><i style="background:${v['--green']}"></i><i style="background:${v['--muted']}"></i></span><span class="theme-mini-sheet"><b class="theme-mini-sample">가나다 Aa</b><span class="theme-mini-tags"><em class="theme-mini-soft">서재</em><em class="theme-mini-cta">저장</em></span></span></span><span class="theme-card-meta"><strong>${esc(preset.name)}</strong><small>${esc(preset.summary)}</small></span></button>`;
+      }).join('');
+      $$('[data-theme-preset]',grid).forEach(button=>{
+        button.onclick=safely(()=>{
+          changePreferences({designTheme:{id:button.dataset.themePreset,shape:'theme',texture:'theme',font:'theme',frame:'theme',accent:''}});
+          syncStudio({rebuild:false});
+        });
+      });
+    };
+    const syncStudio=({rebuild=false}={})=>{
+      if(rebuild)renderCards();
+      else $$('[data-theme-preset]',grid).forEach(b=>{const on=b.dataset.themePreset===preferences.designTheme.id;b.classList.toggle('chosen',on);b.setAttribute('aria-pressed',String(on));});
+      $$('[data-theme-category]',dialog).forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.themeCategory===category)));
+      const dt=preferences.designTheme,resolved=resolveDesignTheme(dt,currentBrightness());
+      $('#theme-appearance',dialog).value=preferences.theme;
+      $('#theme-shape',dialog).value=dt.shape;
+      $('#theme-texture',dialog).value=dt.texture;
+      $('#theme-font',dialog).value=dt.font;
+      $('#theme-frame',dialog).value=dt.frame;
+      const pickerColor=dt.accent||resolved.variables['--green'];
+      if(/^#[\da-f]{6}$/i.test(pickerColor))$('#theme-accent-picker',dialog).value=pickerColor;
+      $('#theme-accent-clear',dialog).disabled=!dt.accent;
+      $('#theme-reset',dialog).disabled=dt.id===DEFAULT_DESIGN_THEME.id&&!hasCustomOverride(dt);
+      $$('[data-theme-accent]',dialog).forEach(b=>{const on=dt.accent===b.dataset.themeAccent;b.classList.toggle('chosen',on);b.setAttribute('aria-pressed',String(on));});
+      status.textContent=`현재 적용: ${describeDesignTheme(dt)} · 문서 본문 서식은 보호하고 앱 외관·서재·사이드바·상태바에 즉시 반영합니다.`;
+    };
+    $('#theme-back-settings',dialog).onclick=()=>{settingsDialog();$('#settings-design-theme')?.focus();};
+    $('#theme-appearance',dialog).onchange=safely(e=>{changePreferences({theme:e.target.value});syncStudio({rebuild:true});});
+    $('#theme-random',dialog).onclick=safely(()=>{
+      const pool=APP_THEMES.filter(t=>t.id!==preferences.designTheme.id);
+      const picked=pool[Math.floor(Math.random()*pool.length)]||APP_THEMES[0];
+      if(category!=='all'&&picked.category!==category)category='all';
+      changePreferences({designTheme:{id:picked.id,shape:'theme',texture:'theme',font:'theme',frame:'theme',accent:''}});
+      syncStudio({rebuild:true});
+    });
+    $('#theme-reset',dialog).onclick=safely(()=>{changePreferences({designTheme:{...DEFAULT_DESIGN_THEME}});syncStudio({rebuild:false});});
+    $$('[data-theme-category]',dialog).forEach(button=>{button.onclick=()=>{category=button.dataset.themeCategory;syncStudio({rebuild:true});};});
+    for(const [sel,key] of [['#theme-shape','shape'],['#theme-texture','texture'],['#theme-font','font'],['#theme-frame','frame']]){
+      $(sel,dialog).onchange=safely(e=>{changePreferences({designTheme:{[key]:e.target.value}});syncStudio({rebuild:false});});
+    }
+    $$('[data-theme-accent]',dialog).forEach(button=>{button.onclick=safely(()=>{changePreferences({designTheme:{accent:button.dataset.themeAccent}});syncStudio({rebuild:false});});});
+    $('#theme-accent-clear',dialog).onclick=safely(()=>{changePreferences({designTheme:{accent:''}});syncStudio({rebuild:false});});
+    const pickAccent=safely(e=>{const norm=normalizeHexColor(e.target.value);if(norm){changePreferences({designTheme:{accent:norm}});syncStudio({rebuild:false});}});
+    $('#theme-accent-picker',dialog).oninput=pickAccent;$('#theme-accent-picker',dialog).onchange=pickAccent;
+    syncStudio({rebuild:true});
+  });
+}
 function settingsDialog() {
-  modal(`<div class="dialog-heading"><h2>LibreMemo 설정</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><div class="settings-app-actions" role="group" aria-label="앱 실행과 정보"><button id="settings-help" class="secondary-button" type="button" aria-haspopup="dialog">${icon('help',15)} 도움말</button><button id="settings-execution" class="secondary-button" type="button">${icon('external',15)} 실행과 앱 전달</button><button id="settings-about" class="secondary-button" type="button" aria-haspopup="dialog">${icon('info',15)} About</button></div><div class="setting-row"><div><strong>기기 간 동기화</strong><p>문서·주석·북마크·읽기 위치·이력을 주고받고, 앱 설정도 선택해 맞춥니다. 휴지통은 제외합니다.</p></div><button id="settings-sync" class="secondary-button">연결</button></div><p class="local-only-note">${icon('check',15)} 문서·주석·설정은 기기에 저장합니다. 기기 간 동기화는 연결할 때만 암호화해 전송합니다.</p><div class="setting-row"><div><strong>AI 검색</strong><p>선택한 글을 보낼 LLM을 등록하고 사용할 것을 체크합니다.</p></div><button id="settings-ai-search" class="secondary-button">관리</button></div><div class="setting-row"><div><strong>데이터 폴더</strong><p id="settings-folder-status">${esc(folderStatusText())}</p></div><button id="settings-folder" class="secondary-button">${folder?'관리':'폴더 연결'}</button></div>${dataFolderGuide()}<div class="setting-row"><div><strong>화면 테마</strong><p>서재와 도구의 밝기를 선택하세요.</p></div><select id="appearance"><option value="light">밝게</option><option value="dark">어둡게</option><option value="system">시스템</option></select></div><details class="settings-backup"><summary>이전 설정 JSON 파일 사용 (선택 사항)</summary><p class="dialog-description small">데이터 폴더를 연결했다면 설정 파일을 따로 저장하거나 불러올 필요가 없습니다. 예전에 저장한 설정 JSON을 옮길 때만 사용하세요.</p><p id="settings-file-name" class="settings-file-name">${settingsFileHandle?esc(settingsFileHandle.name):'연결한 설정 파일이 없습니다.'}</p><div class="settings-file-actions"><button id="settings-save" class="secondary-button">${icon('save',15)} 설정 파일 저장</button><button id="settings-load" class="secondary-button">${icon('folder',15)} 설정 파일 불러오기</button><button id="settings-reload" class="secondary-button" ${settingsFileHandle?'':'disabled'}>${icon('reload',15)} 다시 불러오기</button></div></details><p class="dialog-description small">브라우저 데이터가 삭제돼도 전용 폴더의 파일은 남습니다. 폴더를 다시 선택하면 복원됩니다. 폴더 자체 삭제·기기 고장까지 막는 것은 아니므로 중요한 데이터는 폴더 전체를 다른 저장장치에도 복사하세요.</p>`,()=>{
+  modal(`<div class="dialog-heading"><h2>LibreMemo 설정</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><div class="settings-app-actions" role="group" aria-label="앱 실행과 정보"><button id="settings-help" class="secondary-button" type="button" aria-haspopup="dialog">${icon('help',15)} 도움말</button><button id="settings-execution" class="secondary-button" type="button">${icon('external',15)} 실행과 앱 전달</button><button id="settings-about" class="secondary-button" type="button" aria-haspopup="dialog">${icon('info',15)} About</button></div><div class="setting-row"><div><strong>기기 간 동기화</strong><p>문서·주석·북마크·읽기 위치·이력을 주고받고, 앱 설정도 선택해 맞춥니다. 휴지통은 제외합니다.</p></div><button id="settings-sync" class="secondary-button">연결</button></div><p class="local-only-note">${icon('check',15)} 문서·주석·설정은 기기에 저장합니다. 기기 간 동기화는 연결할 때만 암호화해 전송합니다.</p><div class="setting-row"><div><strong>AI 검색</strong><p>선택한 글을 보낼 LLM을 등록하고 사용할 것을 체크합니다.</p></div><button id="settings-ai-search" class="secondary-button">관리</button></div><div class="setting-row"><div><strong>데이터 폴더</strong><p id="settings-folder-status">${esc(folderStatusText())}</p></div><button id="settings-folder" class="secondary-button">${folder||usingIOSAppStorage()?'관리':'폴더 연결'}</button></div>${dataFolderGuide()}<div class="setting-row"><div><strong>화면 테마</strong><p>서재와 도구의 밝기를 선택하세요.</p></div><select id="appearance"><option value="light">밝게</option><option value="dark">어둡게</option><option value="system">시스템</option></select></div><div class="setting-row"><div><strong>디자인 테마</strong><p id="settings-design-theme-summary"><span class="theme-inline-dots" aria-hidden="true"><i style="background:var(--bg)"></i><i style="background:var(--surface)"></i><i style="background:var(--green)"></i></span>${esc(describeDesignTheme(preferences.designTheme))} · 28종 테마와 질감·모서리·글꼴 조합</p></div><button id="settings-design-theme" class="secondary-button" type="button" aria-haspopup="dialog">테마 선택</button></div><details class="settings-backup"><summary>이전 설정 JSON 파일 사용 (선택 사항)</summary><p class="dialog-description small">데이터 폴더를 연결했다면 설정 파일을 따로 저장하거나 불러올 필요가 없습니다. 예전에 저장한 설정 JSON을 옮길 때만 사용하세요.</p><p id="settings-file-name" class="settings-file-name">${settingsFileHandle?esc(settingsFileHandle.name):'연결한 설정 파일이 없습니다.'}</p><div class="settings-file-actions"><button id="settings-save" class="secondary-button">${icon('save',15)} 설정 파일 저장</button><button id="settings-load" class="secondary-button">${icon('folder',15)} 설정 파일 불러오기</button><button id="settings-reload" class="secondary-button" ${settingsFileHandle?'':'disabled'}>${icon('reload',15)} 다시 불러오기</button></div></details><p class="dialog-description small">브라우저 데이터가 삭제돼도 전용 폴더의 파일은 남습니다. 폴더를 다시 선택하면 복원됩니다. 폴더 자체 삭제·기기 고장까지 막는 것은 아니므로 중요한 데이터는 폴더 전체를 다른 저장장치에도 복사하세요.</p>`,()=>{
     $('#settings-help').onclick=helpDialog;$('#settings-execution').onclick=()=>{$('#dialog').close();activate('execution');$('#execution h1').focus({preventScroll:true});};$('#settings-about').onclick=aboutDialog;
     $('#settings-sync').onclick=deviceSyncDialog;$('#settings-ai-search').onclick=aiSearchDialog;
     $('#settings-folder').onclick=safely(()=>chooseFolder({onConnected:settingsDialog}));
     $('#appearance').value=preferences.theme; $('#appearance').onchange=safely(e=>changePreferences({theme:e.target.value}));
+    $('#settings-design-theme').onclick=()=>designThemeDialog();
     $('#settings-save').onclick=safely(saveSettingsBackup);$('#settings-load').onclick=safely(importSettingsBackup);$('#settings-reload').onclick=safely(async()=>{await restoreSettings(settingsFileHandle);settingsDialog();});
   });
 }
-function applyTheme(theme) { document.documentElement.dataset.theme=theme==='system'?(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):theme;stopAppSidebarResize();applyAppSidebarWidth();for(const tab of tabs){if(tab.reader?.documentSidebarUI)styleNativeSidebar(tab.reader.documentSidebarUI);if(tab.reader&&$('#sidebar').annotationReader===tab.reader)youtubeOutlineStyle($('#sidebar'),tab.reader);tab.reader?.syncSourceThemeControls?.();tab.reader?.updateReadingControls?.();} }
+function applyTheme(theme=preferences.theme,designTheme=preferences.designTheme) { const resolved=applyDesignThemeToDocument(document,currentBrightness(theme),designTheme);ensureBundledThemeFont(resolved.usesBundledFont);stopAppSidebarResize();applyAppSidebarWidth();for(const tab of tabs){if(tab.reader?.documentSidebarUI)styleNativeSidebar(tab.reader.documentSidebarUI);if(tab.reader&&$('#sidebar').annotationReader===tab.reader)youtubeOutlineStyle($('#sidebar'),tab.reader);tab.reader?.syncSourceThemeControls?.();tab.reader?.updateReadingControls?.();} }
 function applyToolbarPosition(){const bar=$('#toolbar'),p=preferences.toolbarPosition;if(!p){bar.style.left='50%';bar.style.top='';bar.style.bottom='';bar.style.transform='';return;}bar.style.transform='none';bar.style.bottom='auto';bar.style.left=(8+p.x*Math.max(0,innerWidth-bar.offsetWidth-16))+'px';bar.style.top=(8+p.y*Math.max(0,innerHeight-bar.offsetHeight-42))+'px';}
-function changePreferences(patch){preferences=storePreferences({...preferences,...patch,annotation:{...preferences.annotation,...patch.annotation}},localStorage);dataFolder?.schedule({settingsOnly:true});applyTheme(preferences.theme);$('#library-sort').value=preferences.librarySort+':'+preferences.librarySortDirection;for(const tab of tabs)if(tab.reader)Object.assign(tab.reader,preferences.annotation);applyToolbarPosition();renderLibrary();if(reader())updateToolbarState();}
+function changePreferences(patch){const nextDesignTheme=patch.designTheme?{...preferences.designTheme,...patch.designTheme}:preferences.designTheme;preferences=storePreferences({...preferences,...patch,designTheme:nextDesignTheme,annotation:{...preferences.annotation,...patch.annotation}},localStorage);dataFolder?.schedule({settingsOnly:true});applyTheme(preferences.theme,preferences.designTheme);$('#library-sort').value=preferences.librarySort+':'+preferences.librarySortDirection;for(const tab of tabs)if(tab.reader)Object.assign(tab.reader,preferences.annotation);applyToolbarPosition();renderLibrary();if(reader())updateToolbarState();}
 async function restoreSettings(input){
   if(input?.kind==='file'&&input.queryPermission){const options={mode:'read'};if(await input.queryPermission(options)!=='granted'&&await input.requestPermission(options)!=='granted')throw new Error('설정 파일 읽기 권한이 필요합니다. 파일을 다시 선택해주세요.');}
   const backup=await readSettingsFile(input);changePreferences(backup.preferences);settingsFolderHint=backup.folderName;await setSetting('settings-folder-hint',settingsFolderHint);
@@ -757,11 +826,12 @@ function dataFolderGuide() {
   return `<details class="export-guide" data-folder-guide><summary>전용 폴더 자동 저장과 새 기기로 옮기는 방법</summary><p>처음 실행할 때 Documents(문서)를 선택하면 그 아래에 <strong>입력한 이름의 전용 하위 폴더</strong>를 만듭니다. 예: <code>문서/LibreMemo</code>. 문서 폴더 전체 선택이 제한되면 선택 창에서 하위 폴더를 만든 뒤 기존 저장 폴더 연결로 선택하세요.</p><p>연결하면 기존 서재와 앞으로 가져오는 모든 문서·표·슬라이드 원본의 복사본, 주석·북마크·주석 이력·읽기 위치·앱 설정을 자동 보관합니다. 원래 파일을 이동·삭제해도 보관한 문서는 열 수 있습니다. <strong>설정 파일을 따로 저장할 필요가 없습니다.</strong></p><p>폴더 연결 시 브라우저 내부 데이터의 자동 삭제 방지도 함께 요청합니다. 브라우저가 허용하지 않아도 전용 폴더 자동 저장은 계속됩니다.</p><p>평소에는 원본 복사본과 주석을 분리해 저장하며 원본에 새 주석을 합치지 않습니다. <strong>다른 사람에게 문서와 주석을 보내려면 상단의 내보내기 → 원본 포함 보관 파일(.librememo)로 저장한 뒤 그 파일을 보내세요.</strong> 원본·현재 주석·북마크·읽던 위치를 함께 담으며, 받는 분은 LibreMemo의 파일 가져오기로 엽니다. 읽기용 HTML 사본은 읽기 화면과 주석을 한 .html 파일에 담고, PDF 원본 문서는 주석 포함 PDF로 다른 PDF 뷰어에도 전달할 수 있습니다. 원본 파일만 보내면 앱에서 추가한 주석은 전달되지 않습니다. 내보내기는 현재 문서만 포함하므로 전체 백업·새 기기 이동에는 전용 폴더 전체를 복사하세요.</p><ol><li>새 기기로 옮기기 전에 <strong>폴더 자동 저장 완료</strong> 표시를 확인하고 앱을 닫습니다.</li><li><strong>전용 폴더 전체를 하위 폴더·파일 빠짐없이</strong> 새 기기의 Documents(문서) 폴더로 복사합니다. 일부 HTML만 옮기면 주석·설정이 빠집니다.</li><li>새 기기의 LibreMemo에서 <strong>설정 → 데이터 폴더 → 폴더 연결</strong>로 옮긴 폴더를 선택하고 쓰기를 허용하면 모두 자동 복원됩니다.</li></ol><p>브라우저가 권한을 회수하거나 폴더를 옮겼다면 다시 연결해야 합니다. 권한·용량·저장 오류는 화면 아래와 설정에 계속 표시하며 변경은 앱에 남겨둡니다. 저장이 끝나기 전에 앱을 강제 종료하지 마세요. 서로 다른 기기의 동시 편집을 실시간 동기화하지는 않습니다.</p></details>`;
 }
 function folderStatusText() {
+  const label=isIOSAppStorageHandle(folder)?'앱 전용 보관함('+folder.name+')':folder?.name;
   if(!folder)return '데이터 폴더 미연결 · 브라우저 데이터 삭제 시 잃을 수 있습니다.';
-  if(dataFolder?.state==='error')return '폴더 저장 중단 · '+folder.name+' · 다시 연결 필요';
+  if(dataFolder?.state==='error')return '폴더 저장 중단 · '+label+' · 다시 연결 필요';
   if(tabs.some(t=>t.queue?.error))return '앱 저장 실패 · 폴더가 최신 상태가 아닙니다.';
-  if(dataFolder?.pending||tabs.some(t=>t.opening||t.queue?.pending))return '폴더 자동 저장 중… · '+folder.name;
-  return '폴더 자동 저장 완료 · '+folder.name;
+  if(dataFolder?.pending||tabs.some(t=>t.opening||t.queue?.pending))return '폴더 자동 저장 중… · '+label;
+  return '폴더 자동 저장 완료 · '+label;
 }
 function renderFolderState() {
   const status=folderStatusText(),error=!!folder&&(dataFolder?.state==='error'||tabs.some(t=>t.queue?.error)),button=$('#data-folder-status');
@@ -871,7 +941,17 @@ function bindFolderConnection(onConnected,root=$('#dialog')) {
   };
   button.onclick=safely(()=>connect());if(create)create.onclick=safely(()=>connect(false,true));if($('#resume-data-folder',root))$('#resume-data-folder',root).onclick=safely(()=>connect(true));
 }
+function iosStorageDialog({onConnected}={}) {
+  modal(`<div class="dialog-heading"><h2>아이폰·아이패드 전용 보관함</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p class="dialog-description">아이폰·아이패드에서는 브라우저의 <strong>앱 내부 전용 보관함(OPFS · LibreMemo)</strong>에 문서 원본 복사본·주석·북마크·이력·디자인 테마 설정을 자동 저장합니다.</p><p class="dialog-description small">iOS·iPadOS는 외부 폴더 직접 연결(showDirectoryPicker)을 제공하지 않으므로 별도 폴더 선택 창 없이 안전한 내부 전용 폴더를 바로 사용합니다.</p><ul class="setup-steps"><li><strong>다른 기기와 함께 쓰기:</strong> 설정 → <strong>기기 간 동기화</strong>로 PC·안드로이드·아이패드와 서재 및 테마 설정을 암호화해 주고받으세요.</li><li><strong>개별 문서 백업·전달:</strong> 문서를 열고 상단의 <strong>내보내기 → 원본 포함 보관 파일(.librememo)</strong>로 파일 앱이나 공유 시트에 저장하세요.</li><li><strong>주의:</strong> 브라우저의 웹사이트 데이터를 지우면 내부 보관함도 함께 삭제됩니다. 홈 화면 웹앱과 브라우저 탭은 보관함이 각각 독립되어 있습니다.</li></ul><p id="folder-connection-status" class="dialog-description" role="status">${esc(folderStatusText())}</p><div class="dialog-actions"><button class="secondary-button" data-dialog-close>닫기</button><button id="ios-storage-verify" class="primary-button" type="button">저장 상태 점검</button></div>`,dialog=>{
+    $('#ios-storage-verify',dialog).onclick=safely(async()=>{
+      const button=$('#ios-storage-verify',dialog);button.disabled=true;
+      try{const handle=await openIOSAppStorage(navigator);await connectDataFolder(handle,onConnected,{resume:!!folder});}
+      finally{if(button.isConnected)button.disabled=false;}
+    });
+  });
+}
 function chooseFolder({onConnected} = {}) {
+  if(usingIOSAppStorage()){iosStorageDialog({onConnected});return;}
   if(!supportsDataFolder(window,navigator)){chromeRequiredDialog();return;}
   modal(`<div class="dialog-heading"><h2>저장 폴더 연결</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p class="dialog-description">Documents(문서) 안의 <strong>LibreMemo 전용 하위 폴더</strong>를 선택하세요. 선택 창에서 <strong>원하는 이름의 새 폴더</strong>를 만들 수 있습니다. 예: <code>문서/LibreMemo</code>.</p><p class="dialog-description small">홈·문서·다운로드 폴더 전체와 시스템 폴더는 브라우저가 연결을 제한합니다. “Can't open this folder”가 나오면 전용 하위 폴더를 선택하세요. 읽기·쓰기 권한을 허용하며, “방문할 때마다 허용” 선택지가 있으면 선택하세요.</p><p class="dialog-description">기존 서재도 이곳에 복사하며 이후 가져오는 문서·주석·설정은 자동 저장합니다. <strong>옮겨 온 데이터 폴더를 선택하면 자동 복원</strong>합니다. 기존 문서와 충돌하는 복원본은 별도 사본으로 남겨 덮어쓰지 않습니다.</p><p class="dialog-description"><strong>새 기기로는 이 폴더 전체를 옮기세요.</strong> 설정 JSON을 별도로 저장할 필요가 없습니다. 모든 하위 파일을 함께 복사해야 합니다.</p>${dataFolderGuide()}<p id="folder-connection-status" class="dialog-description" role="status">${esc(folderStatusText())}</p><div class="dialog-actions"><button class="secondary-button" data-dialog-close>닫기</button>${folder?'<button id="resume-data-folder" class="secondary-button">다시 연결</button>':''}<button id="select-storage-folder" class="primary-button">${folder?'다른 폴더 선택':'폴더 선택'}</button></div>`,()=>{
     bindFolderConnection(onConnected);
@@ -1948,7 +2028,7 @@ function styleNativeSidebar(panel) {
     const style=doc.createElement('style');style.id='htmlmemo-doc-sidebar-style';style.setAttribute('data-htmlmemo-ui','');style.textContent=rules.join('\n')+'\n::highlight(htmlmemo-book-search){background:#f0a85b80;color:inherit}';doc.head.append(style);
   }
   const theme=getComputedStyle(document.documentElement);
-  const names=['--bg','--surface','--surface-muted','--text','--muted','--line','--green','--green-light','--outline-prefix','--outline-prefix-active','--app-font','--color-security-warning','--color-security-warning-ink','--color-security-warning-border'];
+  const names=['--bg','--surface','--surface-muted','--text','--muted','--line','--green','--green-light','--outline-prefix','--outline-prefix-active','--app-font','--radius-control','--app-icon-stroke','--color-security-warning','--color-security-warning-ink','--color-security-warning-border'];
   for(const name of names)panel.style.setProperty(name,theme.getPropertyValue(name));
   const style=doc.getElementById('htmlmemo-doc-sidebar-style');style.sidebarRules??=style.textContent;
   style.textContent=style.sidebarRules+'\n[data-htmlmemo-native-sidebar],[data-htmlmemo-toc-resizer],[data-htmlmemo-toc-resizer-bound]{'+names.map(name=>name+':'+theme.getPropertyValue(name)).join(';')+'}';
@@ -2456,7 +2536,8 @@ function bindUI() {
   window.addEventListener('pagehide',()=>savePositions(true));
   window.addEventListener('online',network);window.addEventListener('offline',network);
   window.addEventListener('focus',resumeBrowser);document.addEventListener('visibilitychange',resumeBrowser);
-  window.addEventListener('storage',()=>{try{preferences=loadPreferences(localStorage);applyTheme(preferences.theme);renderLibrary();dataFolder?.schedule({settingsOnly:true});}catch(error){showError(error);}});
+  window.addEventListener('storage',()=>{try{preferences=loadPreferences(localStorage);applyTheme(preferences.theme,preferences.designTheme);renderLibrary();dataFolder?.schedule({settingsOnly:true});}catch(error){showError(error);}});
+  matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',()=>{if(preferences.theme==='system')applyTheme(preferences.theme,preferences.designTheme);});
   window.addEventListener('resize',()=>{
     stopAppSidebarResize();applyAppSidebarWidth();
     const pop=$('#tool-popover'),editing=!pop.hidden&&pop.contains(document.activeElement)&&document.activeElement.matches('input,textarea,select,[contenteditable=true]');
@@ -2486,11 +2567,14 @@ async function initialize() {
   // The entry can also be loaded dynamically. A cold/streamed document must
   // finish parsing before any handler or status text is assigned to its shell.
   if(document.readyState==='loading')await new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}));
-  if(!supportsDataFolder(window,navigator)){chromeRequiredDialog();return;}
+  try{preferences=loadPreferences(localStorage);}catch{/* Checked again after storage support is confirmed. */}
+  applyTheme(preferences.theme,preferences.designTheme);
+  const iosStorage=usingIOSAppStorage();
+  if(!supportsDataFolder(window,navigator)&&!iosStorage){chromeRequiredDialog();return;}
   document.documentElement.dataset.storageSetup='checking';updateAppInteraction();setStatusLeft('새 버전을 확인하는 중…');
   try{preferences=loadPreferences(localStorage);}catch(error){toast('설정 일부를 읽지 못했습니다. 연결한 데이터 폴더로 복원할 수 있습니다.',true);}
-  dataFolder=new DataFolder({storage:localStorage,report:state=>{if(state.handle)folder=state.handle;renderFolderState();},onRestored:async result=>{preferences=loadPreferences(localStorage);applyTheme(preferences.theme);$('#library-sort').value=preferences.librarySort+':'+preferences.librarySortDirection;for(const tab of tabs)if(tab.reader)Object.assign(tab.reader,preferences.annotation);applyToolbarPosition();await refreshLibrary();if(result.recovered)toast('이전의 온전한 폴더 저장본에서 복원했습니다. 최신 변경 일부가 빠졌을 수 있습니다.',true);}});
-  applyTheme(preferences.theme);bindUI();setupSelectLabels();fitHeader();$('#library-sort').value=preferences.librarySort+':'+preferences.librarySortDirection;network();
+  dataFolder=new DataFolder({storage:localStorage,report:state=>{if(state.handle)folder=state.handle;renderFolderState();},onRestored:async result=>{preferences=loadPreferences(localStorage);applyTheme(preferences.theme,preferences.designTheme);$('#library-sort').value=preferences.librarySort+':'+preferences.librarySortDirection;for(const tab of tabs)if(tab.reader)Object.assign(tab.reader,preferences.annotation);applyToolbarPosition();await refreshLibrary();if(result.recovered)toast('이전의 온전한 폴더 저장본에서 복원했습니다. 최신 변경 일부가 빠졌을 수 있습니다.',true);}});
+  applyTheme(preferences.theme,preferences.designTheme);bindUI();setupSelectLabels();fitHeader();$('#library-sort').value=preferences.librarySort+':'+preferences.librarySortDirection;network();
   // The old app must be able to update before requesting access to its folder.
   // Data already committed to this device survives the version change.
   updateController=new UpdateController({navigator,location,onOffer:offerAppUpdate,onState:appUpdateState,beforeUpdate:async()=>{if(folderSetupBusy)throw Error('진행 중인 폴더 연결을 마친 뒤 다시 시도해주세요.');await flushInternalDocuments();await dataFolder.flush();},reload:()=>location.reload()});
@@ -2501,9 +2585,11 @@ async function initialize() {
   if($('#app-update-dialog').open)await new Promise(resolve=>$('#app-update-dialog').addEventListener('close',resolve,{once:true}));
   if(document.documentElement.dataset.appUpdate==='reloading')return;
   setStatusLeft('서재 준비 중…');
-  folder=await getSetting('folder');settingsFileHandle=await getSetting('settings-file');settingsFolderHint=await getSetting('settings-folder-hint')||'';await refreshLibrary();activate('library');
+  const savedFolder=await getSetting('folder');settingsFileHandle=await getSetting('settings-file');settingsFolderHint=await getSetting('settings-folder-hint')||'';
+  folder=iosStorage?await openIOSAppStorage(navigator):savedFolder;
+  await refreshLibrary();activate('library');
   onStorageChange(()=>{if(activeId==='library'){clearTimeout(libraryReloadTimer);libraryReloadTimer=setTimeout(()=>{if(activeId==='library')refreshLibrary().catch(showError);},30);}});
-  if(folder){try{await dataFolder.connect(folder,{resume:true});await refreshLibrary();}catch(error){renderFolderState();if(!['NotAllowedError','SecurityError'].includes(error?.name))showError(error);}}
+  if(folder){try{await dataFolder.connect(folder,{resume:iosStorage?!!savedFolder:true});if(iosStorage)rememberFolderWelcome();await refreshLibrary();}catch(error){renderFolderState();if(!['NotAllowedError','SecurityError'].includes(error?.name))showError(error);}}
   if(needsFolderWelcome())folderWelcomeDialog();else completeFolderSetup();
   startupPending=false;updateAppInteraction();
   if(!$('#folder-reconnect').hidden)$('#resume-data-folder',$('#folder-reconnect')).focus();

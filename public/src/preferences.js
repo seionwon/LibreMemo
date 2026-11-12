@@ -2,6 +2,7 @@ import {normalizeDefaults,normalizePresets} from './viewer-presets.js';
 import {validTextStyle,validTextStyles} from './text-style.js';
 import {DEFAULT_AI_SEARCH,normalizeAiSearch} from './ai-search.js';
 import {DEFAULT_READING_LAYOUT,normalizeReadingLayout} from './reading-layout.js';
+import {DEFAULT_DESIGN_THEME,normalizeDesignTheme} from './app-themes.js';
 export const PREFERENCES_KEY = 'htmlmemo-preferences-v1';
 export const SETTINGS_FORMAT = 'HTMLMemo.settings';
 export const PRESET_COLORS = Object.freeze([
@@ -32,7 +33,7 @@ export const PRESET_PALETTES = Object.freeze([
   Object.freeze({id:'preset-19',name:'미니멀 잉크',colors:Object.freeze(['#111827','#374151','#dc2626','#2563eb','#16a34a','#d97706','#7c3aed','#0891b2'])}),
   Object.freeze({id:'preset-20',name:'레인보우 컬렉션',colors:Object.freeze(['#ef4444','#f97316','#f59e0b','#eab308','#84cc16','#22c55e','#06b6d4','#3b82f6','#6366f1','#a855f7'])}),
 ]);
-export const DEFAULT_PREFERENCES = Object.freeze({theme:'light',librarySort:'modified',librarySortDirection:'desc',libraryView:'card',annotation:Object.freeze({color:'#edcf67',highlightColor:'#edcf67',width:3,opacity:.35,penTTL:0,paletteId:PRESET_PALETTES[0].id}),toolbarPosition:null,sidebarWidth:300,readingLayout:DEFAULT_READING_LAYOUT,aiSearch:DEFAULT_AI_SEARCH,viewerPresets:Object.freeze([]),viewerDefaults:Object.freeze({})});
+export const DEFAULT_PREFERENCES = Object.freeze({theme:'light',designTheme:DEFAULT_DESIGN_THEME,librarySort:'modified',librarySortDirection:'desc',libraryView:'card',annotation:Object.freeze({color:'#edcf67',highlightColor:'#edcf67',width:3,opacity:.35,penTTL:0,paletteId:PRESET_PALETTES[0].id}),toolbarPosition:null,sidebarWidth:300,readingLayout:DEFAULT_READING_LAYOUT,aiSearch:DEFAULT_AI_SEARCH,viewerPresets:Object.freeze([]),viewerDefaults:Object.freeze({})});
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 export function normalizeHexColor(value) {
   if (typeof value !== 'string') return null;
@@ -82,7 +83,7 @@ export function hexToHsv(hex) { return rgbToHsv(hexToRgb(hex)); }
 export function hsvToHex(hsv) { return rgbToHex(hsvToRgb(hsv)); }
 export function normalizePreferences(value = {}) {
   if (!object(value)) throw new Error('설정 내용이 올바르지 않습니다.');
-  const readingLayout=normalizeReadingLayout(value.readingLayout),aiSearch=normalizeAiSearch(value.aiSearch),viewerPresets=normalizePresets(value.viewerPresets),viewerDefaults=normalizeDefaults(value.viewerDefaults,viewerPresets);
+  const readingLayout=normalizeReadingLayout(value.readingLayout),aiSearch=normalizeAiSearch(value.aiSearch),viewerPresets=normalizePresets(value.viewerPresets),viewerDefaults=normalizeDefaults(value.viewerDefaults,viewerPresets),designTheme=normalizeDesignTheme(value.designTheme);
   const theme=value.theme??DEFAULT_PREFERENCES.theme, librarySort=value.librarySort??DEFAULT_PREFERENCES.librarySort, libraryView=value.libraryView??DEFAULT_PREFERENCES.libraryView;
   const librarySortDirection=value.librarySortDirection??(librarySort==='title'?'asc':'desc');
   if(!['light','dark','system'].includes(theme)||!['modified','created','title'].includes(librarySort)||!['asc','desc'].includes(librarySortDirection)||!['card','list'].includes(libraryView))throw new Error('테마 또는 서재 보기 설정이 올바르지 않습니다.');
@@ -119,7 +120,7 @@ export function normalizePreferences(value = {}) {
   if(value.toolbarPosition!==null&&value.toolbarPosition!==undefined){const p=value.toolbarPosition;if(!object(p)||![p.x,p.y].every(n=>Number.isFinite(n)&&n>=0&&n<=1))throw new Error('툴바 위치 설정이 올바르지 않습니다.');toolbarPosition={x:p.x,y:p.y};}
   const sidebarWidth=value.sidebarWidth??DEFAULT_PREFERENCES.sidebarWidth;
   if(!Number.isFinite(sidebarWidth)||sidebarWidth<8||sidebarWidth>640)throw new Error('사이드바 폭 설정이 올바르지 않습니다.');
-  return {readingLayout,aiSearch,viewerPresets,viewerDefaults,theme,librarySort,librarySortDirection,libraryView,annotation,toolbarPosition,sidebarWidth:Math.round(sidebarWidth)};
+  return {readingLayout,aiSearch,viewerPresets,viewerDefaults,theme,designTheme,librarySort,librarySortDirection,libraryView,annotation,toolbarPosition,sidebarWidth:Math.round(sidebarWidth)};
 }
 export function loadPreferences(storage) {
   const saved=storage.getItem(PREFERENCES_KEY);

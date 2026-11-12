@@ -3,6 +3,7 @@ import {portableRecord,validateState,validateSettings,folderSettings} from './da
 import {localFileIdentity,localFileWithType,sameLocalFile} from './local-files.js';
 import {mergeLibraryFolders,validateFolders} from './library-folders.js';
 import {PREFERENCES_KEY,PRESET_PALETTES,normalizePreferences} from './preferences.js';
+import {describeDesignTheme} from './app-themes.js';
 
 export const DEVICE_SYNC_FORMAT='HTMLMemo.sync';
 export const DEVICE_SYNC_LIMIT=1300000;
@@ -75,7 +76,7 @@ export function syncSettingsDifferences(local,remote){
   const a=normalizeSyncSettings(local).entries,b=normalizeSyncSettings(remote).entries,pa=JSON.parse(a[PREFERENCES_KEY]),pb=JSON.parse(b[PREFERENCES_KEY]),rows=[];
   const add=(label,x,y,different=JSON.stringify(x)!==JSON.stringify(y))=>{if(different)rows.push({label,local:String(x??'기본값'),remote:String(y??'기본값')});};
   const themes={light:'밝게',dark:'어둡게',system:'시스템 설정'},views={card:'카드',list:'목록'};
-  add('화면 테마',themes[pa.theme],themes[pb.theme]);add('서재 보기',views[pa.libraryView],views[pb.libraryView]);
+  add('화면 테마',themes[pa.theme],themes[pb.theme]);add('디자인 테마',describeDesignTheme(pa.designTheme),describeDesignTheme(pb.designTheme),JSON.stringify(pa.designTheme)!==JSON.stringify(pb.designTheme));add('서재 보기',views[pa.libraryView],views[pb.libraryView]);
   const sort=p=>({modified:'수정일',created:'저장일',title:'제목'})[p.librarySort]+' · '+(p.librarySortDirection==='asc'?'오름차순':'내림차순');add('서재 정렬',sort(pa),sort(pb));
   for(const [key,label,format]of [['color','펜 색상',v=>v],['highlightColor','형광펜 색상',v=>v],['width','펜 굵기',v=>v+''],['opacity','형광펜/채움 투명도',v=>Math.round(v*100)+'%'],['penTTL','펜 표시 시간',v=>v?v+'초':'계속 표시'],['customColors','사용자 색상',v=>v.length?v.join(', '):'없음'],['customPalettes','사용자 팔레트',v=>v.length?v.map(p=>p.name+': '+p.colors.join(', ')).join(' / '):'없음']])add(label,format(pa.annotation[key]),format(pb.annotation[key]));
   const palette=p=>(PRESET_PALETTES.find(v=>v.id===p.annotation.paletteId)||p.annotation.customPalettes.find(v=>v.id===p.annotation.paletteId))?.name||'사용자 팔레트';add('색상 팔레트',palette(pa),palette(pb),pa.annotation.paletteId!==pb.annotation.paletteId);

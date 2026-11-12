@@ -1,4 +1,4 @@
-import {publicAppURL} from './install.js';
+import {publicAppURL,isIOS} from './install.js';
 import { listDocuments, getDocument, listRevisions, restoreFolderDocuments, getSetting, setSetting, onStorageChange, permission, readLibrary } from './storage.js';
 import { localFileIdentity } from './local-files.js';
 import { PREFERENCES_KEY, normalizePreferences } from './preferences.js';
@@ -11,8 +11,97 @@ export const FOLDER_PREVIOUS = 'HTMLMemo-library.previous.json';
 export const FOLDER_DATA = 'HTMLMemo-data';
 export const FOLDER_GUIDE = '새 기기로 옮기는 방법.txt';
 export const CHROME_REQUIRED_MESSAGE = '이 앱은 구글 크롬에서만 정상적으로 작동합니다. 크롬에서 실행해주세요.';
+const iosHandles = new WeakSet();
+let opfsWriterWorker = null, opfsWriteSeq = 0;
+const opfsPending = new Map();
+function writeOPFSByWorker(path, bytes) {
+  if (!opfsWriterWorker) {
+    const code = `onmessage=async e=>{const{id,path,buffer}=e.data;let access;try{let dir=await navigator.storage.getDirectory();for(let i=0;i<path.length-1;i++)dir=await dir.getDirectoryHandle(path[i],{create:true});const fh=await dir.getFileHandle(path[path.length-1],{create:true});access=await fh.createSyncAccessHandle();access.truncate(0);access.write(new Uint8Array(buffer),{at:0});access.flush();access.close();postMessage({id,ok:true});}catch(err){try{access?.close();}catch{}postMessage({id,ok:false,name:err?.name||'Error',message:err?.message||String(err)});}};`;
+    opfsWriterWorker = new Worker(URL.createObjectURL(new Blob([code], {type: 'text/javascript'})));
+    opfsWriterWorker.onmessage = e => {
+      const slot = opfsPending.get(e.data.id);
+      if (!slot) return;
+      opfsPending.delete(e.data.id);
+      if (e.data.ok) slot.resolve();
+      else { const err = new Error(e.data.message); err.name = e.data.name; slot.reject(err); }
+    };
+  }
+  const copy = bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength ? bytes.buffer.slice(0) : bytes.slice().buffer;
+  return new Promise((resolve, reject) => {
+    const id = ++opfsWriteSeq;
+    opfsPending.set(id, {resolve, reject});
+    opfsWriterWorker.postMessage({id, path, buffer: copy}, [copy]);
+  });
+}
+function wrapOPFSFile(rawFile, path) {
+  if (typeof rawFile?.createWritable === 'function') return rawFile;
+  return {
+    kind: 'file',
+    name: rawFile.name,
+    getFile: () => rawFile.getFile(),
+    async createWritable() {
+      const parts = [];
+      let aborted = false;
+      return {
+        async write(chunk) {
+          if (aborted) throw new Error('Aborted');
+          if (chunk instanceof Blob) parts.push(new Uint8Array(await chunk.arrayBuffer()));
+          else if (chunk instanceof ArrayBuffer) parts.push(new Uint8Array(chunk));
+          else if (ArrayBuffer.isView(chunk)) parts.push(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
+          else parts.push(new TextEncoder().encode(String(chunk ?? '')));
+        },
+        async abort() { aborted = true; parts.length = 0; },
+        async close() {
+          if (aborted) return;
+          const total = parts.reduce((sum, p) => sum + p.byteLength, 0);
+          const merged = new Uint8Array(total);
+          let offset = 0;
+          for (const p of parts) { merged.set(p, offset); offset += p.byteLength; }
+          await writeOPFSByWorker(path, merged);
+        },
+      };
+    },
+  };
+}
+function wrapOPFSDirectory(rawDir, path) {
+  const wrapped = {
+    kind: 'directory',
+    name: rawDir.name,
+    queryPermission: async () => 'granted',
+    requestPermission: async () => 'granted',
+    async getDirectoryHandle(name, options) {
+      return wrapOPFSDirectory(await rawDir.getDirectoryHandle(name, options), [...path, name]);
+    },
+    async getFileHandle(name, options) {
+      return wrapOPFSFile(await rawDir.getFileHandle(name, options), [...path, name]);
+    },
+    removeEntry: (name, options) => rawDir.removeEntry(name, options),
+    async *entries() {
+      for await (const [entryName, entry] of rawDir.entries()) {
+        yield [entryName, entry.kind === 'directory' ? wrapOPFSDirectory(entry, [...path, entryName]) : wrapOPFSFile(entry, [...path, entryName])];
+      }
+    },
+  };
+  iosHandles.add(wrapped);
+  return wrapped;
+}
 export function supportsDataFolder(window,navigator) {
   return typeof window.showDirectoryPicker==='function'&&typeof navigator.locks?.request==='function';
+}
+export function supportsIOSAppStorage(window,navigator) {
+  return isIOS(navigator)&&typeof window.showDirectoryPicker!=='function'&&typeof navigator.storage?.getDirectory==='function'&&typeof navigator.locks?.request==='function';
+}
+export function isIOSAppStorageHandle(handle) {
+  return !!(handle&&(iosHandles.has(handle)||handle.iosAppStorage));
+}
+export async function openIOSAppStorage(navigator) {
+  void navigator.storage.persist?.().catch(()=>{});
+  const root=await navigator.storage.getDirectory(),raw=await root.getDirectoryHandle('LibreMemo',{create:true});
+  const handle=typeof globalThis.FileSystemFileHandle!=='undefined'&&typeof globalThis.FileSystemFileHandle.prototype?.createWritable!=='function'
+    ? wrapOPFSDirectory(raw,['LibreMemo'])
+    : raw;
+  iosHandles.add(handle);
+  return handle;
 }
 export function storageFolderName(value) {
   const name=typeof value==='string'?value.trim().normalize('NFC'):'';
@@ -200,7 +289,7 @@ export class DataFolder {
         if(!current&&!snapshot&&resume&&checkpoint)throw Error('이전에 저장한 폴더 목록이 없습니다. 다른 폴더인지 확인해주세요. 빈 목록으로 덮어쓰지 않습니다.');
         const target=snapshot?.head||current;
         // Persist the new handle before touching the library; a denied IDB write keeps the old connection.
-        await this.ops.setSetting('folder',handle);
+        await this.ops.setSetting('folder',isIOSAppStorageHandle(handle)?{iosAppStorage:true,name:handle.name}:handle);
         this.handle=handle;this.head=target;
         if(snapshot){
           const localLibrary=await this.ops.readLibrary(),localFolders=validateFolders(localLibrary.folders),merged=mergeLibraryFolders(localFolders,snapshot.folders,uid);
