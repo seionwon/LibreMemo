@@ -422,7 +422,7 @@ export function resolveDesignTheme(designTheme = DEFAULT_DESIGN_THEME, brightnes
       '--shadow': shadow,
       '--card-rest-shadow': cardRestShadow,
       '--frame-ink': frameInk,
-      '--toast-bg': mode === 'dark' ? mixHex(base.surface, accent, 0.78) : mixHex('#1c2623', accent, 0.72),
+      '--toast-bg': readableAccentForSurface(mode === 'dark' ? mixHex(base.surface, accent, 0.78) : mixHex('#1c2623', accent, 0.72), '#fffefb', 'light'),
       '--toast-ink': '#fffefb',
     },
   };

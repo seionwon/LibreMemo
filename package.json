@@ -1,6 +1,6 @@
 {
   "name": "librememo",
-  "version": "1.9.73",
+  "version": "1.9.74",
   "private": true,
   "type": "module",
   "description": "문서·전자책·이미지·자막을 읽고 주석과 북마크를 자동 저장하는 PWA",

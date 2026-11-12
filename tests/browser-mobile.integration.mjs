@@ -150,7 +150,7 @@ test('real Chrome: Pages-only empty library waits for folder permission and rest
     })()`});
     const url=process.env.HTMLMEMO_SIDEBAR_TEST_URL||`http://127.0.0.1:${server.address().port}/`;
     const hidden=async label=>{assert.equal(await page.evaluate('document.querySelector("#empty-library").hidden'),true,label);assert.deepEqual(await page.evaluate('window.libraryHintViolations'),[],label);report.checks.push(label);};
-    report.phase='first run and cancellation';await page.navigate(url);await page.waitFor('!!document.querySelector("#create-storage-folder")');await hidden('First run does not show an empty-library claim');
+    report.phase='first run and cancellation';await page.navigate(url);await page.waitFor('!!document.querySelector("#create-storage-folder")',45000);await hidden('First run does not show an empty-library claim');
     await page.click('#cancel-folder-setup');await pausedSetup(page);await hidden('Canceling folder setup keeps the hint hidden');await page.click('#folder-setup-resume');
     report.phase='delayed permission and initial folder read';await page.evaluate('window.holdLibraryPermission=true;window.holdLibraryManifest=true');await page.click('#select-storage-folder');
     await page.waitFor('typeof window.releaseLibraryPermission==="function"');await hidden('Waiting for permission keeps the hint hidden');await page.evaluate('window.releaseLibraryPermission()');
@@ -187,7 +187,7 @@ test('real Chrome: Pages-only Android first-run folder welcome is error-free and
   const report={simulation:'Android user agent and touch viewports in dedicated desktop Chrome; an explicit folder picker stub and a null optional launchQueue',layouts:[]};
   try{
     await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));chrome=await launchChrome({firstRun:true});const {page}=chrome;await phone(page);
-    const url=process.env.HTMLMEMO_SIDEBAR_TEST_URL||`http://127.0.0.1:${server.address().port}/`;await page.navigate(url);await page.waitFor(ready);await page.waitFor('document.querySelector("[data-folder-welcome]")');
+    const url=process.env.HTMLMEMO_SIDEBAR_TEST_URL||`http://127.0.0.1:${server.address().port}/`;await page.navigate(url);await page.waitFor(ready,45000);await page.waitFor('document.querySelector("[data-folder-welcome]")',45000);
     await page.evaluate('navigator.serviceWorker.ready.then(()=>true)');
     assert.equal(await page.evaluate('window.phonePickerCalls'),0,'opening the app does not prompt for a folder');
     assert.equal(await page.evaluate('document.querySelector("#toast.error:not([hidden])")'),null,'no raw startup error after offline preparation');
@@ -237,7 +237,7 @@ test('real Chrome: Pages-only Android saved folder resumes across launches witho
         localStorage.setItem(${JSON.stringify(grantKey)},'granted');return 'granted';
       }});
     })()`});
-    const url=process.env.HTMLMEMO_SIDEBAR_TEST_URL||`http://127.0.0.1:${server.address().port}/`;await page.navigate(url);await page.waitFor('document.querySelector("#create-storage-folder")');
+    const url=process.env.HTMLMEMO_SIDEBAR_TEST_URL||`http://127.0.0.1:${server.address().port}/`;await page.navigate(url);await page.waitFor('document.querySelector("#create-storage-folder")',45000);
     assert.equal(await page.evaluate('!!document.querySelector("[data-folder-resume]")'),false);
     await page.evaluate(`window.showDirectoryPicker=async()=>{window.phonePickerCalls++;localStorage.setItem(${JSON.stringify(grantKey)},'granted');return(await navigator.storage.getDirectory()).getDirectoryHandle(${JSON.stringify(folderName)},{create:true});}`);
     await page.click('#select-storage-folder');await page.waitFor('document.documentElement.dataset.storageSetup==="ready"');

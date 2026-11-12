@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 import {DOMParser} from 'linkedom';
 import {
   THEME_CATEGORIES,
@@ -39,10 +40,14 @@ test('all 28 built-in design themes have unique IDs, valid categories and WCAG A
       const textVsSurface = contrastRatio(v['--text'], v['--surface']);
       const onAccentVsAccent = contrastRatio(v['--on-green'], v['--green']);
       const btnInkVsBtnBg = contrastRatio(v['--btn-primary-ink'], v['--btn-primary-bg']);
+      const btnInkVsDesignBrand = contrastRatio(v['--btn-primary-ink'], v['--design-brand']);
+      const toastInkVsToastBg = contrastRatio(v['--toast-ink'], v['--toast-bg']);
       assert.ok(textVsBg >= 4.5, `${theme.id}/${mode} text vs bg contrast ${textVsBg}`);
       assert.ok(textVsSurface >= 4.5, `${theme.id}/${mode} text vs surface contrast ${textVsSurface}`);
       assert.ok(onAccentVsAccent >= 4.5, `${theme.id}/${mode} onAccent vs accent contrast ${onAccentVsAccent}`);
       assert.ok(btnInkVsBtnBg >= 4.5, `${theme.id}/${mode} buttonInk vs buttonBg contrast ${btnInkVsBtnBg}`);
+      assert.ok(btnInkVsDesignBrand >= 4.5, `${theme.id}/${mode} buttonInk vs designBrand contrast ${btnInkVsDesignBrand}`);
+      assert.ok(toastInkVsToastBg >= 4.5, `${theme.id}/${mode} toastInk vs toastBg contrast ${toastInkVsToastBg}`);
     }
   }
 });
@@ -90,7 +95,7 @@ test('5 customization axes and custom accent colors auto-adapt for readability a
   }
 });
 
-test('applyDesignThemeToDocument updates root dataset attributes, CSS variables and Android/iOS status-bar meta tags', () => {
+test('applyDesignThemeToDocument updates root dataset attributes, CSS variables and Android/iOS status-bar meta tags', async () => {
   const doc = new DOMParser().parseFromString(
     '<!doctype html><html><head><meta name="theme-color" content="#334155"><meta name="apple-mobile-web-app-status-bar-style" content="default"></head><body></body></html>',
     'text/html',
@@ -114,6 +119,11 @@ test('applyDesignThemeToDocument updates root dataset attributes, CSS variables 
   assert.equal(doc.documentElement.dataset.skin, 'default');
   assert.equal(lightDefault.themeColor, '#334155');
   assert.equal(doc.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').getAttribute('content'), 'default');
+
+  const css = await readFile(new URL('../public/design.tailwind.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(css, /\.sync-scope input:checked\+span\{[^}]*color:white\b/);
+  assert.match(css, /\.sync-scope input:checked\+span\{[^}]*var\(--btn-primary-ink/);
+  assert.match(css, /\[data-design-primary\]\{[^}]*var\(--btn-primary-ink/);
 });
 
 test('iPhone and iPad automatically qualify for OPFS app storage while non-iOS browsers without folder picker do not', async () => {
