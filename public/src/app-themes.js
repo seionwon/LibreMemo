@@ -429,7 +429,9 @@ export function resolveDesignTheme(designTheme = DEFAULT_DESIGN_THEME, brightnes
 }
 
 export function applyDesignThemeToDocument(doc, brightness = 'light', designTheme = DEFAULT_DESIGN_THEME) {
-  const resolved = resolveDesignTheme(designTheme, brightness);
+  const lightResolved = resolveDesignTheme(designTheme, 'light');
+  const darkResolved = resolveDesignTheme(designTheme, 'dark');
+  const resolved = brightness === 'dark' ? darkResolved : lightResolved;
   const root = doc?.documentElement;
   if (!root) return resolved;
   root.dataset.theme = resolved.mode;
@@ -438,10 +440,15 @@ export function applyDesignThemeToDocument(doc, brightness = 'light', designThem
   root.dataset.skinTexture = resolved.texture;
   root.dataset.skinFont = resolved.font;
   root.dataset.skinFrame = resolved.frame;
-  if (root.style?.setProperty) {
-    root.style.colorScheme = resolved.mode;
-    for (const [name, value] of Object.entries(resolved.variables)) root.style.setProperty(name, value);
+  const serializeVars = vars => Object.entries(vars).map(([name, value]) => `${name}:${value}`).join(';');
+  const cssText = `:root{color-scheme:light;${serializeVars(lightResolved.variables)}}:root[data-theme="dark"]{color-scheme:dark;${serializeVars(darkResolved.variables)}}`;
+  let styleEl = doc.querySelector?.('#librememo-design-theme');
+  if (!styleEl && doc.createElement) {
+    styleEl = doc.createElement('style');
+    styleEl.id = 'librememo-design-theme';
+    (doc.head || root).appendChild(styleEl);
   }
+  if (styleEl && styleEl.textContent !== cssText) styleEl.textContent = cssText;
   const themeMeta = doc.querySelector?.('meta[name="theme-color"]');
   if (themeMeta) themeMeta.setAttribute('content', resolved.themeColor);
   const iosBarMeta = doc.querySelector?.('meta[name="apple-mobile-web-app-status-bar-style"]');

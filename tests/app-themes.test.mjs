@@ -104,6 +104,10 @@ test('applyDesignThemeToDocument updates root dataset attributes, CSS variables 
   assert.equal(doc.documentElement.dataset.skinFrame, 'editorial');
   assert.equal(doc.querySelector('meta[name="theme-color"]').getAttribute('content'), darkCyber.themeColor);
   assert.equal(doc.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').getAttribute('content'), 'black-translucent');
+  const styleSheetText = doc.querySelector('#librememo-design-theme')?.textContent || '';
+  assert.match(styleSheetText, /:root\{color-scheme:light;[^}]*--surface:#f7fcf9/);
+  assert.match(styleSheetText, /:root\[data-theme="dark"\]\{color-scheme:dark;[^}]*--surface:#0e1713/);
+  assert.equal(doc.documentElement.style.getPropertyValue('--surface') || '', '');
 
   const lightDefault = applyDesignThemeToDocument(doc, 'light', DEFAULT_DESIGN_THEME);
   assert.equal(doc.documentElement.dataset.theme, 'light');
