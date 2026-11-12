@@ -189,7 +189,7 @@ npm run build
 
 `npm run test:browser`는 실행 가능한 환경에서 임시 Chrome 프로필로 전체 브라우저 통합 검사를 수행합니다. macOS 에이전트 샌드박스에서는 데스크톱 Chrome을 직접 실행하지 않고 `codememo-browser request.json` 검증 서비스 또는 CI를 사용합니다. 실행하지 못한 검사는 통과로 기록하지 않습니다. 자세한 게시·검증 규칙은 [AGENTS.md](AGENTS.md)를 따릅니다.
 
-앱 기본 디자인은 라이브러리 데스크/슬레이트 테마이며, **설정 → 디자인 테마**에서 추가 다운로드 없이 내장된 28가지 디자인 테마(56개 라이트·다크 팔레트)와 모서리·절차적 배경 질감·글꼴·윤곽 프레임·강조색 5축 맞춤 조합을 오프라인에서도 바로 전환할 수 있습니다. `public/design.tailwind.css`의 CSS-first `@theme`와 실제 HTML·JavaScript를 **Tailwind CSS 4.3.3**으로 로컬 컴파일해 `public/styles.css`에 저장하며 런타임 CDN을 사용하지 않습니다. 디자인 선택·카탈로그는 일반 작업에서 새로 생성하지 않습니다.
+앱 기본 디자인은 라이브러리 데스크/슬레이트 테마이며, **설정 → 디자인 테마**에서 추가 다운로드 없이 내장된 10개 분류 80가지 디자인 테마(160개 라이트·다크 팔레트), 키워드 검색·즐겨찾기(★) 고정, 모서리·14종 절차적 배경 질감·글꼴·10종 윤곽 프레임·강조색 5축 맞춤 조합을 오프라인에서도 가볍게 전환할 수 있습니다. `public/design.tailwind.css`의 CSS-first `@theme`와 실제 HTML·JavaScript를 **Tailwind CSS 4.3.3**으로 로컬 컴파일해 `public/styles.css`에 저장하며 런타임 CDN을 사용하지 않습니다. 디자인 선택·카탈로그는 일반 작업에서 새로 생성하지 않습니다.
 
 ### YouTube 시점 메모
 

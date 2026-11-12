@@ -27,7 +27,7 @@ import {TEXT_STYLE_PRESETS,TEXT_SIZE_MIN,TEXT_SIZE_MAX,validTextStyle,stylePrevi
 import {parseYouTubeInput,parseChapters,cueTimes,clock,youtubeDocumentHTML,subtitleFormat,decodeSubtitle,matchSubtitleFiles,subtitlesFromZip,playlistFolderName,watchURL,SUBTITLE_EXTENSION,guideHTML,validateYouTube} from './youtube.js';
 import {isVideoNote,makeVideoNote,matchingVideoRecords,findVideoNote} from './youtube-notes.js';
 import {openVideoNoteDialog} from './youtube-note-dialog.js';
-import {THEME_CATEGORIES,APP_THEMES,THEME_SHAPE_OPTIONS,THEME_TEXTURE_OPTIONS,THEME_FONT_OPTIONS,THEME_FRAME_OPTIONS,THEME_ACCENT_PRESETS,DEFAULT_DESIGN_THEME,resolveDesignTheme,applyDesignThemeToDocument,describeDesignTheme} from './app-themes.js';
+import {THEME_CATEGORIES,APP_THEMES,THEME_SHAPE_OPTIONS,THEME_TEXTURE_OPTIONS,THEME_FONT_OPTIONS,THEME_FRAME_OPTIONS,THEME_ACCENT_PRESETS,DEFAULT_DESIGN_THEME,resolveDesignTheme,applyDesignThemeToDocument,describeDesignTheme,toggleFavoriteTheme,filterDesignThemes} from './app-themes.js';
 
 const PUBLIC_APP_URL = publicAppURL(location);
 for(const template of $$('#about-content,#export-guide-content'))template.innerHTML=template.innerHTML.replaceAll('https://seionwon.github.io/LibreMemo/',PUBLIC_APP_URL);
@@ -250,30 +250,66 @@ function ensureBundledThemeFont(family){
   try{const bytes=bundledFontBytes(family);if(bytes)void new window.FontFace(family,bytes,{weight:'100 900'}).load().then(face=>document.fonts.add(face)).catch(()=>loadedBundledFonts.delete(family));}catch{loadedBundledFonts.delete(family);}
 }
 function designThemeDialog(initialCategory='all') {
-  let category=THEME_CATEGORIES.some(c=>c.id===initialCategory)?initialCategory:'all';
+  let category=initialCategory==='favorites'||THEME_CATEGORIES.some(c=>c.id===initialCategory)?initialCategory:'all';
+  let query='',showAll=false;
+  const INITIAL_ALL_LIMIT=16;
+  const nonAllCategories=THEME_CATEGORIES.filter(item=>item.id!=='all');
   const hasCustomOverride=dt=>dt.shape!=='theme'||dt.texture!=='theme'||dt.font!=='theme'||dt.frame!=='theme'||!!dt.accent;
   const optionItems=list=>list.map(item=>`<option value="${esc(item.id)}">${esc(item.label)}</option>`).join('');
   const categoryCount=id=>id==='all'?APP_THEMES.length:APP_THEMES.filter(t=>t.category===id).length;
-  modal(`<section class="theme-studio" data-theme-studio><div class="dialog-heading"><div class="theme-heading-main"><button id="theme-back-settings" class="text-button theme-back-button" type="button" aria-label="설정으로 돌아가기">${icon('back',15)}<span>설정</span></button><h2>디자인 테마</h2></div><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p id="theme-studio-status" class="dialog-description small theme-studio-status" role="status"></p><div class="theme-quick-bar"><label class="theme-quick-select" for="theme-appearance"><span>밝기</span><select id="theme-appearance"><option value="light">밝게</option><option value="dark">어둡게</option><option value="system">시스템</option></select></label><button id="theme-random" type="button" class="secondary-button">분위기 추천</button><button id="theme-reset" type="button" class="secondary-button">기본값 복원</button></div><div class="theme-categories" role="group" aria-label="테마 분위기 분류">${THEME_CATEGORIES.map(item=>`<button type="button" class="theme-category-chip" data-theme-category="${esc(item.id)}" aria-pressed="${item.id===category}"><span>${esc(item.label)}</span><small>${categoryCount(item.id)}</small></button>`).join('')}</div><div id="theme-preset-grid" class="theme-preset-grid" role="group" aria-label="디자인 테마 목록"></div><details id="theme-customizer" class="theme-customizer"${hasCustomOverride(preferences.designTheme)?' open':''}><summary>세부 스타일 맞춤 조합 (모서리·질감·글꼴·윤곽·포인트색)</summary><div class="theme-custom-grid"><label for="theme-shape"><span>모서리 모양</span><select id="theme-shape">${optionItems(THEME_SHAPE_OPTIONS)}</select></label><label for="theme-texture"><span>배경 질감</span><select id="theme-texture">${optionItems(THEME_TEXTURE_OPTIONS)}</select></label><label for="theme-font"><span>앱 글꼴</span><select id="theme-font">${optionItems(THEME_FONT_OPTIONS)}</select></label><label for="theme-frame"><span>카드·윤곽선</span><select id="theme-frame">${optionItems(THEME_FRAME_OPTIONS)}</select></label></div><div class="theme-accent-box"><div class="theme-accent-head"><span>포인트 색상</span><button id="theme-accent-clear" type="button" class="palette-mini-btn">테마 기본색</button></div><div class="theme-accent-swatches">${THEME_ACCENT_PRESETS.map(hex=>`<button type="button" class="swatch" data-theme-accent="${hex}" style="--swatch:${hex}" aria-label="포인트 색상 ${hex}" aria-pressed="false"></button>`).join('')}<input id="theme-accent-picker" type="color" aria-label="포인트 색상 직접 선택" value="#334155"></div></div></details><p class="dialog-description small theme-studio-note">모든 테마는 그림 파일 없이 순수 스타일·절차적 질감·내장 가변 한글 글꼴로 작동해 오프라인에서도 가볍고 빠릅니다. 읽는 문서(PDF·전자책·웹·한글·Office)의 본문 서식은 건드리지 않습니다.</p><div class="dialog-actions"><button type="button" class="primary-button" data-dialog-close>완료</button></div></section>`,dialog=>{
-    const grid=$('#theme-preset-grid',dialog),status=$('#theme-studio-status',dialog);
+  const curatedAllSlice=(favorites,activeThemeId)=>{
+    const seen=new Set(),ordered=[];
+    const pushById=id=>{const found=APP_THEMES.find(t=>t.id===id);if(found&&!seen.has(found.id)){seen.add(found.id);ordered.push(found);}};
+    for(const fid of favorites)pushById(fid);
+    pushById(activeThemeId);
+    const byCat=nonAllCategories.map(cat=>APP_THEMES.filter(t=>t.category===cat.id));
+    for(let round=0;ordered.length<INITIAL_ALL_LIMIT&&round<8;round++){
+      for(const group of byCat){
+        if(ordered.length>=INITIAL_ALL_LIMIT)break;
+        const item=group[round];
+        if(item&&!seen.has(item.id)){seen.add(item.id);ordered.push(item);}
+      }
+    }
+    return ordered;
+  };
+  modal(`<section class="theme-studio" data-theme-studio><div class="dialog-heading"><div class="theme-heading-main"><button id="theme-back-settings" class="text-button theme-back-button" type="button" aria-label="설정으로 돌아가기">${icon('back',15)}<span>설정</span></button><h2>디자인 테마</h2></div><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p id="theme-studio-status" class="dialog-description small theme-studio-status" role="status"></p><div class="theme-quick-bar"><div class="theme-search-box">${icon('search',14)}<input id="theme-search" type="text" autocomplete="off" spellcheck="false" maxlength="60" placeholder="테마·분위기·질감 검색 (한지, 원고지, 오로라…)" aria-label="디자인 테마 검색"><button id="theme-search-clear" type="button" aria-label="테마 검색어 지우기" hidden>${icon('close',13)}</button></div><label class="theme-quick-select" for="theme-appearance"><span>밝기</span><select id="theme-appearance"><option value="light">밝게</option><option value="dark">어둡게</option><option value="system">시스템</option></select></label><button id="theme-random" type="button" class="secondary-button">분위기 추천</button><button id="theme-reset" type="button" class="secondary-button">기본값 복원</button></div><div class="theme-categories" role="group" aria-label="테마 분위기 분류"><button type="button" class="theme-category-chip" data-theme-category="all" aria-pressed="${category==='all'}"><span>전체</span><small>${APP_THEMES.length}</small></button><button type="button" class="theme-category-chip" data-theme-category="favorites" aria-pressed="${category==='favorites'}"><span>★ 즐겨찾기</span><small data-fav-count>${(preferences.designTheme.favorites||[]).length}</small></button>${nonAllCategories.map(item=>`<button type="button" class="theme-category-chip" data-theme-category="${esc(item.id)}" aria-pressed="${item.id===category}"><span>${esc(item.label)}</span><small>${categoryCount(item.id)}</small></button>`).join('')}</div><div id="theme-preset-grid" class="theme-preset-grid" role="group" aria-label="디자인 테마 목록"></div><details id="theme-customizer" class="theme-customizer"${hasCustomOverride(preferences.designTheme)?' open':''}><summary>세부 스타일 맞춤 조합 (모서리·질감·글꼴·윤곽·포인트색)</summary><div class="theme-custom-grid"><label for="theme-shape"><span>모서리 모양</span><select id="theme-shape">${optionItems(THEME_SHAPE_OPTIONS)}</select></label><label for="theme-texture"><span>배경 질감</span><select id="theme-texture">${optionItems(THEME_TEXTURE_OPTIONS)}</select></label><label for="theme-font"><span>앱 글꼴</span><select id="theme-font">${optionItems(THEME_FONT_OPTIONS)}</select></label><label for="theme-frame"><span>카드·윤곽선</span><select id="theme-frame">${optionItems(THEME_FRAME_OPTIONS)}</select></label></div><div class="theme-accent-box"><div class="theme-accent-head"><span>포인트 색상</span><button id="theme-accent-clear" type="button" class="palette-mini-btn">테마 기본색</button></div><div class="theme-accent-swatches">${THEME_ACCENT_PRESETS.map(hex=>`<button type="button" class="swatch" data-theme-accent="${hex}" style="--swatch:${hex}" aria-label="포인트 색상 ${hex}" aria-pressed="false"></button>`).join('')}<input id="theme-accent-picker" type="color" aria-label="포인트 색상 직접 선택" value="#334155"></div></div></details><p class="dialog-description small theme-studio-note">모든 테마는 그림 파일 없이 순수 스타일·절차적 질감·내장 가변 한글 글꼴로 작동해 오프라인에서도 가볍고 빠릅니다. 읽는 문서(PDF·전자책·웹·한글·Office)의 본문 서식은 건드리지 않습니다.</p><div class="dialog-actions"><button type="button" class="primary-button" data-dialog-close>완료</button></div></section>`,dialog=>{
+    const grid=$('#theme-preset-grid',dialog),status=$('#theme-studio-status',dialog),searchInput=$('#theme-search',dialog),searchClear=$('#theme-search-clear',dialog);
     const renderCards=()=>{
-      const mode=currentBrightness(),items=category==='all'?APP_THEMES:APP_THEMES.filter(t=>t.category===category);
+      const mode=currentBrightness(),favorites=preferences.designTheme.favorites||[],favSet=new Set(favorites);
+      const compactAll=category==='all'&&!query.trim()&&!showAll;
+      const matched=filterDesignThemes({category,query,favorites});
+      const items=compactAll?curatedAllSlice(favorites,preferences.designTheme.id):matched;
+      const hiddenCount=compactAll?Math.max(0,APP_THEMES.length-items.length):0;
+      if(!items.length){
+        grid.innerHTML=`<p class="theme-empty">${category==='favorites'&&!query.trim()?'아직 별표(★)로 고정한 즐겨찾기 테마가 없습니다. 마음에 드는 테마 카드 오른쪽 위의 ★ 버튼을 눌러 보세요.':'검색 조건에 맞는 테마가 없습니다. 다른 키워드나 분류를 선택해 보세요.'}</p>`;
+        return;
+      }
       grid.innerHTML=items.map(preset=>{
         const resolved=resolveDesignTheme({id:preset.id,shape:'theme',texture:'theme',font:'theme',frame:'theme',accent:''},mode);
-        const v=resolved.variables,activePreset=preferences.designTheme.id===preset.id;
-        return `<button type="button" class="theme-preset-card${activePreset?' chosen':''}" data-theme-preset="${esc(preset.id)}" aria-pressed="${activePreset}"><span class="theme-card-preview" data-preview-texture="${esc(resolved.texture)}" data-preview-frame="${esc(resolved.frame)}" style="--p-bg:${v['--bg']};--p-surface:${v['--surface']};--p-muted:${v['--surface-muted']};--p-text:${v['--text']};--p-sub:${v['--muted']};--p-line:${v['--line']};--p-accent:${v['--green']};--p-soft:${v['--green-light']};--p-on:${v['--on-green']};--p-radius:${v['--radius-library']};--p-btn-radius:${v['--radius-button']};--p-font:${esc(v['--app-font'])}" aria-hidden="true"><span class="theme-mini-bar"><i style="background:${v['--green']}"></i><i style="background:${v['--muted']}"></i></span><span class="theme-mini-sheet"><b class="theme-mini-sample">가나다 Aa</b><span class="theme-mini-tags"><em class="theme-mini-soft">서재</em><em class="theme-mini-cta">저장</em></span></span></span><span class="theme-card-meta"><strong>${esc(preset.name)}</strong><small>${esc(preset.summary)}</small></span></button>`;
-      }).join('');
+        const v=resolved.variables,activePreset=preferences.designTheme.id===preset.id,starred=favSet.has(preset.id);
+        return `<div class="theme-preset-item"><button type="button" class="theme-preset-card${activePreset?' chosen':''}" data-theme-preset="${esc(preset.id)}" aria-pressed="${activePreset}"><span class="theme-card-preview" data-preview-texture="${esc(resolved.texture)}" data-preview-frame="${esc(resolved.frame)}" style="--p-bg:${v['--bg']};--p-surface:${v['--surface']};--p-muted:${v['--surface-muted']};--p-text:${v['--text']};--p-sub:${v['--muted']};--p-line:${v['--line']};--p-accent:${v['--green']};--p-soft:${v['--green-light']};--p-on:${v['--on-green']};--p-radius:${v['--radius-library']};--p-btn-radius:${v['--radius-button']};--p-font:${esc(v['--app-font'])}" aria-hidden="true"><span class="theme-mini-bar"><i style="background:${v['--green']}"></i><i style="background:${v['--muted']}"></i></span><span class="theme-mini-sheet"><b class="theme-mini-sample">가나다 Aa</b><span class="theme-mini-tags"><em class="theme-mini-soft">서재</em><em class="theme-mini-cta">저장</em></span></span></span><span class="theme-card-meta"><strong>${esc(preset.name)}</strong><small>${esc(preset.summary)}</small></span></button><button type="button" class="theme-star-btn${starred?' starred':''}" data-theme-star="${esc(preset.id)}" aria-pressed="${starred}" aria-label="${esc(preset.name)} 즐겨찾기">${icon(starred?'star-filled':'star',13)}</button></div>`;
+      }).join('')+(hiddenCount>0?`<button id="theme-show-all" type="button" class="secondary-button theme-show-all">전체 ${APP_THEMES.length}종 모두 펼치기 (+${hiddenCount})</button>`:'');
       $$('[data-theme-preset]',grid).forEach(button=>{
         button.onclick=safely(()=>{
-          changePreferences({designTheme:{id:button.dataset.themePreset,shape:'theme',texture:'theme',font:'theme',frame:'theme',accent:''}});
+          changePreferences({designTheme:{id:button.dataset.themePreset,shape:'theme',texture:'theme',font:'theme',frame:'theme',accent:'',favorites:preferences.designTheme.favorites||[]}});
           syncStudio({rebuild:false});
         });
       });
+      $$('[data-theme-star]',grid).forEach(starBtn=>{
+        starBtn.onclick=safely(()=>{
+          const next=toggleFavoriteTheme(preferences.designTheme,starBtn.dataset.themeStar);
+          changePreferences({designTheme:{...next,favorites:next.favorites||[]}});
+          syncStudio({rebuild:true});
+        });
+      });
+      const expandBtn=$('#theme-show-all',grid);
+      if(expandBtn)expandBtn.onclick=()=>{showAll=true;syncStudio({rebuild:true});};
     };
     const syncStudio=({rebuild=false}={})=>{
       if(rebuild)renderCards();
       else $$('[data-theme-preset]',grid).forEach(b=>{const on=b.dataset.themePreset===preferences.designTheme.id;b.classList.toggle('chosen',on);b.setAttribute('aria-pressed',String(on));});
       $$('[data-theme-category]',dialog).forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.themeCategory===category)));
+      const favCountEl=$('[data-fav-count]',dialog);if(favCountEl)favCountEl.textContent=String((preferences.designTheme.favorites||[]).length);
       const dt=preferences.designTheme,resolved=resolveDesignTheme(dt,currentBrightness());
       $('#theme-appearance',dialog).value=preferences.theme;
       $('#theme-shape',dialog).value=dt.shape;
@@ -288,15 +324,23 @@ function designThemeDialog(initialCategory='all') {
       status.textContent=`현재 적용: ${describeDesignTheme(dt)} · 문서 본문 서식은 보호하고 앱 외관·서재·사이드바·상태바에 즉시 반영합니다.`;
     };
     $('#theme-back-settings',dialog).onclick=()=>{settingsDialog();$('#settings-design-theme')?.focus();};
+    searchInput.oninput=()=>{
+      query=searchInput.value;
+      searchClear.hidden=!query.length;
+      if(query.trim()&&category!=='all'&&category!=='favorites')category='all';
+      syncStudio({rebuild:true});
+    };
+    searchClear.onclick=()=>{query='';searchInput.value='';searchClear.hidden=true;syncStudio({rebuild:true});searchInput.focus();};
     $('#theme-appearance',dialog).onchange=safely(e=>{changePreferences({theme:e.target.value});syncStudio({rebuild:true});});
     $('#theme-random',dialog).onclick=safely(()=>{
       const pool=APP_THEMES.filter(t=>t.id!==preferences.designTheme.id);
       const picked=pool[Math.floor(Math.random()*pool.length)]||APP_THEMES[0];
       if(category!=='all'&&picked.category!==category)category='all';
-      changePreferences({designTheme:{id:picked.id,shape:'theme',texture:'theme',font:'theme',frame:'theme',accent:''}});
+      query='';searchInput.value='';searchClear.hidden=true;
+      changePreferences({designTheme:{id:picked.id,shape:'theme',texture:'theme',font:'theme',frame:'theme',accent:'',favorites:preferences.designTheme.favorites||[]}});
       syncStudio({rebuild:true});
     });
-    $('#theme-reset',dialog).onclick=safely(()=>{changePreferences({designTheme:{...DEFAULT_DESIGN_THEME}});syncStudio({rebuild:false});});
+    $('#theme-reset',dialog).onclick=safely(()=>{changePreferences({designTheme:{...DEFAULT_DESIGN_THEME,favorites:preferences.designTheme.favorites||[]}});syncStudio({rebuild:true});});
     $$('[data-theme-category]',dialog).forEach(button=>{button.onclick=()=>{category=button.dataset.themeCategory;syncStudio({rebuild:true});};});
     for(const [sel,key] of [['#theme-shape','shape'],['#theme-texture','texture'],['#theme-font','font'],['#theme-frame','frame']]){
       $(sel,dialog).onchange=safely(e=>{changePreferences({designTheme:{[key]:e.target.value}});syncStudio({rebuild:false});});
@@ -309,7 +353,7 @@ function designThemeDialog(initialCategory='all') {
   });
 }
 function settingsDialog() {
-  modal(`<div class="dialog-heading"><h2>LibreMemo 설정</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><div class="settings-app-actions" role="group" aria-label="앱 실행과 정보"><button id="settings-help" class="secondary-button" type="button" aria-haspopup="dialog">${icon('help',15)} 도움말</button><button id="settings-execution" class="secondary-button" type="button">${icon('external',15)} 실행과 앱 전달</button><button id="settings-about" class="secondary-button" type="button" aria-haspopup="dialog">${icon('info',15)} About</button></div><div class="setting-row"><div><strong>기기 간 동기화</strong><p>문서·주석·북마크·읽기 위치·이력을 주고받고, 앱 설정도 선택해 맞춥니다. 휴지통은 제외합니다.</p></div><button id="settings-sync" class="secondary-button">연결</button></div><p class="local-only-note">${icon('check',15)} 문서·주석·설정은 기기에 저장합니다. 기기 간 동기화는 연결할 때만 암호화해 전송합니다.</p><div class="setting-row"><div><strong>AI 검색</strong><p>선택한 글을 보낼 LLM을 등록하고 사용할 것을 체크합니다.</p></div><button id="settings-ai-search" class="secondary-button">관리</button></div><div class="setting-row"><div><strong>데이터 폴더</strong><p id="settings-folder-status">${esc(folderStatusText())}</p></div><button id="settings-folder" class="secondary-button">${folder||usingIOSAppStorage()?'관리':'폴더 연결'}</button></div>${dataFolderGuide()}<div class="setting-row"><div><strong>화면 테마</strong><p>서재와 도구의 밝기를 선택하세요.</p></div><select id="appearance"><option value="light">밝게</option><option value="dark">어둡게</option><option value="system">시스템</option></select></div><div class="setting-row"><div><strong>디자인 테마</strong><p id="settings-design-theme-summary"><span class="theme-inline-dots" aria-hidden="true"><i style="background:var(--bg)"></i><i style="background:var(--surface)"></i><i style="background:var(--green)"></i></span>${esc(describeDesignTheme(preferences.designTheme))} · 28종 테마와 질감·모서리·글꼴 조합</p></div><button id="settings-design-theme" class="secondary-button" type="button" aria-haspopup="dialog">테마 선택</button></div><details class="settings-backup"><summary>이전 설정 JSON 파일 사용 (선택 사항)</summary><p class="dialog-description small">데이터 폴더를 연결했다면 설정 파일을 따로 저장하거나 불러올 필요가 없습니다. 예전에 저장한 설정 JSON을 옮길 때만 사용하세요.</p><p id="settings-file-name" class="settings-file-name">${settingsFileHandle?esc(settingsFileHandle.name):'연결한 설정 파일이 없습니다.'}</p><div class="settings-file-actions"><button id="settings-save" class="secondary-button">${icon('save',15)} 설정 파일 저장</button><button id="settings-load" class="secondary-button">${icon('folder',15)} 설정 파일 불러오기</button><button id="settings-reload" class="secondary-button" ${settingsFileHandle?'':'disabled'}>${icon('reload',15)} 다시 불러오기</button></div></details><p class="dialog-description small">브라우저 데이터가 삭제돼도 전용 폴더의 파일은 남습니다. 폴더를 다시 선택하면 복원됩니다. 폴더 자체 삭제·기기 고장까지 막는 것은 아니므로 중요한 데이터는 폴더 전체를 다른 저장장치에도 복사하세요.</p>`,()=>{
+  modal(`<div class="dialog-heading"><h2>LibreMemo 설정</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><div class="settings-app-actions" role="group" aria-label="앱 실행과 정보"><button id="settings-help" class="secondary-button" type="button" aria-haspopup="dialog">${icon('help',15)} 도움말</button><button id="settings-execution" class="secondary-button" type="button">${icon('external',15)} 실행과 앱 전달</button><button id="settings-about" class="secondary-button" type="button" aria-haspopup="dialog">${icon('info',15)} About</button></div><div class="setting-row"><div><strong>기기 간 동기화</strong><p>문서·주석·북마크·읽기 위치·이력을 주고받고, 앱 설정도 선택해 맞춥니다. 휴지통은 제외합니다.</p></div><button id="settings-sync" class="secondary-button">연결</button></div><p class="local-only-note">${icon('check',15)} 문서·주석·설정은 기기에 저장합니다. 기기 간 동기화는 연결할 때만 암호화해 전송합니다.</p><div class="setting-row"><div><strong>AI 검색</strong><p>선택한 글을 보낼 LLM을 등록하고 사용할 것을 체크합니다.</p></div><button id="settings-ai-search" class="secondary-button">관리</button></div><div class="setting-row"><div><strong>데이터 폴더</strong><p id="settings-folder-status">${esc(folderStatusText())}</p></div><button id="settings-folder" class="secondary-button">${folder||usingIOSAppStorage()?'관리':'폴더 연결'}</button></div>${dataFolderGuide()}<div class="setting-row"><div><strong>화면 테마</strong><p>서재와 도구의 밝기를 선택하세요.</p></div><select id="appearance"><option value="light">밝게</option><option value="dark">어둡게</option><option value="system">시스템</option></select></div><div class="setting-row"><div><strong>디자인 테마</strong><p id="settings-design-theme-summary"><span class="theme-inline-dots" aria-hidden="true"><i style="background:var(--bg)"></i><i style="background:var(--surface)"></i><i style="background:var(--green)"></i></span>${esc(describeDesignTheme(preferences.designTheme))} · 80종 테마와 질감·모서리·글꼴 조합</p></div><button id="settings-design-theme" class="secondary-button" type="button" aria-haspopup="dialog">테마 선택</button></div><details class="settings-backup"><summary>이전 설정 JSON 파일 사용 (선택 사항)</summary><p class="dialog-description small">데이터 폴더를 연결했다면 설정 파일을 따로 저장하거나 불러올 필요가 없습니다. 예전에 저장한 설정 JSON을 옮길 때만 사용하세요.</p><p id="settings-file-name" class="settings-file-name">${settingsFileHandle?esc(settingsFileHandle.name):'연결한 설정 파일이 없습니다.'}</p><div class="settings-file-actions"><button id="settings-save" class="secondary-button">${icon('save',15)} 설정 파일 저장</button><button id="settings-load" class="secondary-button">${icon('folder',15)} 설정 파일 불러오기</button><button id="settings-reload" class="secondary-button" ${settingsFileHandle?'':'disabled'}>${icon('reload',15)} 다시 불러오기</button></div></details><p class="dialog-description small">브라우저 데이터가 삭제돼도 전용 폴더의 파일은 남습니다. 폴더를 다시 선택하면 복원됩니다. 폴더 자체 삭제·기기 고장까지 막는 것은 아니므로 중요한 데이터는 폴더 전체를 다른 저장장치에도 복사하세요.</p>`,()=>{
     $('#settings-help').onclick=helpDialog;$('#settings-execution').onclick=()=>{$('#dialog').close();activate('execution');$('#execution h1').focus({preventScroll:true});};$('#settings-about').onclick=aboutDialog;
     $('#settings-sync').onclick=deviceSyncDialog;$('#settings-ai-search').onclick=aiSearchDialog;
     $('#settings-folder').onclick=safely(()=>chooseFolder({onConnected:settingsDialog}));

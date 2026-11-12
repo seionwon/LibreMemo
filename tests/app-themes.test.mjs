@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
+import {gzipSync} from 'node:zlib';
 import {DOMParser} from 'linkedom';
 import {
   THEME_CATEGORIES,
@@ -13,6 +14,8 @@ import {
   DEFAULT_DESIGN_THEME,
   contrastRatio,
   normalizeDesignTheme,
+  toggleFavoriteTheme,
+  filterDesignThemes,
   resolveDesignTheme,
   applyDesignThemeToDocument,
   describeDesignTheme,
@@ -21,14 +24,26 @@ import {normalizePreferences, storePreferences, loadPreferences, serializeSettin
 import {syncSettingsDifferences} from '../public/src/sync-adapter.js';
 import {supportsDataFolder, supportsIOSAppStorage, isIOSAppStorageHandle, openIOSAppStorage} from '../public/src/data-folder.js';
 
-test('all 28 built-in design themes have unique IDs, valid categories and WCAG AA >= 4.5 contrast in both Light and Dark modes', () => {
-  assert.equal(APP_THEMES.length, 28);
+const LEGACY_28_IDS = [
+  'default', 'oneui-breeze', 'cupertino-glass', 'material-sage', 'nordic-arctic', 'fluent-mica',
+  'hanji-library', 'vintage-hardcover', 'editorial-press', 'warm-bookcafe', 'eink-paperwhite',
+  'grid-engineering', 'lined-diary', 'dot-bullet', 'kraft-scrapbook', 'blueprint-studio',
+  'forest-moss', 'ocean-breeze', 'sakura-spring', 'autumn-terracotta', 'matcha-tea',
+  'lavender-dream', 'peach-sorbet', 'midnight-astronomy', 'royal-velvet',
+  'neo-brutal-pop', 'pop-mint-candy', 'cyber-terminal', 'retro-classic-os',
+];
+
+test('all 80 built-in design themes preserve legacy IDs, stay lightweight and satisfy WCAG AA >= 4.5 contrast in both Light and Dark modes', async () => {
+  assert.equal(APP_THEMES.length, 80);
   const ids = new Set(APP_THEMES.map(t => t.id));
   assert.equal(ids.size, APP_THEMES.length);
+  for (const legacyId of LEGACY_28_IDS) {
+    assert.ok(ids.has(legacyId), `preserves theme ID ${legacyId}`);
+  }
   const categoryIds = new Set(THEME_CATEGORIES.filter(c => c.id !== 'all').map(c => c.id));
-  assert.equal(categoryIds.size, 6);
+  assert.equal(categoryIds.size, 10);
   for (const catId of categoryIds) {
-    assert.ok(APP_THEMES.some(t => t.category === catId), `category ${catId} has themes`);
+    assert.equal(APP_THEMES.filter(t => t.category === catId).length, 8, `category ${catId} has 8 balanced themes`);
   }
 
   for (const theme of APP_THEMES) {
@@ -38,26 +53,50 @@ test('all 28 built-in design themes have unique IDs, valid categories and WCAG A
       const v = resolved.variables;
       const textVsBg = contrastRatio(v['--text'], v['--bg']);
       const textVsSurface = contrastRatio(v['--text'], v['--surface']);
+      const mutedVsBg = contrastRatio(v['--muted'], v['--bg']);
+      const mutedVsSurface = contrastRatio(v['--muted'], v['--surface']);
+      const accentVsSurface = contrastRatio(v['--green'], v['--surface']);
+      const accentVsSoft = contrastRatio(v['--green'], v['--green-light']);
       const onAccentVsAccent = contrastRatio(v['--on-green'], v['--green']);
       const btnInkVsBtnBg = contrastRatio(v['--btn-primary-ink'], v['--btn-primary-bg']);
       const btnInkVsDesignBrand = contrastRatio(v['--btn-primary-ink'], v['--design-brand']);
       const toastInkVsToastBg = contrastRatio(v['--toast-ink'], v['--toast-bg']);
       assert.ok(textVsBg >= 4.5, `${theme.id}/${mode} text vs bg contrast ${textVsBg}`);
       assert.ok(textVsSurface >= 4.5, `${theme.id}/${mode} text vs surface contrast ${textVsSurface}`);
+      assert.ok(mutedVsBg >= 4.5, `${theme.id}/${mode} muted vs bg contrast ${mutedVsBg}`);
+      assert.ok(mutedVsSurface >= 4.5, `${theme.id}/${mode} muted vs surface contrast ${mutedVsSurface}`);
+      assert.ok(accentVsSurface >= 4.5, `${theme.id}/${mode} accent vs surface contrast ${accentVsSurface}`);
+      assert.ok(accentVsSoft >= 4.5, `${theme.id}/${mode} accent vs accentSoft contrast ${accentVsSoft}`);
       assert.ok(onAccentVsAccent >= 4.5, `${theme.id}/${mode} onAccent vs accent contrast ${onAccentVsAccent}`);
       assert.ok(btnInkVsBtnBg >= 4.5, `${theme.id}/${mode} buttonInk vs buttonBg contrast ${btnInkVsBtnBg}`);
       assert.ok(btnInkVsDesignBrand >= 4.5, `${theme.id}/${mode} buttonInk vs designBrand contrast ${btnInkVsDesignBrand}`);
       assert.ok(toastInkVsToastBg >= 4.5, `${theme.id}/${mode} toastInk vs toastBg contrast ${toastInkVsToastBg}`);
     }
   }
+
+  const rawModule = await readFile(new URL('../public/src/app-themes.js', import.meta.url));
+  const gzippedBytes = gzipSync(rawModule).byteLength;
+  assert.ok(gzippedBytes < 20 * 1024, `app-themes.js stays lightweight (${gzippedBytes} bytes gzipped)`);
+  assert.doesNotMatch(rawModule.toString('utf8'), /data:image\/|\.(?:png|jpe?g|webp|gif)\b/i);
 });
 
-test('5 customization axes and custom accent colors auto-adapt for readability and round-trip through preferences and device sync', () => {
-  assert.ok(THEME_SHAPE_OPTIONS.length >= 5);
-  assert.ok(THEME_TEXTURE_OPTIONS.length >= 8);
-  assert.ok(THEME_FONT_OPTIONS.length >= 6);
-  assert.ok(THEME_FRAME_OPTIONS.length >= 7);
-  assert.equal(THEME_ACCENT_PRESETS.length, 16);
+test('5 customization axes, procedural textures/frames, favorites pinning and search round-trip cleanly', () => {
+  assert.equal(THEME_SHAPE_OPTIONS.length, 6);
+  assert.equal(THEME_TEXTURE_OPTIONS.length, 15);
+  assert.equal(THEME_FONT_OPTIONS.length, 6);
+  assert.equal(THEME_FRAME_OPTIONS.length, 11);
+  assert.equal(THEME_ACCENT_PRESETS.length, 24);
+
+  for (const texture of ['millimeter', 'cornell', 'manuscript', 'staff', 'starlight', 'canvas']) {
+    const r = resolveDesignTheme({id: 'wongoji-manuscript', texture, shape: 'pebble', frame: 'double'}, 'light');
+    assert.equal(r.texture, texture);
+    assert.equal(r.shape, 'pebble');
+    assert.equal(r.frame, 'double');
+  }
+  for (const frame of ['double', 'spiral', 'luminous']) {
+    const r = resolveDesignTheme({id: 'aurora-borealis', frame}, 'dark');
+    assert.equal(r.frame, frame);
+  }
 
   for (const accent of ['#ffff00', '#050505', ...THEME_ACCENT_PRESETS]) {
     for (const mode of ['light', 'dark']) {
@@ -72,16 +111,31 @@ test('5 customization axes and custom accent colors auto-adapt for readability a
     }
   }
 
+  let favTheme = toggleFavoriteTheme(DEFAULT_DESIGN_THEME, 'hanji-library');
+  favTheme = toggleFavoriteTheme(favTheme, 'wongoji-manuscript');
+  assert.deepEqual(favTheme.favorites, ['wongoji-manuscript', 'hanji-library']);
+  const pinnedList = filterDesignThemes({category: 'all', favorites: favTheme.favorites});
+  assert.equal(pinnedList[0].id, 'wongoji-manuscript');
+  assert.equal(pinnedList[1].id, 'hanji-library');
+  assert.deepEqual(filterDesignThemes({category: 'favorites', favorites: favTheme.favorites}).map(t => t.id), ['wongoji-manuscript', 'hanji-library']);
+  assert.ok(filterDesignThemes({category: 'all', query: '원고지'}).some(t => t.id === 'wongoji-manuscript'));
+  assert.ok(filterDesignThemes({category: 'all', query: '오선지'}).some(t => t.id === 'music-conservatory'));
+  assert.ok(filterDesignThemes({category: 'all', query: '아몰레드'}).length >= 1);
+
+  const unstarred = toggleFavoriteTheme(toggleFavoriteTheme(favTheme, 'hanji-library'), 'wongoji-manuscript');
+  assert.equal('favorites' in unstarred, false);
+
   const localMap = new Map();
   const storage = {getItem: k => localMap.get(k) ?? null, setItem: (k, v) => localMap.set(k, v)};
   const stored = storePreferences({
     theme: 'dark',
-    designTheme: {id: 'cupertino-glass', shape: 'round', texture: 'glow', font: 'rounded', frame: 'glass', accent: '#1D4ED8'},
+    designTheme: {id: 'cupertino-glass', shape: 'round', texture: 'glow', font: 'rounded', frame: 'glass', accent: '#1D4ED8', favorites: ['kyoto-teahouse', 'hanji-library']},
   }, storage);
   assert.equal(stored.designTheme.accent, '#1d4ed8');
+  assert.deepEqual(stored.designTheme.favorites, ['kyoto-teahouse', 'hanji-library']);
   assert.deepEqual(loadPreferences(storage), stored);
   assert.deepEqual(parseSettings(serializeSettings(stored)).preferences, stored);
-  assert.match(describeDesignTheme(stored.designTheme), /쿠퍼티노 프로스트 글래스/);
+  assert.match(describeDesignTheme(stored.designTheme), /쿠퍼티노 프로스트 글래스.*★2/);
 
   const baseEntries = {[`htmlmemo-preferences-v1`]: JSON.stringify(normalizePreferences())};
   const customEntries = {[`htmlmemo-preferences-v1`]: JSON.stringify(stored)};
@@ -89,7 +143,7 @@ test('5 customization axes and custom accent colors auto-adapt for readability a
   assert.ok(diffs.includes('화면 테마'));
   assert.ok(diffs.includes('디자인 테마'));
 
-  for (const bad of [null, 'hanji-library', [], {id: 'nonexistent'}, {shape: 'hexagon'}, {texture: 'marble'}, {font: 'comic'}, {frame: 'neon'}, {accent: 'red'}, {accent: '#123'}]) {
+  for (const bad of [null, 'hanji-library', [], {id: 'nonexistent'}, {shape: 'hexagon'}, {texture: 'marble'}, {font: 'comic'}, {frame: 'neon'}, {accent: 'red'}, {accent: '#123'}, {favorites: 'hanji-library'}, {favorites: ['nonexistent']}]) {
     assert.throws(() => normalizeDesignTheme(bad));
     assert.throws(() => normalizePreferences({designTheme: bad}));
   }
