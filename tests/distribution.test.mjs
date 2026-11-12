@@ -285,6 +285,13 @@ test('library star buttons toggle per folder, keep most recently starred items a
   // Trash has no star toggle buttons.
   doc.querySelector('#library-trash').onclick();
   assert.equal(doc.querySelectorAll('[data-card-star],[data-folder-star]').length,0);
+  const css=assets.app['styles.css'].text;
+  for(const selector of [/\.library-folder-card \.card-menu\{([^}]*)\}/,/\.library-folder-card \.card-star\{([^}]*)\}/]){
+    const body=css.match(selector)?.[1]||'';
+    assert.match(body,/top:50%/);
+    assert.match(body,/transform:translateY\(-50%\)/);
+  }
+  assert.doesNotMatch(css,/\.library-folder-card \.card-(?:menu|star)\{[^}]*top:[15]px/);
 });
 test('empty trash offers no example or destructive action and keeps HTML import available',async()=>{
   const {doc}=await fileApp();doc.querySelector('#library-trash').onclick();assert.equal(doc.querySelector('#empty-library h3').textContent,'휴지통이 비어 있습니다.');assert.equal(doc.querySelector('#open-example').hidden,true);assert.equal(doc.querySelector('#library-empty-trash').disabled,true);assert.equal(doc.querySelector('#hero-import').hidden,false);assert.equal(doc.querySelector('#document-count').textContent,'0');
