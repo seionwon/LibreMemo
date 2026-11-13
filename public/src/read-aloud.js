@@ -35,8 +35,45 @@ export function createReadAloud(reader) {
     highlightSheet.replaceSync('::highlight(mstts){background:#7b61ff33;text-decoration:underline 2px #7b61ff66;}');
     D.adoptedStyleSheets=[...D.adoptedStyleSheets,highlightSheet];
   } catch {}
-  function visibleRect(rect) {const frame=reader.frame.getBoundingClientRect();return {top:frame.top+rect.top*reader.zoom,bottom:frame.top+rect.bottom*reader.zoom,height:rect.height*reader.zoom};}
-  function viewBounds() {return reader.viewport.getBoundingClientRect();}
+  function visibleRect(rect) {
+    const frame=reader.frame.getBoundingClientRect(),bottom=Number.isFinite(rect.bottom)?rect.bottom:rect.top+rect.height;
+    return {top:frame.top+rect.top*reader.zoom,bottom:frame.top+bottom*reader.zoom,height:rect.height*reader.zoom};
+  }
+  function visibleViewBounds(root) {
+    const vp=reader.viewport.getBoundingClientRect(),vpH=reader.viewport.clientHeight>0?Math.min(vp.height,reader.viewport.clientHeight):vp.height;
+    let top=vp.top,bottom=vp.top+vpH;
+    const zoom=Math.max(0.2,Number(reader.zoom)||1),frame=reader.frame?.getBoundingClientRect?.()||{top:0};
+    try {
+      const host=reader.findAnnotationScrollHost?.();
+      if(host&&host!==D.body&&host!==D.documentElement&&(!root||host===root||host.contains?.(root))){
+        const hr=host.getBoundingClientRect?.();
+        if(hr&&hr.height>0){
+          const hTop=frame.top+hr.top*zoom,hBottom=frame.top+hr.bottom*zoom;
+          if(Math.min(bottom,hBottom)-Math.max(top,hTop)>=40){top=Math.max(top,hTop);bottom=Math.min(bottom,hBottom);}
+        }
+      }
+      const pageTop=D.getElementById?.('htmlmemo-page-top'),ptr=pageTop?.getBoundingClientRect?.();
+      if(ptr&&ptr.height>0){const ptBottom=frame.top+ptr.bottom*zoom;if(bottom-Math.max(top,ptBottom)>=40)top=Math.max(top,ptBottom);}
+      const pageBottom=D.getElementById?.('htmlmemo-page-bottom'),pbr=pageBottom?.getBoundingClientRect?.();
+      if(pbr&&pbr.height>0&&pbr.top>0){const pbTop=frame.top+pbr.top*zoom;if(Math.min(bottom,pbTop)-top>=40)bottom=Math.min(bottom,pbTop);}
+      if(typeof R?.getComputedStyle==='function'&&D.querySelectorAll){
+        const vpW=vp.width||reader.viewport.clientWidth||0;
+        const bars=D.querySelectorAll('[data-htmlmemo-doc-topbar], header, nav, [role="banner"], [role="navigation"], .topbar, #topbar, .navbar, #navbar');
+        for(const barEl of bars){
+          if(root?.contains?.(barEl)||barEl.closest?.('[hidden], [aria-hidden="true"]'))continue;
+          const st=R.getComputedStyle(barEl);
+          if(!st||(st.position!=='fixed'&&st.position!=='sticky'))continue;
+          if(st.display==='none'||st.visibility==='hidden'||st.pointerEvents==='none'||Number(st.opacity)===0)continue;
+          const br=barEl.getBoundingClientRect();
+          if(!(br.height>0)||br.height*zoom>Math.min(120,vpH*0.25)||br.top*zoom>8||br.bottom*zoom<=4)continue;
+          if(vpW>0&&br.width*zoom<vpW*0.5)continue;
+          const barBottom=frame.top+br.bottom*zoom;
+          if(bottom-Math.max(top,barBottom)>=40)top=Math.max(top,barBottom);
+        }
+      }
+    } catch {}
+    return {top,bottom,height:Math.max(1,bottom-top)};
+  }
 
   if (!('speechSynthesis' in W)) return;                       // no engine → no button at all
   var ROOT = readAloudRoot(D);
@@ -762,21 +799,74 @@ export function createReadAloud(reader) {
     render();
     // Applies from the NEXT sentence — each sentence is its own utterance (same as in-app).
   }
+  function isLineVisibleAtTop(rect, top) {
+    return rect.bottom > top + 1 && (rect.top + rect.bottom) * 0.5 >= top - 1;
+  }
+  function sentenceRects(sent, index) {
+    var s = posAt(index.parts, sent.start, false), e = posAt(index.parts, sent.end, true);
+    if (!s || !e) return [];
+    var out = [];
+    for (var k = s.part; k <= e.part; k++) {
+      var part = index.parts[k];
+      var from = k === s.part ? s.offset : part.offset;
+      var to = k === e.part ? e.offset : part.offset + part.length;
+      if (to <= from || !/\S/.test(part.node.data.slice(from, to))) continue;
+      var r = D.createRange();
+      r.setStart(part.node, from);
+      r.setEnd(part.node, to);
+      var rl = r.getClientRects && r.getClientRects();
+      if (rl && rl.length) {
+        for (var j = 0; j < rl.length; j++) if (rl[j].height > 0) out.push(visibleRect(rl[j]));
+      } else if (r.getBoundingClientRect) {
+        var br = r.getBoundingClientRect();
+        if (br && br.height > 0) out.push(visibleRect(br));
+      }
+    }
+    return out;
+  }
   function firstVisibleSentence(sents, index) {
-    var bounds=viewBounds(),threshold=bounds.top+Math.min(80,bounds.height*.12),frame=reader.frame.getBoundingClientRect(),boxes=new WeakMap();
+    var bounds = visibleViewBounds(ROOT), top = bounds.top, boxes = new WeakMap();
+    var boxOf = function (el) {
+      if (!el) return null;
+      var b = boxes.get(el);
+      if (b === undefined) {
+        var raw = el.getBoundingClientRect && el.getBoundingClientRect();
+        b = raw && raw.height > 0 ? visibleRect(raw) : null;
+        boxes.set(el, b);
+      }
+      return b;
+    };
     for (var i = 0; i < sents.length; i++) {
-      var p = posAt(index.parts, sents[i].start);
-      var el = p && p.node.parentElement;
-      if(el&&!boxes.has(el))boxes.set(el,frame.top+el.getBoundingClientRect().bottom*reader.zoom);
-      if(el&&boxes.get(el)>threshold)return i;
+      var s = posAt(index.parts, sents[i].start, false), e = posAt(index.parts, sents[i].end, true);
+      var sEl = s && s.node.parentElement, eEl = e && e.node.parentElement;
+      var sBox = boxOf(sEl), eBox = sEl === eEl ? sBox : boxOf(eEl);
+      if (sBox && (!eBox || sEl === eEl)) {
+        if (sBox.bottom <= top + 1) continue;
+        if (sBox.top >= top - 1) return i;
+      } else if (sBox && eBox && sBox.bottom <= top + 1 && eBox.bottom <= top + 1) {
+        continue;
+      }
+      var rects = sentenceRects(sents[i], index);
+      if (rects.length) {
+        for (var j = 0; j < rects.length; j++) if (isLineVisibleAtTop(rects[j], top)) return i;
+        continue;
+      }
+      if (sBox && isLineVisibleAtTop(sBox, top)) return i;
+      if (eBox && isLineVisibleAtTop(eBox, top)) return i;
     }
     return 0;
   }
+  function innerScrollTop(root) {
+    var sum = 0;
+    for (var n = root; n && n !== D.body && n !== D.documentElement; n = n.parentElement) sum += Number(n.scrollTop) || 0;
+    return sum;
+  }
   function readingPosition() {
-    return {root:readAloudRoot(D),top:Number(reader.scrollTop)||0,left:Number(reader.scrollLeft)||0};
+    var root = readAloudRoot(D);
+    return {root:root,section:currentSection(D),top:Number(reader.scrollTop)||0,innerTop:innerScrollTop(root),left:Number(reader.scrollLeft)||0};
   }
   function samePosition(a, b) {
-    return !!a && !!b && a.root === b.root && Math.abs(a.top-b.top)<1 && Math.abs(a.left-b.left)<1;
+    return !!a && !!b && a.root === b.root && a.section === b.section && Math.abs(a.top-b.top)<2 && Math.abs(a.innerTop-b.innerTop)<2 && Math.abs(a.left-b.left)<2;
   }
   function selectedPosition() {
     try {
@@ -826,17 +916,17 @@ export function createReadAloud(reader) {
       reader.callbacks?.onNotice?.('선택한 글의 위치를 찾지 못했습니다. 글을 다시 선택해 주세요.');return false;
     }
   }
-  function beginReading(index, sents, at) {
+  function beginReading(index, sents, at, fromView) {
     if (run) run.stopped = true;
     cancelSpeech();idx = index;resetPause();
     if (!sents.length) {run = null;clearPaint();state = 'ready';render();return;}
     run = {sents:sents,i:at,stopped:false};
-    state = 'playing';render();speakFrom(at);
+    state = 'playing';render();speakFrom(at, !!fromView);
   }
   function startReading() {
     var index = readingIndex();if(!index)return;
     var sents = splitSentences(index.text,!!selectionScope);
-    beginReading(index, sents, selectionScope ? 0 : firstVisibleSentence(sents, index));
+    beginReading(index, sents, selectionScope ? 0 : firstVisibleSentence(sents, index), !selectionScope);
   }
   function resumeReading() {
     var position = readingPosition();
@@ -856,9 +946,37 @@ export function createReadAloud(reader) {
         if (selected >= 0) at = selected;
       }
     }
-    beginReading(index, sents, at);
+    beginReading(index, sents, at, !selectionScope);
   }
-  function speakFrom(i) {
+  function followSentence(sent, fromView) {
+    var rects = sentenceRects(sent, idx);
+    if (!rects.length) return;
+    var bounds = visibleViewBounds(ROOT), viewH = bounds.height;
+    var topPad = Math.min(28, Math.max(8, Math.round(viewH * 0.05)));
+    var first = rects[0], last = rects[rects.length - 1];
+    var firstVisibleTop = isLineVisibleAtTop(first, bounds.top);
+    var anyVisibleTop = firstVisibleTop || isLineVisibleAtTop(last, bounds.top);
+    var outAbove = fromView ? !anyVisibleTop : !firstVisibleTop;
+    var fitsViewport = last.bottom - first.top <= Math.max(24, viewH - topPad - 8);
+    var checkBottom = fitsViewport ? last.bottom : first.bottom;
+    var outBelow = checkBottom > bounds.bottom + 2;
+    if (!outAbove && !outBelow) return;
+    var targetY = bounds.top + topPad;
+    if (reader.pager && reader.pager.active) {
+      var zoom = Math.max(0.2, Number(reader.zoom) || 1);
+      if (outBelow && !outAbove && first.top >= bounds.bottom - 4 && first.top < bounds.bottom + viewH * 0.75) {
+        if (reader.pager.next()) {
+          var after = sentenceRects(sent, idx), afterBounds = visibleViewBounds(ROOT);
+          if (!after.length || (isLineVisibleAtTop(after[0], afterBounds.top) && after[0].bottom <= afterBounds.bottom + 2)) return;
+          first = after[0]; bounds = afterBounds;
+        }
+      }
+      reader.pager.go(reader.pager.top + (first.top - (bounds.top + 8)) / zoom);
+      return;
+    }
+    reader.scrollTop = (Number(reader.scrollTop) || 0) + (first.top - targetY);
+  }
+  function speakFrom(i, fromView) {
     var ctx = run;
     if (!ctx || ctx.stopped) return;
     if (!scopeIsCurrent()) {invalidateSelection();return;}
@@ -868,30 +986,18 @@ export function createReadAloud(reader) {
     }
     ctx.i = i; render();
     var sent = ctx.sents[i];
-    // Paint the sentence + follow it without bobbing (twin of the in-app band rule).
+    // Paint the sentence + keep the user's scroll position whenever the spoken line is visible,
+    // only scrolling when the spoken line moves outside the visible viewport.
     try {
       if (!idx) idx = readingIndex();
       if (!idx) return;
       // The sentence carries its own offsets into idx.text. Searching by TEXT (indexOf) matched the
       // FIRST occurrence, so a repeated sentence sent the highlight back up the page and the next
       // one brought it down again.
-      if (CSS && CSS.highlights && R.Highlight) {
-        var s = posAt(idx.parts, sent.start, false), e = posAt(idx.parts, sent.end, true);
-        if (s && e) {
-          var r = D.createRange(), sPart = idx.parts[s.part];
-          r.setStart(s.node, s.offset); r.setEnd(s.node, s.node === e.node ? e.offset : sPart.offset + sPart.length);
-          paintSentence(s,e);
-          // The FIRST client rect (the sentence's first line), not the union: a union spanning a
-          // block boundary is hundreds of pixels tall and would scroll to somewhere nobody is reading.
-          var rl = r.getClientRects();
-          var rect = rl && rl.length ? rl[0] : r.getBoundingClientRect();
-          if (rect.height > 0) {
-            rect=visibleRect(rect);var bounds=viewBounds(),viewH=bounds.height;
-            var outAbove = rect.top < bounds.top + Math.min(72, viewH * 0.12);
-            var outBelow = rect.bottom > bounds.top + viewH * 0.72;
-            if (outAbove || outBelow) reader.scrollTop += rect.top - bounds.top - viewH * 0.3;
-          }
-        }
+      var s = posAt(idx.parts, sent.start, false), e = posAt(idx.parts, sent.end, true);
+      if (s && e) {
+        if (CSS && CSS.highlights && R.Highlight) paintSentence(s, e);
+        followSentence(sent, !!fromView);
       }
     } catch (err) { /* painting is best-effort */ }
     // What is SPOKEN can differ from what is shown: formulas become words, unicode math is

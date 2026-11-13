@@ -273,3 +273,125 @@ test('PPTX slides, PDF text layers, HWP/DjVu pages and br-separated lines highli
   }
   b.player.dispose();
 });
+
+test('paused Play after scrolling starts from the topmost visible line instead of skipping to the second line',()=>{
+  const lines=Array.from({length:20},(_,i)=>`<p id="line-${i}">줄 ${i} 문장입니다.</p>`).join('');
+  const a=fixture({html:`<html><body><main>${lines}</main></body></html>`});
+  const nodes=[...a.doc.querySelectorAll('main p')];
+  const rectFor=i=>({left:24,top:6+i*28-a.reader.scrollTop,bottom:30+i*28-a.reader.scrollTop,width:320,height:24});
+  nodes.forEach((p,i)=>{p.getBoundingClientRect=()=>rectFor(i);});
+  const origRange=a.doc.createRange;
+  a.doc.createRange=()=>{
+    const r=origRange();
+    r.getClientRects=()=>{
+      const idx=nodes.findIndex(p=>p.firstChild===r.startContainer);
+      return idx>=0?[rectFor(idx)]:[];
+    };
+    return r;
+  };
+  a.play();
+  assert.equal(a.spoken.at(-1).text,'줄 0 문장입니다.');
+  assert.equal(a.reader.scrollTop,0);
+
+  // Scroll so line 5 sits right at the very top of the viewport (top: 6px, bottom: 30px)
+  // while line 4 is scrolled off above (top: -22px, bottom: 2px) and line 6 is the 2nd line (top: 34px).
+  a.pause();
+  a.reader.scrollTop=140;
+  a.play();
+  assert.equal(a.spoken.at(-1).text,'줄 5 문장입니다.');
+  assert.equal(a.reader.scrollTop,140);
+
+  // Even when the top line is slightly clipped at the top edge (top: -4px, bottom: 20px -> 83% visible),
+  // it is still read as the topmost visible line without yanking scrollTop.
+  a.pause();
+  a.reader.scrollTop=150;
+  a.play();
+  assert.equal(a.spoken.at(-1).text,'줄 5 문장입니다.');
+  assert.equal(a.reader.scrollTop,150);
+
+  // Once line 5 is mostly scrolled off above (top: -18px, bottom: 6px -> <25% visible),
+  // line 6 (top: 10px, bottom: 34px) becomes the topmost visible line.
+  a.pause();
+  a.reader.scrollTop=164;
+  a.play();
+  assert.equal(a.spoken.at(-1).text,'줄 6 문장입니다.');
+  assert.equal(a.reader.scrollTop,164);
+  a.player.dispose();
+});
+
+test('paused Play inside a partially scrolled multi-sentence paragraph starts from the topmost visible sentence',()=>{
+  const sentences=Array.from({length:8},(_,i)=>`문단 안 ${i}번째 문장입니다.`);
+  const a=fixture({html:`<html><body><main><p id="multi">${sentences.join(' ')}</p></main></body></html>`});
+  const p=a.doc.querySelector('#multi'),textNode=p.firstChild;
+  p.getBoundingClientRect=()=>({left:24,top:4-a.reader.scrollTop,bottom:4+8*28-a.reader.scrollTop,width:400,height:8*28});
+  const starts=sentences.map((_,i)=>textNode.data.indexOf(`문단 안 ${i}번째`));
+  const origRange=a.doc.createRange;
+  a.doc.createRange=()=>{
+    const r=origRange();
+    r.getClientRects=()=>{
+      if(r.startContainer!==textNode)return [];
+      let lineIdx=0;
+      for(let i=0;i<starts.length;i++)if(r.startOffset>=starts[i])lineIdx=i;
+      const top=4+lineIdx*28-a.reader.scrollTop;
+      return [{left:24,top,bottom:top+24,width:320,height:24}];
+    };
+    return r;
+  };
+  a.play();
+  assert.equal(a.spoken.at(-1).text,'문단 안 0번째 문장입니다.');
+  a.pause();
+  // Scroll 3 lines down so sentences 0..2 are above top (bottom <= 0) and sentence 3 is at top: 4..28.
+  a.reader.scrollTop=84;
+  a.play();
+  assert.equal(a.spoken.at(-1).text,'문단 안 세 번째 문장입니다.');
+  assert.equal(a.reader.scrollTop,84);
+  a.player.dispose();
+});
+
+test('playback keeps the user scroll position while the spoken line is visible and scrolls only when offscreen',()=>{
+  const lines=Array.from({length:32},(_,i)=>`<p>줄 ${i} 본문입니다.</p>`).join('');
+  const a=fixture({html:`<html><body><main>${lines}</main></body></html>`});
+  const nodes=[...a.doc.querySelectorAll('main p')];
+  const rectFor=i=>({left:24,top:8+i*28-a.reader.scrollTop,bottom:32+i*28-a.reader.scrollTop,width:320,height:24});
+  nodes.forEach((p,i)=>{p.getBoundingClientRect=()=>rectFor(i);});
+  const origRange=a.doc.createRange;
+  a.doc.createRange=()=>{
+    const r=origRange();
+    r.getClientRects=()=>{
+      const idx=nodes.findIndex(p=>p.firstChild===r.startContainer);
+      return idx>=0?[rectFor(idx)]:[];
+    };
+    return r;
+  };
+  // User positions scrollTop at 112: line 4 is at y=8..32, line 24 is at y=568..592 (all inside 0..600),
+  // and line 25 is at y=596..620 (bottom cut off past 600).
+  a.reader.scrollTop=112;
+  a.play();
+  assert.equal(a.spoken.at(-1).text,'줄 4 본문입니다.');
+  assert.equal(a.reader.scrollTop,112);
+
+  for(let i=5;i<=24;i++){
+    // Simulate user nudging scroll slightly mid-playback while upcoming lines remain visible.
+    if(i===12)a.reader.scrollTop=140;
+    const expectedScroll=a.reader.scrollTop;
+    a.spoken.at(-1).onend();
+    assert.equal(a.spoken.at(-1).text,`줄 ${i} 본문입니다.`);
+    assert.equal(a.reader.scrollTop,expectedScroll,`visible line ${i} must not force scroll`);
+  }
+  // At scrollTop=140, line 25 is at y=568..592 (still visible!) and line 26 is at y=596..620 (offscreen below 600).
+  a.spoken.at(-1).onend();
+  assert.equal(a.spoken.at(-1).text,'줄 25 본문입니다.');
+  assert.equal(a.reader.scrollTop,140);
+
+  a.spoken.at(-1).onend();
+  assert.equal(a.spoken.at(-1).text,'줄 26 본문입니다.');
+  assert.ok(a.reader.scrollTop>500,'offscreen bottom line scrolls into view');
+  const settled=a.reader.scrollTop;
+  assert.ok(rectFor(26).top>=0&&rectFor(26).bottom<=600);
+
+  // Subsequent visible lines on the new screen keep the new scrollTop untouched.
+  a.spoken.at(-1).onend();
+  assert.equal(a.spoken.at(-1).text,'줄 27 본문입니다.');
+  assert.equal(a.reader.scrollTop,settled);
+  a.player.dispose();
+});

@@ -102,5 +102,58 @@ test('real Chrome: MemoSuite TTS toolbar in LibreMemo',{timeout:90000},async t=>
       assert.equal(chrome.errors.length,0,chrome.errors.join('\n'));
       }catch(error){console.error(error,chrome.errors,await page.evaluate('({toast:document.querySelector("#toast")?.textContent,bar:document.querySelector(".mstts-player")?.outerHTML,calls:window.__speechCalls})'));throw error;}
     });
+    await t.test('pause, scroll and play starts at topmost visible line and preserves visible scroll position',async()=>{
+      const lines=Array.from({length:45},(_,i)=>i===8
+        ?'<p id="multi-line">다문장 첫째 줄입니다.<br>다문장 둘째 줄입니다.<br>다문장 셋째 줄입니다.</p>'
+        :`<p id="row-${i}">스크롤 검증 문장 ${i}입니다.</p>`).join('');
+      const html=`<!doctype html><html lang="ko"><head><title>TTS 최상단 줄 검증</title><style>html,body{margin:0;font:16px/24px system-ui}main{padding:12px 24px 800px}p{margin:0 0 4px}</style></head><body><main data-tts-root>${lines}</main></body></html>`;
+      await page.send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});
+      await page.evaluate(`(()=>{window.__utterances=[];const t=new DataTransfer();t.items.add(new File([${JSON.stringify(html)}],'tts-top-line.html',{type:'text/html'}));const input=document.querySelector('#file-input');input.files=t.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+      await page.waitFor('document.querySelector(".document-host:not([hidden]) iframe")?.contentDocument?.title==="TTS 최상단 줄 검증"&&document.querySelector(".document-host:not([hidden]) iframe")?.style.visibility==="visible"');
+      await page.click('.document-host:not([hidden]) > [data-htmlmemo-reading-controls] [data-action=speak]');
+      await page.waitFor('!!document.querySelector(".mstts-player")');
+      await page.click('.mstts-player [aria-label="소리내어 읽기"]');
+      await page.waitFor('window.__utterances.length===1');
+      assert.equal(await page.evaluate('window.__utterances.at(-1).text'),'스크롤 검증 문장 0입니다.');
+      await page.click('.mstts-player [aria-label="일시정지"]');
+
+      // Scroll row-5 right to the very top of the viewport (+4px) so row-4 is offscreen above and row-6 is 2nd line.
+      const readScroll=()=>page.evaluate(`(()=>{const v=document.querySelector('.document-host:not([hidden]) .reader-viewport'),f=v.querySelector('iframe'),scale=f.getBoundingClientRect().width/f.offsetWidth;return v.classList.contains('reader-native-scroll')?f.contentWindow.scrollY*scale:v.scrollTop;})()`);
+      const scrollTargetToTop=expr=>page.evaluate(`(()=>{
+        const v=document.querySelector('.document-host:not([hidden]) .reader-viewport'),f=v.querySelector('iframe'),d=f.contentDocument;
+        const b=f.getBoundingClientRect(),scale=b.width/f.offsetWidth,targetY=${expr};
+        const delta=b.top+targetY*scale-(v.getBoundingClientRect().top+4);
+        if(v.classList.contains('reader-native-scroll'))d.defaultView.scrollBy(0,delta/scale);else v.scrollTop+=delta;
+      })()`);
+      await scrollTargetToTop('d.getElementById("row-5").getBoundingClientRect().top');
+      await page.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+      const scrolledTop=await readScroll();
+      assert.ok(scrolledTop>50);
+      await page.click('.mstts-player [aria-label="소리내어 읽기"]');
+      assert.equal(await page.evaluate('window.__utterances.at(-1).text'),'스크롤 검증 문장 5입니다.');
+      assert.ok(Math.abs((await readScroll())-scrolledTop)<1,'topmost visible line must not trigger forced scroll');
+
+      // Pause and scroll halfway into #multi-line so its 2nd line is the topmost visible line.
+      await page.click('.mstts-player [aria-label="일시정지"]');
+      await scrollTargetToTop('d.getElementById("multi-line").getBoundingClientRect().top+25');
+      await page.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+      const multiScrollTop=await readScroll();
+      await page.click('.mstts-player [aria-label="소리내어 읽기"]');
+      assert.equal(await page.evaluate('window.__utterances.at(-1).text'),'다문장 둘째 줄입니다.');
+      assert.ok(Math.abs((await readScroll())-multiScrollTop)<1,'partially scrolled paragraph keeps user scrollTop');
+
+      // Advance while lines remain visible -> scroll stays untouched; once past bottom -> scrolls into view.
+      for(let step=0;step<6;step++){
+        await page.evaluate('window.__utterances.at(-1).onend()');
+        assert.ok(Math.abs((await readScroll())-multiScrollTop)<1);
+      }
+      let autoScrolled=false;
+      for(let step=0;step<35;step++){
+        await page.evaluate('window.__utterances.at(-1).onend()');
+        if((await readScroll())>multiScrollTop+100){autoScrolled=true;break;}
+      }
+      assert.equal(autoScrolled,true,'advancing past bottom of viewport scrolls new line into view');
+      await page.click('.mstts-player [aria-label="플레이어 닫기"]');
+    });
   } finally { await chrome?.close();await new Promise(resolve=>server.close(resolve));await rm(folder,{recursive:true,force:true}); }
 });

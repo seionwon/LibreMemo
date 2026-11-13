@@ -390,8 +390,8 @@ export class PdfReader{
     const page=this.pageAt();await this.ensure(page);if(page<this.count)await this.ensure(page+1);if(this.disposed)return false;
     // After following a sentence the viewport can start in the preceding
     // page's bottom margin. Choose the first visible text, not that blank page.
-    const threshold=Math.min(80,this.reader.viewport.clientHeight/this.reader.zoom*.12),bottom=this.reader.viewport.clientHeight/this.reader.zoom;
-    const visible=[...this.slots.values()].filter(slot=>slot.page>=page&&slot.text).sort((a,b)=>a.page-b.page).find(slot=>[...slot.text.querySelectorAll('[data-pdf-text]')].some(span=>{if(!span.textContent.trim())return false;const rect=span.getBoundingClientRect();return rect.bottom>threshold&&rect.top<bottom;}));
+    const bottom=this.reader.viewport.clientHeight/this.reader.zoom;
+    const visible=[...this.slots.values()].filter(slot=>slot.page>=page&&slot.text).sort((a,b)=>a.page-b.page).find(slot=>[...slot.text.querySelectorAll('[data-pdf-text]')].some(span=>{if(!span.textContent.trim())return false;const rect=span.getBoundingClientRect();return rect.bottom>1&&(rect.top+rect.bottom)*.5>=-1&&rect.top<bottom;}));
     this.setSpeechRoot(visible?.page||page);return !!this.speechRoot?.textContent.trim();
   }
   async nextSpeechPage(isCurrent=()=>true){let page=Number(this.speechRoot?.closest('[data-pdf-page]')?.dataset.pdfPage)||this.pageAt();while(page<this.count&&!this.disposed&&isCurrent()){page++;await this.ensure(page);if(!isCurrent()||this.disposed)return false;await this.go(page);this.setSpeechRoot(page);if(this.speechRoot?.textContent.trim())return true;}return false;}
