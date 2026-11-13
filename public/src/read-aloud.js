@@ -948,18 +948,52 @@ export function createReadAloud(reader) {
     }
     beginReading(index, sents, at, !selectionScope);
   }
+  function bottomLineMetrics(sent, rects, bounds) {
+    if (reader.pager && reader.pager.active) return {reserve:0,halfLead:0};
+    var zoom = Math.max(0.2, Number(reader.zoom) || 1), rectH = 0;
+    for (var k = 0; k < rects.length; k++) {
+      if (rects[k].height > rectH) rectH = rects[k].height;
+    }
+    rectH = Math.min(rectH || 20 * zoom, 72 * zoom);
+    var cssLineH = 0;
+    try {
+      var endPos = posAt(idx.parts, sent.end, true);
+      var el = endPos && endPos.node && endPos.node.parentElement;
+      if (el && typeof R?.getComputedStyle === 'function') {
+        var block = el.closest && el.closest('p, li, dd, dt, blockquote, td, th, h1, h2, h3, h4, h5, h6');
+        for (var m = 0; m < 2; m++) {
+          var target = m === 0 ? el : block;
+          if (!target) continue;
+          var lh = parseFloat(R.getComputedStyle(target).lineHeight);
+          if (Number.isFinite(lh) && lh > 0) cssLineH = Math.max(cssLineH, Math.min(lh * zoom, 80 * zoom));
+        }
+      }
+    } catch (e) { /* ignore */ }
+    var lineStride = Math.max(30, cssLineH, Math.round(rectH * 1.2));
+    var reserve = lineStride - 2;
+    try {
+      var br = bar && bar.getBoundingClientRect && bar.getBoundingClientRect();
+      if (br && br.height > 0 && br.top >= bounds.bottom - Math.max(48, lineStride * 1.4) && br.top < bounds.bottom) {
+        reserve = Math.max(reserve, Math.round(bounds.bottom - br.top));
+      }
+    } catch (e2) { /* ignore */ }
+    reserve = Math.max(0, Math.min(Math.floor(bounds.height * 0.35), reserve));
+    return {reserve:reserve, halfLead:cssLineH > rectH ? (cssLineH - rectH) * 0.5 : 0};
+  }
   function followSentence(sent, fromView) {
     var rects = sentenceRects(sent, idx);
     if (!rects.length) return;
     var bounds = visibleViewBounds(ROOT), viewH = bounds.height;
     var topPad = Math.min(28, Math.max(8, Math.round(viewH * 0.05)));
     var first = rects[0], last = rects[rects.length - 1];
+    var bm = bottomLineMetrics(sent, rects, bounds), reserve = bm.reserve;
+    var bottomLimit = Math.max(bounds.top + topPad + (first.height || 0) + bm.halfLead + 2, bounds.bottom - reserve);
     var firstVisibleTop = isLineVisibleAtTop(first, bounds.top);
     var anyVisibleTop = firstVisibleTop || isLineVisibleAtTop(last, bounds.top);
     var outAbove = fromView ? !anyVisibleTop : !firstVisibleTop;
-    var fitsViewport = last.bottom - first.top <= Math.max(24, viewH - topPad - 8);
-    var checkBottom = fitsViewport ? last.bottom : first.bottom;
-    var outBelow = checkBottom > bounds.bottom + 2;
+    var fitsViewport = last.bottom + bm.halfLead - first.top <= Math.max(24, bottomLimit - bounds.top - topPad);
+    var checkBottom = (fitsViewport ? last.bottom : first.bottom) + bm.halfLead;
+    var outBelow = checkBottom > (reserve > 0 ? bottomLimit : bounds.bottom + 2);
     if (!outAbove && !outBelow) return;
     var targetY = bounds.top + topPad;
     if (reader.pager && reader.pager.active) {
@@ -986,8 +1020,8 @@ export function createReadAloud(reader) {
     }
     ctx.i = i; render();
     var sent = ctx.sents[i];
-    // Paint the sentence + keep the user's scroll position whenever the spoken line is visible,
-    // only scrolling when the spoken line moves outside the visible viewport.
+    // Paint the sentence + keep the user's scroll position down through the second-to-last visible
+    // line, scrolling once reaching the bottommost line so the last row stays free for the TTS bar.
     try {
       if (!idx) idx = readingIndex();
       if (!idx) return;

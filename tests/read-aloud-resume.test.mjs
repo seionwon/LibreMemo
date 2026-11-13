@@ -348,8 +348,8 @@ test('paused Play inside a partially scrolled multi-sentence paragraph starts fr
   a.player.dispose();
 });
 
-test('playback keeps the user scroll position while the spoken line is visible and scrolls only when offscreen',()=>{
-  const lines=Array.from({length:32},(_,i)=>`<p>줄 ${i} 본문입니다.</p>`).join('');
+test('playback keeps user scroll through the second-to-last visible line and scrolls once reaching the bottommost line for the TTS toolbar',()=>{
+  const lines=Array.from({length:34},(_,i)=>`<p>줄 ${i} 본문입니다.</p>`).join('');
   const a=fixture({html:`<html><body><main>${lines}</main></body></html>`});
   const nodes=[...a.doc.querySelectorAll('main p')];
   const rectFor=i=>({left:24,top:8+i*28-a.reader.scrollTop,bottom:32+i*28-a.reader.scrollTop,width:320,height:24});
@@ -363,35 +363,81 @@ test('playback keeps the user scroll position while the spoken line is visible a
     };
     return r;
   };
-  // User positions scrollTop at 112: line 4 is at y=8..32, line 24 is at y=568..592 (all inside 0..600),
-  // and line 25 is at y=596..620 (bottom cut off past 600).
+  // User positions scrollTop at 112: line 4 is at y=8..32, line 23 is at y=540..564 (2nd-to-last visible line),
+  // and line 24 is at y=568..592 (bottommost visible line inside 0..600, reserved for TTS toolbar).
   a.reader.scrollTop=112;
   a.play();
   assert.equal(a.spoken.at(-1).text,'줄 4 본문입니다.');
   assert.equal(a.reader.scrollTop,112);
 
   for(let i=5;i<=24;i++){
-    // Simulate user nudging scroll slightly mid-playback while upcoming lines remain visible.
+    // Simulate user nudging scroll slightly mid-playback: at scrollTop=140, line 24 is y=540..564 (2nd-to-last)
+    // and line 25 is y=568..592 (bottommost visible line).
     if(i===12)a.reader.scrollTop=140;
     const expectedScroll=a.reader.scrollTop;
     a.spoken.at(-1).onend();
     assert.equal(a.spoken.at(-1).text,`줄 ${i} 본문입니다.`);
-    assert.equal(a.reader.scrollTop,expectedScroll,`visible line ${i} must not force scroll`);
+    assert.equal(a.reader.scrollTop,expectedScroll,`line ${i} up to 2nd-to-last must not force scroll`);
   }
-  // At scrollTop=140, line 25 is at y=568..592 (still visible!) and line 26 is at y=596..620 (offscreen below 600).
+  // Once line 24 (the 2nd-to-last visible line) finishes and TTS advances to line 25 (the bottommost visible line,
+  // y=568..592 inside 0..600), it scrolls immediately so the bottom line stays free for the TTS toolbar.
+  assert.ok(rectFor(25).bottom<=600,'line 25 was the bottommost visible line before advancing');
   a.spoken.at(-1).onend();
   assert.equal(a.spoken.at(-1).text,'줄 25 본문입니다.');
-  assert.equal(a.reader.scrollTop,140);
-
-  a.spoken.at(-1).onend();
-  assert.equal(a.spoken.at(-1).text,'줄 26 본문입니다.');
-  assert.ok(a.reader.scrollTop>500,'offscreen bottom line scrolls into view');
+  assert.ok(a.reader.scrollTop>500,'advancing onto the bottommost visible line scrolls immediately');
   const settled=a.reader.scrollTop;
-  assert.ok(rectFor(26).top>=0&&rectFor(26).bottom<=600);
+  assert.ok(rectFor(25).top>=0&&rectFor(25).bottom<=60);
 
   // Subsequent visible lines on the new screen keep the new scrollTop untouched.
   a.spoken.at(-1).onend();
-  assert.equal(a.spoken.at(-1).text,'줄 27 본문입니다.');
+  assert.equal(a.spoken.at(-1).text,'줄 26 본문입니다.');
   assert.equal(a.reader.scrollTop,settled);
+
+  // Flush bottom alignment (scrollTop=132: line 24 at y=548..572 is 2nd-to-last, line 25 at y=576..600 is last)
+  // also reads line 24 without scrolling and scrolls right when advancing to line 25.
+  a.pause();
+  a.reader.scrollTop=132;
+  a.play();
+  assert.equal(a.spoken.at(-1).text,'줄 4 본문입니다.');
+  for(let i=5;i<=24;i++){
+    a.spoken.at(-1).onend();
+    assert.equal(a.spoken.at(-1).text,`줄 ${i} 본문입니다.`);
+    assert.equal(a.reader.scrollTop,132,`flush alignment line ${i} stays at user scroll`);
+  }
+  a.spoken.at(-1).onend();
+  assert.equal(a.spoken.at(-1).text,'줄 25 본문입니다.');
+  assert.ok(a.reader.scrollTop>500,'flush bottommost line scrolls immediately after 2nd-to-last line');
+  a.player.dispose();
+});
+
+test('bottom toolbar line reserve scales with zoom so zoomed playback still moves right after the second-to-last line',()=>{
+  const lines=Array.from({length:20},(_,i)=>`<p>확대 줄 ${i} 문장입니다.</p>`).join('');
+  const a=fixture({html:`<html><body><main>${lines}</main></body></html>`});
+  a.reader.zoom=2;
+  const nodes=[...a.doc.querySelectorAll('main p')];
+  // Unzoomed line height 24px, stride 28px -> zoomed height 48px, stride 56px in 600px viewport.
+  const rawRect=i=>({left:12,top:(8+i*56-a.reader.scrollTop)/2,bottom:(56+i*56-a.reader.scrollTop)/2,width:200,height:24});
+  nodes.forEach((p,i)=>{p.getBoundingClientRect=()=>rawRect(i);});
+  const origRange=a.doc.createRange;
+  a.doc.createRange=()=>{
+    const r=origRange();
+    r.getClientRects=()=>{
+      const idx=nodes.findIndex(p=>p.firstChild===r.startContainer);
+      return idx>=0?[rawRect(idx)]:[];
+    };
+    return r;
+  };
+  // At scrollTop=0: line 0 is y=8..56, line 8 is y=456..504 (2nd-to-last visible line),
+  // and line 9 is y=512..560 (last full visible line, since line 10 at y=568..616 is cut off past 600).
+  a.play();
+  assert.equal(a.spoken.at(-1).text,'확대 줄 0 문장입니다.');
+  for(let i=1;i<=8;i++){
+    a.spoken.at(-1).onend();
+    assert.equal(a.spoken.at(-1).text,`확대 줄 ${i} 문장입니다.`);
+    assert.equal(a.reader.scrollTop,0,`zoomed line ${i} up to 2nd-to-last stays at 0`);
+  }
+  a.spoken.at(-1).onend();
+  assert.equal(a.spoken.at(-1).text,'확대 줄 9 문장입니다.');
+  assert.ok(a.reader.scrollTop>400,'zoomed bottommost full line scrolls immediately after 2nd-to-last line');
   a.player.dispose();
 });

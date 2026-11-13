@@ -142,17 +142,35 @@ test('real Chrome: MemoSuite TTS toolbar in LibreMemo',{timeout:90000},async t=>
       assert.equal(await page.evaluate('window.__utterances.at(-1).text'),'다문장 둘째 줄입니다.');
       assert.ok(Math.abs((await readScroll())-multiScrollTop)<1,'partially scrolled paragraph keeps user scrollTop');
 
-      // Advance while lines remain visible -> scroll stays untouched; once past bottom -> scrolls into view.
+      // Advance while lines remain above the bottommost toolbar row -> scroll stays untouched;
+      // once the 2nd-to-last visible line finishes and TTS reaches the bottommost visible line, it scrolls immediately.
       for(let step=0;step<6;step++){
         await page.evaluate('window.__utterances.at(-1).onend()');
         assert.ok(Math.abs((await readScroll())-multiScrollTop)<1);
       }
-      let autoScrolled=false;
+      const lineScreenBottom=text=>page.evaluate(`(()=>{
+        const v=document.querySelector('.document-host:not([hidden]) .reader-viewport'),f=v.querySelector('iframe'),d=f.contentDocument;
+        const b=f.getBoundingClientRect(),scale=b.width/f.offsetWidth,vpBottom=v.getBoundingClientRect().top+v.clientHeight;
+        const p=[...d.querySelectorAll('main p')].find(el=>el.textContent.trim()===${JSON.stringify(text)});
+        return p?{bottom:b.top+p.getBoundingClientRect().bottom*scale,vpBottom}:null;
+      })()`);
+      let autoScrolled=false,scrolledBeforeOffscreen=false,prevBottom=null;
       for(let step=0;step<35;step++){
+        const curText=await page.evaluate('window.__utterances.at(-1).text');
+        const curPos=await lineScreenBottom(curText);
+        const m=curText.match(/^스크롤 검증 문장 (\d+)입니다\.$/);
+        const nextPos=m?await lineScreenBottom(`스크롤 검증 문장 ${Number(m[1])+1}입니다.`):null;
         await page.evaluate('window.__utterances.at(-1).onend()');
-        if((await readScroll())>multiScrollTop+100){autoScrolled=true;break;}
+        if((await readScroll())>multiScrollTop+100){
+          autoScrolled=true;
+          prevBottom=curPos;
+          scrolledBeforeOffscreen=!!nextPos&&nextPos.bottom<=nextPos.vpBottom+2;
+          break;
+        }
       }
-      assert.equal(autoScrolled,true,'advancing past bottom of viewport scrolls new line into view');
+      assert.equal(autoScrolled,true,'advancing past 2nd-to-last visible line scrolls into view');
+      assert.ok(prevBottom&&prevBottom.vpBottom-prevBottom.bottom>=24,'2nd-to-last line stayed clear of bottom toolbar row');
+      assert.equal(scrolledBeforeOffscreen,true,'scrolls upon reaching the bottommost visible line rather than after reading it');
       await page.click('.mstts-player [aria-label="플레이어 닫기"]');
     });
   } finally { await chrome?.close();await new Promise(resolve=>server.close(resolve));await rm(folder,{recursive:true,force:true}); }
