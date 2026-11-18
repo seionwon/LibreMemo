@@ -85,6 +85,12 @@ test('real Chrome: Pages-only help and search reopen offline after a complete ap
   await page.evaluate('window.helpBeforeReload=true');await page.send('Network.enable');await page.send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:-1,uploadThroughput:-1});
   await page.navigate(f.url);assert.equal(await page.evaluate('window.helpBeforeReload'),undefined);await openHelp(page);await search(page,'휴지통 영구 삭제');await page.click('.help-results [data-help-open="trash"]');
   assert.match(await page.evaluate('document.querySelector(".help-article").textContent'),/되돌릴 수 없습니다/);assert.equal(await fits(page),true);assert.deepEqual(await preserved(page),before);
-  await mkdir(root+'/test-results',{recursive:true});await writeFile(root+'/test-results/pages-only-help-offline.png',await page.screenshot());assert.deepEqual(f.browser.errors,[]);
+  await search(page,'발췌 노트');
+  await page.click('.help-results [data-help-open="review-tutorial"]');
+  assert.match(await page.evaluate('document.querySelector(".help-article").textContent'),/현재 문서 전체/);
+  await mkdir(root+'/test-results',{recursive:true});await writeFile(root+'/test-results/pages-only-help-offline.png',await page.screenshot());
+  await page.click('[data-help-related="youtube"]');
+  assert.match(await page.evaluate('document.querySelector(".help-article").textContent'),/이 장면 10초 반복/);
+  assert.equal(await fits(page),true);assert.deepEqual(await preserved(page),before);assert.deepEqual(f.browser.errors,[]);
  }finally{await f.close();}
 });

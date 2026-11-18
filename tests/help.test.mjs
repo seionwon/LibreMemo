@@ -48,6 +48,22 @@ test('help search results open an article, retain the query and return to the sa
  assert.match(f.doc.querySelector('#help-article-title').textContent,/동기화/);assert.equal(f.doc.querySelector('#help-search').value,'원본 생략');assert.ok(f.doc.querySelectorAll('.help-article mark').length);
  f.doc.querySelector('#help-results-back').onclick();assert.ok(f.doc.querySelector('.help-results'));assert.equal(f.doc.activeElement.id,'help-search');
 });
+test('a reader can find the review tutorial by its tools and follow its related help',()=>{
+ const f=fixture();
+ for(const term of ['형광펜 색 이름','내 주석에서 찾기','발췌 노트','장면 10초 반복']){
+   f.query(term);
+   const button=f.doc.querySelector('.help-results [data-help-open="review-tutorial"]');
+   assert.ok(button,term);
+   button.onclick();
+   assert.match(f.doc.querySelector('.help-article').textContent,/현재 문서 전체/);
+ }
+ for(const id of ['search-outline','colors','export-html','youtube']){
+   assert.ok(f.doc.querySelector('[data-help-related="'+id+'"]'),id);
+ }
+ f.doc.querySelector('[data-help-related="export-html"]').onclick();
+ assert.equal(f.doc.querySelector('#help-topic-select').value,'export-html');
+ assert.match(f.doc.querySelector('.help-article').textContent,/발췌 노트 복사/);
+});
 test('one help render compiles highlighting once and safely reuses it across all result text',()=>{
  const f=fixture(),OriginalRegExp=globalThis.RegExp;let compiled=0;
  globalThis.RegExp=class extends OriginalRegExp{constructor(pattern,flags){super(pattern,flags);if(pattern==='동기화'&&flags==='giu')compiled++;}};

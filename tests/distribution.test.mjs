@@ -9,6 +9,7 @@ import { compileDesign } from '../scripts/design.mjs';
 import { standaloneHTML, bundleModules, assetBytes } from '../public/src/bundler.js';
 import {pwaEntries,APP_FILES} from '../public/src/distribution.js';
 import { PUBLIC_APP_URL } from '../public/src/install.js';
+import {supportsDataFolder,supportsIOSAppStorage} from '../public/src/data-folder.js';
 import { crc32, zipFiles } from '../public/src/zip.js';
 import { serializeSettings, PREFERENCES_KEY } from '../public/src/preferences.js';
 import { DOMParser } from 'linkedom';
@@ -84,7 +85,7 @@ async function fileApp({address='file:///Users/beginner/LibreMemo.html',navigato
   if(directoryPicker)window.showDirectoryPicker=directoryPicker;
   if(launchQueue!==undefined)window.launchQueue=launchQueue;
   const context=vm.createContext({document:doc,window,indexedDB,localStorage:{get length(){return local.size;},key:index=>[...local.keys()][index]??null,getItem:key=>local.get(key)??null,setItem:(key,value)=>local.set(key,value)},location:new URL(address),navigator:{onLine:false,storage:{},locks:{request:async(name,action)=>action()},...navigator},URL:LocalURL,Blob,File,crypto,TextEncoder,TextDecoder,Uint8Array,DataView,atob,btoa,structuredClone,Event,DOMException,innerWidth:1200,innerHeight:850,matchMedia:()=>({matches:false}),setInterval(){},setTimeout(fn,ms){if(ms===800)queueMicrotask(fn);return 1;},clearTimeout(){},requestAnimationFrame:fn=>fn(),fetch:()=>{throw new Error('An embedded app must not fetch a server');}});
-  const script=[...doc.querySelectorAll('script')].find(el=>el.type!=='application/json');new vm.Script(script.textContent).runInContext(context);await new Promise(resolve=>setImmediate(resolve));if(!firstRun&&doc.querySelector('[data-folder-welcome]'))dialog.open=false;if(waitingForUpdate)assert.equal(doc.querySelector('#status-left').textContent,'새 버전을 확인하는 중…');else assert.match(doc.querySelector('#status-left').textContent,typeof directoryPicker==='function'&&typeof context.navigator.locks?.request==='function'?/개의 문서/:/Chrome/);return {doc,context,blobs,local,get databaseOpens(){return databaseOpens;},settings:stores.get('settings'),emit:(name,event)=>events.get(name)?.forEach(fn=>fn(event))};
+  const script=[...doc.querySelectorAll('script')].find(el=>el.type!=='application/json');new vm.Script(script.textContent).runInContext(context);await new Promise(resolve=>setImmediate(resolve));if(!firstRun&&doc.querySelector('[data-folder-welcome]'))dialog.open=false;if(waitingForUpdate)assert.equal(doc.querySelector('#status-left').textContent,'새 버전을 확인하는 중…');else assert.match(doc.querySelector('#status-left').textContent,supportsDataFolder(window,context.navigator)||supportsIOSAppStorage(window,context.navigator)?/개의 문서/:/Chrome/);return {doc,context,blobs,local,get databaseOpens(){return databaseOpens;},settings:stores.get('settings'),emit:(name,event)=>events.get(name)?.forEach(fn=>fn(event))};
 }
 function openExecution(app){app.doc.querySelector('#settings-button').onclick();app.doc.querySelector('#settings-execution').onclick();}
 test('execution shares only the canonical URL, with no app package or installation download',async()=>{
@@ -126,6 +127,18 @@ test('the real app uses the same button for native installation and iPhone Chrom
   desktop.emit('appinstalled');assert.equal(desktop.doc.querySelector('#execution-install').textContent,'설치 완료');
   const iphone=await fileApp({address:PUBLIC_APP_URL,navigator:{userAgent:'iPhone CriOS/140'}});openExecution(iphone);assert.equal(iphone.doc.querySelector('#execution-install').hidden,false);
   iphone.doc.querySelector('#execution-install').onclick();await new Promise(resolve=>setImmediate(resolve));assert.match(iphone.doc.querySelector('#dialog-content').textContent,/Chrome/);assert.match(iphone.doc.querySelector('#dialog-content').textContent,/공유/);assert.match(iphone.doc.querySelector('#dialog-content').textContent,/홈 화면에 추가/);
+});
+test('settings describes the automatic iOS library and its recovery options without an external folder picker',async()=>{
+  const root=memoryFolder('internal storage');
+  const {doc}=await fileApp({address:PUBLIC_APP_URL,directoryPicker:null,navigator:{userAgent:'iPhone',storage:{getDirectory:async()=>root}}});
+  await settleUntil(()=>doc.documentElement.dataset.storageSetup==='ready');
+  doc.querySelector('#settings-button').onclick();
+  const guide=doc.querySelector('[data-folder-guide]');
+  assert.match(guide.querySelector('summary').textContent,/앱 전용 보관함/);
+  assert.match(guide.textContent,/저장 상태 점검/);
+  assert.match(guide.textContent,/기기 간 동기화/);
+  assert.match(guide.textContent,/원본 포함 보관 파일/);
+  assert.match(doc.querySelector('#dialog-content').textContent,/웹사이트 데이터를 지우면.*내부 보관함도 함께 지워집니다/);
 });
 test('execution is the only installation entry and describes both immediate URL use and optional app installation',async()=>{
   const initial=new DOMParser().parseFromString(assets.app['index.html'].text,'text/html'),app=await fileApp({address:PUBLIC_APP_URL}),doc=app.doc;
@@ -390,7 +403,7 @@ test('single-file save guidance stays in library and execution help without a pe
 
 test('export sharing help explains three formats, recipient import and local-only storage without changing saved notes',async()=>{
   const record={id:'share-guide',title:'공유 안내',name:'공유.html',created:1,modified:2,metadata:{annotations:[{id:'kept',text:'기존 주석'}],bookmarks:[{id:'kept-mark'}]}},before=structuredClone(record),app=await fileApp({documents:[record]}),doc=app.doc;
-  const check=guide=>{assert.ok(guide);assert.equal(guide.hasAttribute('open'),false);assert.match(guide.querySelector('summary').textContent,/원본·주석 파일/);assert.equal(guide.querySelectorAll('li').length,3);for(const text of ['원본 포함 보관 파일 (.librememo)','읽기용 HTML 사본 (.html)','주석 포함 PDF (.pdf)','파일 가져오기','다시 내보내세요','앱 URL만 보내면 문서와 주석이 전달되지 않습니다','원본 파일과 이미 내보낸 사본은 자동으로 덮어쓰지 않습니다','전체 백업은 전용 폴더를 복사'])assert.ok(guide.textContent.includes(text),text);assert.match(guide.textContent,/로그인·서버 업로드는 필요하지 않으며/);};
+  const check=guide=>{assert.ok(guide);assert.equal(guide.hasAttribute('open'),false);assert.match(guide.querySelector('summary').textContent,/원본·주석 파일/);assert.equal(guide.querySelectorAll('li').length,3);for(const text of ['원본 포함 보관 파일 (.librememo)','읽기용 HTML 사본 (.html)','주석 포함 PDF (.pdf)','파일 가져오기','다시 내보내세요','앱 URL만 보내면 문서와 주석이 전달되지 않습니다','원본 파일과 이미 내보낸 사본은 자동으로 덮어쓰지 않습니다','전용 폴더 전체를 복사','iPhone·iPad의 내부 보관함','발췌 노트 복사'])assert.ok(guide.textContent.includes(text),text);assert.match(guide.textContent,/로그인·서버 업로드는 필요하지 않으며/);};
   openExecution(app);check(doc.querySelector('#execution-export-guide [data-export-guide]'));
   doc.querySelector('#library-tab').onclick();doc.querySelector('[data-card-menu="share-guide"]').click();check(doc.querySelector('#dialog [data-export-guide]'));assert.ok(doc.querySelector('#menu-export'));assert.deepEqual(record,before);
 });
