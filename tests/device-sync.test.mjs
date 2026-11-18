@@ -331,3 +331,16 @@ test('PDF streams and repeated unchanged sync preserve binary sources and page b
   const received=receiver.docs.get(row.id);assert.equal(received.metadata.format,'pdf');assert.equal(received.file.type,'application/pdf');assert.deepEqual(new Uint8Array(await received.file.arrayBuffer()),new Uint8Array(await row.file.arrayBuffer()));assert.deepEqual(received.metadata.bookmarks,row.metadata.bookmarks);
   const next=await sender.adapter({includeSettings:false}).getStreamBundle();await receiver.adapter({includeSettings:false}).mergeStreamBundle(next,()=>assert.fail('unchanged PDF should not conflict'));assert.equal(receiver.calls.at(-1).length,0);
 });
+
+test('preset highlight names compare by colour, including presets not currently active', () => {
+  function withNames(names) {
+    const storage = memoryLocal();
+    storePreferences({annotation:{paletteId:'preset-2',highlightColorNames:{'preset-7':names}}},storage);
+    return syncSettingsSnapshot(storage);
+  }
+  const source = withNames({'#fde047':'핵심','#7dd3fc':'근거'});
+  assert.ok(sameSyncSettings(source,withNames({'#7dd3fc':'근거','#FDE047':'핵심'})));
+  const target = withNames({'#fde047':'질문','#7dd3fc':'근거'});
+  assert.equal(sameSyncSettings(source,target),false);
+  assert.deepEqual(syncSettingsDifferences(source,target),[{label:'형광펜 색 이름 · 교재,논문 마킹',local:'#fde047 핵심',remote:'#fde047 질문'}]);
+});

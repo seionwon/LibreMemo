@@ -4,7 +4,7 @@
 // cross-origin reads; the playlist's video IDs come from the embedded player.
 import {cueTimes,cueAt,clock,thumbnailURL,watchURL,playlistURL} from './youtube.js';
 import {icon,escapeHTML as esc} from './utils.js';
-import {videoNotes,videoNotesHTML,VIDEO_NOTES_CSS,isVideoNote,videoNoteURL} from './youtube-notes.js';
+import {videoNotes,videoNotesHTML,VIDEO_NOTES_CSS,isVideoNote,videoNoteURL,SCENE_REPEAT_SECONDS} from './youtube-notes.js';
 
 const PLAYER_HOST='https://www.youtube-nocookie.com';
 let apiPromise=null;
@@ -89,6 +89,17 @@ const DOC_STYLE='.subtitle-cue{display:flex;align-items:baseline;gap:.55em;paddi
   +'[data-htmlmemo-yt-now]{background:rgba(229,57,53,.08);box-shadow:inset 3px 0 #e53935;border-radius:4px}'
   +'[data-htmlmemo-yt-now] .subtitle-time::before{color:#d32f2f;font-weight:600}';
 
+const SCENE_CONTROLS_STYLE=`
+.youtube-notes-row{align-items:flex-start;flex-wrap:wrap}
+.youtube-scene-menu{max-width:100%;margin:0;padding:0;border:0}
+.youtube-scene-menu summary{display:flex;align-items:center;justify-content:center;margin-left:auto;width:38px;min-height:38px;box-sizing:border-box;border:1px solid var(--htmlmemo-reader-line,#d0d7e2);border-radius:8px;cursor:pointer;list-style:none}
+.youtube-scene-menu summary::-webkit-details-marker{display:none}
+.youtube-scene-menu summary:hover,.youtube-scene-menu[open] summary,.youtube-scene-menu [aria-pressed=true]{background:rgba(100,116,139,.14)}
+.youtube-scene-menu[open] > div{display:grid;gap:4px;padding-top:4px}
+.youtube-scene-menu button{justify-content:flex-start}
+@media(pointer:coarse){.youtube-scene-menu summary,.youtube-scene-menu button{min-height:44px}.youtube-scene-menu summary{width:44px}}
+[data-youtube-empty]{display:none}`;
+
 /**
  * The player above one YouTube document. The subtitle stays the document: the pane
  * only marks the cue being spoken, scrolls it into view and seeks when a cue's time
@@ -111,6 +122,7 @@ export class YouTubePane {
         <span class="youtube-clock" data-yt="clock">0:00</span>
         <select class="youtube-rate" data-yt="rate" title="재생 속도" aria-label="재생 속도">${RATES.map(r=>`<option value="${r}" ${r===rate?'selected':''}>${r}×</option>`).join('')}</select>
         <button type="button" class="youtube-button" data-yt="note" title="현재 시점에 메모 남기기" aria-label="현재 시점 메모">${icon('video-note',15)}<span>시점 메모</span></button>
+        <button type="button" class="youtube-button" data-yt="loop-stop" hidden>${icon('reload',15)} 반복 종료</button>
         <button type="button" class="youtube-button" data-yt="mark" title="지금 장면을 북마크">${icon('bookmark',15)}<span>북마크</span></button>
         <button type="button" class="youtube-button" data-yt="chapters" title="영상 설명란의 챕터를 붙여넣어 목차로 쓰기">${icon('list',15)}<span>목차</span></button>
         <button type="button" class="youtube-button" data-yt="attach" title="자막 파일(.srt, .vtt 등) 붙이기">${icon('subtitles',15)}<span>${this.hasCues()?'자막 바꾸기':'자막 붙이기'}</span></button>
@@ -139,6 +151,7 @@ export class YouTubePane {
     $('follow').onclick=()=>{this.follow=!this.follow;$('follow').setAttribute('aria-pressed',String(this.follow));this.quietUntil=0;if(this.follow)this.reveal(true);};
     $('mark').onclick=()=>this.bookmark();
     $('note').onclick=()=>this.addSceneNote();
+    $('loop-stop').onclick=()=>{this.stopSceneLoop();$('note').focus();};
     $('open').onclick=()=>{$('open').href=watchURL(this.youtube.videoId,this.youtube.playlistId)+'&t='+Math.floor(this.time())+'s';};
     $('chapters').onclick=()=>callbacks.onChapters();$('attach').onclick=()=>callbacks.onAttach();
     $('prev').onclick=()=>callbacks.onNavigate(-1);$('next').onclick=()=>callbacks.onNavigate(1);
@@ -167,8 +180,14 @@ export class YouTubePane {
     };
     document.addEventListener('click',this.onOutlineClick,true);
     // A hidden tab stops speaking; the learner returns to the same place.
-    this.visibility=new MutationObserver(()=>{if(tab.host.hidden)this.player?.pauseVideo?.();});
+    this.visibility=new MutationObserver(()=>{
+      if(tab.host.hidden){this.stopSceneLoop();this.player?.pauseVideo?.();}
+    });
     this.visibility.observe(tab.host,{attributes:true,attributeFilter:['hidden']});
+    this.onPageVisibility=()=>{
+      if(document.hidden&&this.sceneLoop){this.stopSceneLoop();this.player?.pauseVideo?.();}
+    };
+    document.addEventListener('visibilitychange',this.onPageVisibility);
     this.indexCues();
     this.renderNotes();
     this.timer=setInterval(()=>this.tick(),250);
@@ -177,6 +196,7 @@ export class YouTubePane {
   hasCues(){return !!this.reader.doc?.querySelector?.('.subtitle-cue .subtitle-time');}
   addSceneNote(note=null){
     const seconds=note?.videoAnchor.seconds??Math.floor(this.time());
+    this.stopSceneLoop();
     this.player?.pauseVideo?.();
     this.callbacks.onNote?.(seconds,note);
   }
@@ -184,18 +204,27 @@ export class YouTubePane {
     const doc=this.reader.doc;if(!doc?.body||this.disposed)return;
     const notes=videoNotes(this.reader.metadata),key=JSON.stringify(notes);
     if(this.notesKey===key&&this.notes?.isConnected)return;this.notesKey=key;
+    if(this.sceneLoop&&!notes.some(note=>note.id===this.sceneLoop.id&&note.videoAnchor.seconds===this.sceneLoop.start&&note.videoAnchor.videoId===this.youtube.videoId)){
+      this.stopSceneLoop();
+    }
     let box=this.notes;
     if(!box?.isConnected){
       box=doc.createElement('div');box.setAttribute('data-htmlmemo-ui','');box.setAttribute('data-htmlmemo-preview','');
       const article=doc.querySelector('[data-subtitles],[data-youtube-empty]');if(article)article.before(box);else doc.body.append(box);this.notes=box;
-      const style=doc.createElement('style');style.setAttribute('data-htmlmemo-ui','');style.setAttribute('data-htmlmemo-preview','');style.textContent=VIDEO_NOTES_CSS+'[data-youtube-empty]{display:none}';box.append(style);this.notesStyle=style;
+      const style=doc.createElement('style');style.setAttribute('data-htmlmemo-ui','');style.setAttribute('data-htmlmemo-preview','');style.textContent=VIDEO_NOTES_CSS+SCENE_CONTROLS_STYLE;box.append(style);this.notesStyle=style;
+      box.addEventListener('toggle',()=>this.reader.measure?.(),true);
     }
     box.innerHTML=videoNotesHTML(this.reader.metadata,{interactive:true});box.prepend(this.notesStyle);
+    if(this.sceneLoop)this.updateLoopControls();
     box.onclick=event=>{
       const control=event.target.closest('button,a');if(!control||!box.contains(control))return;
       if(control.hasAttribute('data-scene-add')){event.preventDefault();this.addSceneNote();return;}
-      const id=control.dataset.scenePlay||control.dataset.sceneEdit||control.dataset.sceneDelete,note=this.reader.metadata.annotations.find(a=>a.id===id&&isVideoNote(a));if(!note)return;
+      const id=control.closest('[data-scene-row]')?.dataset.sceneRow;
+      const note=this.reader.metadata.annotations.find(a=>a.id===id&&isVideoNote(a));if(!note)return;
+      const menu=control.closest('.youtube-scene-menu');
+      if(menu){menu.open=false;menu.querySelector('summary')?.focus();}
       if(control.hasAttribute('data-scene-play')){if(note.videoAnchor.videoId!==this.youtube.videoId){window.open(videoNoteURL(note),'_blank','noopener,noreferrer');return;}event.preventDefault();this.revealNote(note,true);}
+      else if(control.hasAttribute('data-scene-loop'))this.toggleSceneLoop(note);
       else if(control.hasAttribute('data-scene-edit'))this.addSceneNote(note);
       else if(control.hasAttribute('data-scene-delete'))this.callbacks.onDeleteNote?.(note);
     };
@@ -206,8 +235,73 @@ export class YouTubePane {
     const row=[...this.notes.querySelectorAll('[data-scene-row]')].find(el=>el.dataset.sceneRow===note.id);
     this.notes.querySelectorAll('[aria-current]').forEach(el=>el.removeAttribute('aria-current'));row?.setAttribute('aria-current','true');row?.scrollIntoView({block:'center',behavior:'smooth'});
     if(note.videoAnchor.videoId===this.youtube.videoId){
-      this.quietUntil=Date.now()+8000;this.pane.classList.remove('youtube-collapsed');this.$('size').setAttribute('aria-pressed','false');this.$('size').title='영상 접기';if(play)this.seek(note.videoAnchor.seconds,true);else this.prepareScene(note.videoAnchor.seconds);
+      this.expandAtScene();if(play)this.seek(note.videoAnchor.seconds,true);else this.prepareScene(note.videoAnchor.seconds);
     }
+    return true;
+  }
+  expandAtScene(){
+    this.quietUntil=Date.now()+8000;
+    this.pane.classList.remove('youtube-collapsed');
+    this.$('size').setAttribute('aria-pressed','false');
+    this.$('size').title='영상 접기';
+  }
+  toggleSceneLoop(note){
+    if(this.disposed||this.tab.host.hidden||note.videoAnchor.videoId!==this.youtube.videoId)return;
+    if(this.sceneLoop?.id===note.id){this.stopSceneLoop();return;}
+    if(this.playerError){this.sceneStatus(this.playerError);return;}
+    this.sceneStatus('');
+    this.sceneLoop={id:note.id,start:note.videoAnchor.seconds};
+    this.pendingSeek=null;
+    this.expandAtScene();
+    this.updateLoopControls();
+    if(this.ready)this.playSceneLoop();
+  }
+  sceneStatus(message){
+    const status=this.notes?.querySelector('[data-scene-status]');
+    if(status){status.textContent=message;status.hidden=!message;}
+  }
+  updateLoopControls(){
+    const stop=this.$('loop-stop');
+    stop.hidden=!this.sceneLoop;
+    if(this.sceneLoop)stop.title=clock(this.sceneLoop.start)+'부터 장면 반복 종료';
+    for(const button of this.notes?.querySelectorAll('[data-scene-loop]')||[]){
+      const active=button.dataset.sceneLoop===this.sceneLoop?.id;
+      if(button.getAttribute('aria-pressed')===String(active))continue;
+      button.setAttribute('aria-pressed',String(active));
+      button.querySelector('span').textContent=active?'반복 종료':`이 장면 ${SCENE_REPEAT_SECONDS}초 반복`;
+    }
+  }
+  stopSceneLoop(){
+    if(!this.sceneLoop)return;
+    this.sceneLoop=null;
+    this.updateLoopControls();
+  }
+  sceneLoopEnd(){
+    const duration=this.player?.getDuration?.();
+    const end=this.sceneLoop.start+SCENE_REPEAT_SECONDS;
+    return duration>0?Math.min(end,duration):end;
+  }
+  playSceneLoop(){
+    if(this.tab.host.hidden||this.pane.ownerDocument.hidden){this.stopSceneLoop();return;}
+    if(this.sceneLoopEnd()<=this.sceneLoop.start){
+      this.stopSceneLoop();
+      this.sceneStatus('이 메모의 시점이 영상 끝에 있어 반복할 구간이 없습니다.');
+      return;
+    }
+    this.seekPlayer(this.sceneLoop.start,true);
+    this.remember();
+  }
+  maintainSceneLoop(time,ended=false){
+    if(!this.sceneLoop||(!ended&&!this.playing))return false;
+    const {start}=this.sceneLoop,end=this.sceneLoopEnd();
+    // A scrub away from the passage takes precedence. Allow for keyframe seeks
+    // and the existing quarter-second clock, including double-speed playback.
+    if(this.tab.host.hidden||this.pane.ownerDocument.hidden||end<=start||time<start-1.5||time>end+1.5){
+      this.stopSceneLoop();
+      return false;
+    }
+    if(!ended&&time<end)return false;
+    this.seekPlayer(start,ended);
     return true;
   }
   indexCues(){
@@ -222,13 +316,25 @@ export class YouTubePane {
     let YT;try{YT=await loadYouTubeAPI();}catch(error){this.message(error.message);return;}
     if(this.disposed)return;
     this.player=new YT.Player(this.pane.querySelector('.youtube-frame'),{host:PLAYER_HOST,videoId:this.youtube.videoId,playerVars:{playsinline:1,rel:0,fs:0,iv_load_policy:3,cc_load_policy:0,start:Math.floor(this.savedAt),origin:location.origin},events:{
-      onReady:()=>{if(this.disposed)return;this.ready=true;this.player.setPlaybackRate?.(Number(this.$('rate').value));if(this.pendingSeek){const {seconds,play,prepare}=this.pendingSeek;this.pendingSeek=null;if(prepare)this.prepareScene(seconds);else this.seek(seconds,play);}},
+      onReady:()=>{
+        if(this.disposed)return;
+        this.ready=true;
+        this.player.setPlaybackRate?.(Number(this.$('rate').value));
+        if(this.sceneLoop)this.playSceneLoop();
+        else if(this.pendingSeek){
+          const {seconds,play,prepare}=this.pendingSeek;
+          this.pendingSeek=null;
+          if(prepare)this.prepareScene(seconds);else this.seek(seconds,play);
+        }
+      },
       onStateChange:event=>{
+        if(this.disposed)return;
         if(event.data===1)this.preparedTime=null;
         const playing=event.data===1;this.playing=playing;if(playing)this.resumeZones();
         if(event.data===5)this.player?.setPlaybackRate?.(Number(this.$('rate').value));
         this.$('play').setAttribute('aria-label',playing?'일시정지':'재생');
-        if(!playing&&this.ready)this.remember(true);
+        if(event.data===0&&this.sceneLoop&&this.maintainSceneLoop(this.player.getDuration?.()||this.time(),true))return;
+        if(!playing&&this.ready&&(!this.sceneLoop||event.data===2))this.remember(true);
         if(event.data===0)this.callbacks.onEnded?.();
       },
       onError:event=>this.message([101,150,153].includes(event.data)?'이 영상은 다른 사이트에서 재생할 수 없게 막혀 있습니다. 「YouTube에서 열기」로 보세요. 자막과 주석은 여기서 계속 쓸 수 있습니다.':'영상을 재생하지 못했습니다. (YouTube 오류 '+event.data+')'),
@@ -277,7 +383,7 @@ export class YouTubePane {
   }
   resumeZones(){this.pane?.querySelector('.youtube-zones')?.removeAttribute('data-yield');}
   // An unplayable video keeps YouTube's own message and links reachable.
-  message(text){const el=this.pane.querySelector('.youtube-message');el.textContent=text;el.hidden=false;this.pane.querySelector('.youtube-zones').hidden=true;}
+  message(text){this.playerError=text;this.stopSceneLoop();const el=this.pane.querySelector('.youtube-message');el.textContent=text;el.hidden=false;this.pane.querySelector('.youtube-zones').hidden=true;}
   /**
    * Full screen for the video with its tap zones. Browsers without element full screen
    * (iPhone Safari) get the same picture filling the window; Esc or a double tap returns.
@@ -308,16 +414,32 @@ export class YouTubePane {
   // instead cue the scene, which loads only a preview until the user plays.
   prepareScene(seconds){
     if(!Number.isFinite(seconds)||this.disposed)return;
+    this.stopSceneLoop();
     this.preparedTime=seconds;this.savedAt=seconds;this.target=null;
     if(!this.ready||!this.player?.cueVideoById){this.pendingSeek={seconds,play:false,prepare:true};return;}
     this.player.cueVideoById({videoId:this.youtube.videoId,startSeconds:seconds});this.tick(true);
   }
-  seek(seconds,play=false){if(!Number.isFinite(seconds)||this.disposed)return;this.preparedTime=null;seconds=Math.max(0,seconds);if(!this.ready||!this.player?.seekTo){this.pendingSeek={seconds,play};this.savedAt=seconds;return;}this.target={t:seconds,until:Date.now()+2500};this.player.seekTo(seconds,true);if(play)this.player.playVideo();this.tick(true);}
+  seek(seconds,play=false){
+    if(!Number.isFinite(seconds)||this.disposed)return;
+    this.stopSceneLoop();
+    this.seekPlayer(seconds,play);
+  }
+  seekPlayer(seconds,play){
+    this.preparedTime=null;
+    seconds=Math.max(0,seconds);
+    if(!this.ready||!this.player?.seekTo){this.pendingSeek={seconds,play};this.savedAt=seconds;return;}
+    this.target={t:seconds,until:Date.now()+2500};
+    this.player.seekTo(seconds,true);
+    if(play)this.player.playVideo();
+    this.tick(true);
+  }
   seekBy(delta){this.seek(this.time()+delta);}
   setSiblings(prev,next){this.$('prev').hidden=!prev;this.$('next').hidden=!next;this.$('prev').title=prev?'이전 영상: '+prev:'';this.$('next').title=next?'다음 영상: '+next:'';}
   tick(force=false){
     if(this.disposed||!this.ready)return;
-    const t=this.time();this.$('clock').textContent=this.clockText(t);
+    const t=this.time();
+    if(!force&&this.sceneLoop&&this.maintainSceneLoop(t))return;
+    this.$('clock').textContent=this.clockText(t);
     const index=cueAt(this.cues,t);
     if(index!==this.current||force){
       this.cues[this.current]?.el.removeAttribute('data-htmlmemo-yt-now');this.current=index;
@@ -326,7 +448,7 @@ export class YouTubePane {
       // Following keeps the playing line in the middle of the subtitle area.
       if(cue&&this.follow&&(this.playing||force)&&Date.now()>this.quietUntil)this.reveal(true);
     }
-    if(this.playing&&Math.abs(t-this.savedAt)>=5)this.remember();
+    if(this.playing&&!this.sceneLoop&&Math.abs(t-this.savedAt)>=5)this.remember();
   }
   /** Scroll the current cue into view only when it has left the visible area. */
   reveal(always=false,behavior='smooth'){
@@ -466,6 +588,8 @@ export class YouTubePane {
     handle?.setAttribute('aria-valuenow',String(now));handle?.setAttribute('aria-valuetext',this.videoShare?'영상 높이 '+now+'px':'기본 크기');
   }
   dispose(){
+    document.removeEventListener('visibilitychange',this.onPageVisibility);
+    this.stopSceneLoop();
     this.notes?.remove();
     if(this.disposed)return;this.disposed=true;this.sizeObserver?.disconnect();window.removeEventListener('resize',this.onWindowResize);window.removeEventListener('blur',this.onWindowBlur);window.removeEventListener('focus',this.onWindowFocus);clearInterval(this.timer);clearTimeout(this.tapTimer);document.removeEventListener('keydown',this.onFullscreenKey);this.visibility.disconnect();document.removeEventListener('click',this.onOutlineClick,true);
     if(this.ready)this.remember(true);

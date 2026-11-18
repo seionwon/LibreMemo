@@ -46,6 +46,7 @@ const paths = {
   'file-transfer': '<path d="M10 3H3v15h5M7 7h10v14H7zM14 7V3h7v12h-4M10 13h4m-2-2 2 2-2 2"/>',
   'area-underline': '<path d="M3 5h18v12H3z" stroke-dasharray="3 3"/><path d="M3 21h18"/>',
   note: '<path d="M21 14V3H3v18h11zM14 21v-7h7M7 8h10M7 12h5"/>',
+  'excerpt-copy': '<path d="M6 2.75h8l5 5v12.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.75a1 1 0 0 1 1-1Zm8 0v5h5M8.5 17.5h6"/><path d="M11 10.5H9v2.75c0 1-.5 1.5-1 1.75m7-4.5h-2v2.75c0 1-.5 1.5-1 1.75"/>',
   'video-note': '<rect x="3" y="3" width="14" height="17" rx="2"/><path d="M6 7h7M6 11h4"/><circle cx="17" cy="16" r="5"/><path d="M17 13v3l2 1"/>',
   'video-pin': '<path d="M12 21s8-7 8-12A8 8 0 0 0 4 9c0 5 8 12 8 12Z"/><path d="m10 6 5 3-5 3Z"/>',
   text: '<path d="M3 5h18M12 5v16M8 21h8M3 5v3M21 5v3"/>',

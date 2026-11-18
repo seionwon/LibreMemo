@@ -15,6 +15,7 @@ import {CardPreviewQueue,cardPreviewKey,savedCardPicture} from './card-previews.
 import {readWebPage,pastedPage,PASTE_LIMIT,isWebSearch,BrowserTabs} from './web.js';
 import { readLocalHTML, droppedHTMLFiles, findLocalDuplicates, identifyLocalFile, htmlExportName } from './local-files.js';
 import { normalizePreferences, loadPreferences, storePreferences, serializeSettings, readSettingsFile, PRESET_COLORS, PRESET_PALETTES, normalizeHexColor, hexToRgb, rgbToHex, hexToHsv, hsvToHex } from './preferences.js';
+import {HIGHLIGHT_NAME_LENGTH, namedHighlightColors} from './highlight-color-names.js';
 import {bundledExample,bundledFontBytes} from './distribution.js';
 import { InstallController, isIOS, installableLocation, installationURL, publicAppURL } from './install.js';
 import { APP_VERSION } from './version.js';
@@ -27,6 +28,7 @@ import {TEXT_STYLE_PRESETS,TEXT_SIZE_MIN,TEXT_SIZE_MAX,validTextStyle,stylePrevi
 import {parseYouTubeInput,parseChapters,cueTimes,clock,youtubeDocumentHTML,subtitleFormat,decodeSubtitle,matchSubtitleFiles,subtitlesFromZip,playlistFolderName,watchURL,SUBTITLE_EXTENSION,guideHTML,validateYouTube} from './youtube.js';
 import {isVideoNote,makeVideoNote,matchingVideoRecords,findVideoNote} from './youtube-notes.js';
 import {openVideoNoteDialog} from './youtube-note-dialog.js';
+import {renderAnnotationReview, annotationExpansion} from './annotation-review.js';
 import {THEME_CATEGORIES,APP_THEMES,THEME_SHAPE_OPTIONS,THEME_TEXTURE_OPTIONS,THEME_FONT_OPTIONS,THEME_FRAME_OPTIONS,THEME_ACCENT_PRESETS,DEFAULT_DESIGN_THEME,resolveDesignTheme,applyDesignThemeToDocument,describeDesignTheme,toggleFavoriteTheme,filterDesignThemes} from './app-themes.js';
 
 const PUBLIC_APP_URL = publicAppURL(location);
@@ -237,7 +239,7 @@ function deviceSyncDialog() {
   const currentId=active()?.record?.id;let reopen=[],selected=currentId;
   openDeviceSync({modal,currentId,onError:showError,
     prepare:async()=>{await flushInternalDocuments();reopen=tabs.filter(t=>t.reader).map(t=>t.record.id);for(const tab of [...tabs])if(tab.reader)await closeTab(tab.id);},
-    afterCommit:async()=>{preferences=loadPreferences(localStorage);applyTheme(preferences.theme,preferences.designTheme);dataFolder?.schedule({settingsOnly:true});if(dataFolder?.handle)await dataFolder.flush();await refreshLibrary();},
+    afterCommit:async()=>{reloadStoredPreferences();applyTheme(preferences.theme,preferences.designTheme);dataFolder?.schedule({settingsOnly:true});if(dataFolder?.handle)await dataFolder.flush();await refreshLibrary();},
     onClose:async()=>{for(const id of reopen){const record=await getDocument(id);if(record&&!record.trashedAt)await openRecord(record);}const original=tabs.find(t=>t.record?.id===selected);if(original)activate(original.id);else activate('library');}
   });
 }
@@ -364,7 +366,28 @@ function settingsDialog() {
 }
 function applyTheme(theme=preferences.theme,designTheme=preferences.designTheme) { const resolved=applyDesignThemeToDocument(document,currentBrightness(theme),designTheme);ensureBundledThemeFont(resolved.usesBundledFont);stopAppSidebarResize();applyAppSidebarWidth();for(const tab of tabs){if(tab.reader?.documentSidebarUI)styleNativeSidebar(tab.reader.documentSidebarUI);if(tab.reader&&$('#sidebar').annotationReader===tab.reader)youtubeOutlineStyle($('#sidebar'),tab.reader);tab.reader?.syncSourceThemeControls?.();tab.reader?.updateReadingControls?.();} }
 function applyToolbarPosition(){const bar=$('#toolbar'),p=preferences.toolbarPosition;if(!p){bar.style.left='50%';bar.style.top='';bar.style.bottom='';bar.style.transform='';return;}bar.style.transform='none';bar.style.bottom='auto';bar.style.left=(8+p.x*Math.max(0,innerWidth-bar.offsetWidth-16))+'px';bar.style.top=(8+p.y*Math.max(0,innerHeight-bar.offsetHeight-42))+'px';}
-function changePreferences(patch){const nextDesignTheme=patch.designTheme?{...preferences.designTheme,...patch.designTheme}:preferences.designTheme;preferences=storePreferences({...preferences,...patch,designTheme:nextDesignTheme,annotation:{...preferences.annotation,...patch.annotation}},localStorage);dataFolder?.schedule({settingsOnly:true});applyTheme(preferences.theme,preferences.designTheme);$('#library-sort').value=preferences.librarySort+':'+preferences.librarySortDirection;for(const tab of tabs)if(tab.reader)Object.assign(tab.reader,preferences.annotation);applyToolbarPosition();renderLibrary();if(reader())updateToolbarState();}
+function changePreferences(patch){
+  const nextDesignTheme=patch.designTheme?{...preferences.designTheme,...patch.designTheme}:preferences.designTheme;
+  preferences=storePreferences({...preferences,...patch,designTheme:nextDesignTheme,annotation:{...preferences.annotation,...patch.annotation}},localStorage);
+  dataFolder?.schedule({settingsOnly:true});applyTheme(preferences.theme,preferences.designTheme);
+  $('#library-sort').value=preferences.librarySort+':'+preferences.librarySortDirection;
+  for(const tab of tabs)if(tab.reader)Object.assign(tab.reader,preferences.annotation);
+  applyToolbarPosition();renderLibrary();
+  if(reader()){
+    updateToolbarState();
+    if(patch.annotation && ('paletteId' in patch.annotation || 'highlightColorNames' in patch.annotation)) refreshAnnotationFilters();
+  }
+}
+function reloadStoredPreferences() {
+  const previous = preferences.annotation;
+  preferences = loadPreferences(localStorage);
+  const current = preferences.annotation, r = reader();
+  if (!r) return;
+  const changedPreset = previous.paletteId !== current.paletteId;
+  if (!changedPreset && JSON.stringify(previous.highlightColorNames[previous.paletteId]) === JSON.stringify(current.highlightColorNames[current.paletteId])) return;
+  refreshAnnotationFilters();
+  if (popoverName === 'palette' && (changedPreset || !$('#highlight-color-names')?.open)) renderPalettePopoverContent(r);
+}
 async function restoreSettings(input){
   if(input?.kind==='file'&&input.queryPermission){const options={mode:'read'};if(await input.queryPermission(options)!=='granted'&&await input.requestPermission(options)!=='granted')throw new Error('설정 파일 읽기 권한이 필요합니다. 파일을 다시 선택해주세요.');}
   const backup=await readSettingsFile(input);changePreferences(backup.preferences);settingsFolderHint=backup.folderName;await setSetting('settings-folder-hint',settingsFolderHint);
@@ -684,7 +707,7 @@ function updateChrome() {
   if(!$('.chrome').classList.contains('address-editing'))$('#address').value=local?tab.record.name:tab?.url||'';
   $('#address-icon').innerHTML=icon(local?'file':'globe',15);$('#local-label').hidden=!local;
   setIconButton('#save-page',execution?'globe':local?'download':tab?.external?'folder':'save',execution?'URL 복사':local?'내보내기':tab?.external?'Chrome에서 가져오기':'페이지 저장',17);
-  if(local){$('#save-page').title='내보내기 · 원본 포함 보관 파일, 읽기용 HTML, 주석 포함 PDF';$('#save-page').setAttribute('aria-description','원본·주석·북마크를 함께 보관하거나 다른 사람에게 전달할 형식을 선택합니다.');}
+  if(local){$('#save-page').title='내보내기 · 원본 포함 보관 파일, 읽기용 HTML, 주석 포함 PDF, 발췌 노트 복사';$('#save-page').setAttribute('aria-description','원본·주석·북마크를 파일로 보관하거나 표시한 글과 메모를 마크다운으로 복사합니다.');}
   else $('#save-page').removeAttribute('aria-description');
   $('#save-page').disabled=execution?sharingApp:!tab||!!tab.capturing;
   if(local)saveStatus(tab); else if(tab){$('#status-left').textContent=tab.external?'웹 탐색은 브라우저 탭 · 복사한 글과 저장한 HTML은 여기서 주석 달기':tab.capturing?'읽기용 사본을 준비하는 중…':tab.readable?'페이지 저장 → 주석 달기 · 추가 설치 없음':'앱 문서를 준비하는 중…';if(typeof syncStatusbarVisibility==='function')syncStatusbarVisibility();}
@@ -1657,6 +1680,42 @@ function getActivePalette() {
   const id = preferences.annotation.paletteId || PRESET_PALETTES[0].id;
   return all.find(p => p.id === id) || PRESET_PALETTES[0];
 }
+function bindHighlightColorNames(pop, palette, names, reader) {
+  const editor = $('#highlight-color-names', pop), form = $('form', editor);
+  editor.ontoggle = () => {
+    if (!editor.open || form.childElementCount) return;
+    form.innerHTML = palette.colors.map(color => `<label class="highlight-name-row">
+      <span class="highlight-name-sample" style="--swatch:${color}" aria-hidden="true"></span>
+      <span>${color.toUpperCase()}</span>
+      <input type="text" data-highlight-color-name="${color}" aria-label="${color.toUpperCase()} 형광펜 색 이름" autocomplete="off" maxlength="${HIGHLIGHT_NAME_LENGTH}" value="${esc(names.get(color) || '')}" placeholder="이름">
+    </label>`).join('') + '<button type="submit" class="palette-mini-btn primary" data-save-highlight-names>이름 저장</button>';
+    positionPopover();
+  };
+  form.onsubmit = safely(event => {
+    event.preventDefault();
+    const current = getActivePalette();
+    if (current.id !== palette.id) {
+      renderPalettePopoverContent(reader);
+      throw Error('선택한 팔레트가 바뀌었습니다. 현재 팔레트를 확인해주세요.');
+    }
+    const saved = preferences.annotation.highlightColorNames;
+    const next = {...saved[palette.id]};
+    for (const input of $$('[data-highlight-color-name]', form)) {
+      const color = input.dataset.highlightColorName, name = input.value.trim();
+      const original = names.get(color) || '', latest = next[color] || '';
+      if (name === original) continue;
+      if (latest !== original && name !== latest) {
+        throw Error('다른 창에서 이 색 이름을 변경했습니다. 팔레트를 다시 열어 확인해주세요.');
+      }
+      if (name) next[color] = name;
+      else delete next[color];
+    }
+    changePreferences({annotation:{highlightColorNames:{...saved,[palette.id]:next}}});
+    renderPalettePopoverContent(reader);
+    $('#highlight-color-names summary', pop).focus({preventScroll:true});
+    toast('형광펜 색 이름을 저장했습니다.');
+  });
+}
 function renderPalettePopoverContent(r) {
   const pop = $('#tool-popover');
   pop.cancelPaletteDrag?.();
@@ -1664,12 +1723,15 @@ function renderPalettePopoverContent(r) {
   const customPalettes = preferences.annotation.customPalettes || [];
   const isCustomPalette = customPalettes.some(p => p.id === activePalette.id);
   const customColors = preferences.annotation.customColors || [];
+  const highlightNames = new Map(namedHighlightColors(preferences.annotation).map(({color, name}) => [color, name]));
+  const swatchLabel = color => highlightNames.has(color) ? highlightNames.get(color) + ' · ' + color : color;
   const currentColor = annotationColor(r).toLowerCase();
   let pickerHsv = hexToHsv(currentColor);
   const rgb = hexToRgb(currentColor);
   pop.innerHTML = `<div class="popover-heading" data-palette-drag tabindex="0" role="group" aria-label="펜과 색상 창 이동" title="드래그하여 이동 · 방향키로 이동 (Shift: 크게)"><h3>펜과 색상</h3><button type="button" class="icon-button popover-close" data-popover-close aria-label="펜과 색상 닫기" title="닫기">${icon('close',16)}</button></div>`
     + `<label class="range-label">굵기 <output id="width-output">${r.width}px</output><input id="pen-width" type="range" min="1" max="18" value="${r.width}"></label><label class="range-label">형광펜/채움 투명도 <output id="opacity-output">${Math.round(r.opacity*100)}%</output><input id="pen-opacity" type="range" min="10" max="90" value="${Math.round(r.opacity*100)}"></label><label class="select-label">펜 표시 시간 <select id="pen-ttl"><option value="0">영구 저장</option><option value="3">3초</option><option value="10">10초</option><option value="30">30초</option></select></label><p class="popover-hint">시간을 정한 펜은 잠깐 표시되고 저장되지 않아요.</p>`
-    + `<div class="palette-section"><div class="palette-bar"><span class="palette-label">팔레트 프리셋</span><div class="palette-actions"><select id="palette-preset" aria-label="팔레트 프리셋"><optgroup label="프리셋 팔레트 (20개)">${PRESET_PALETTES.map((p, idx) => `<option value="${esc(p.id)}" ${p.id === activePalette.id ? 'selected' : ''}>${idx + 1}. ${esc(p.name)} (${p.colors.length})</option>`).join('')}</optgroup>${customPalettes.length ? `<optgroup label="사용자 팔레트 (${customPalettes.length}개)">${customPalettes.map(p => `<option value="${esc(p.id)}" ${p.id === activePalette.id ? 'selected' : ''}>★ ${esc(p.name)} (${p.colors.length})</option>`).join('')}</optgroup>` : ''}</select>${isCustomPalette ? `<button type="button" id="delete-custom-palette" class="palette-mini-btn danger" title="선택한 사용자 팔레트 삭제" aria-label="사용자 팔레트 삭제">삭제</button>` : ''}</div></div><div id="preset-swatches" class="swatches preset-swatches">${activePalette.colors.map(c => `<button type="button" data-color="${c}" style="--swatch:${c}" title="${c}" aria-label="색상 ${c}" class="swatch ${currentColor === c ? 'chosen' : ''}"></button>`).join('')}</div></div>`
+    + `<div class="palette-section"><div class="palette-bar"><span class="palette-label">팔레트 프리셋</span><div class="palette-actions"><select id="palette-preset" aria-label="팔레트 프리셋"><optgroup label="프리셋 팔레트 (20개)">${PRESET_PALETTES.map((p, idx) => `<option value="${esc(p.id)}" ${p.id === activePalette.id ? 'selected' : ''}>${idx + 1}. ${esc(p.name)} (${p.colors.length})</option>`).join('')}</optgroup>${customPalettes.length ? `<optgroup label="사용자 팔레트 (${customPalettes.length}개)">${customPalettes.map(p => `<option value="${esc(p.id)}" ${p.id === activePalette.id ? 'selected' : ''}>★ ${esc(p.name)} (${p.colors.length})</option>`).join('')}</optgroup>` : ''}</select>${isCustomPalette ? `<button type="button" id="delete-custom-palette" class="palette-mini-btn danger" title="선택한 사용자 팔레트 삭제" aria-label="사용자 팔레트 삭제">삭제</button>` : ''}</div></div><div id="preset-swatches" class="swatches preset-swatches">${activePalette.colors.map(c => `<button type="button" data-color="${c}" style="--swatch:${c}" title="${esc(swatchLabel(c))}" aria-label="색상 ${esc(swatchLabel(c))}" class="swatch ${currentColor === c ? 'chosen' : ''}"></button>`).join('')}</div>
+      <details id="highlight-color-names" class="highlight-name-editor"><summary>형광펜 색 이름 <span data-active-highlight-name>${esc(highlightNames.get(currentColor) || '')}</span></summary><form aria-label="현재 팔레트의 형광펜 색 이름"></form></details></div>`
     + `<div class="palette-section"><div class="palette-bar"><span class="palette-label">사용자 색상 (${customColors.length})</span><div class="palette-actions"><button type="button" id="add-custom-color" class="palette-mini-btn" title="현재 색상을 사용자 색상에 추가">+ 색상 추가</button><button type="button" id="remove-custom-color" class="palette-mini-btn" ${customColors.includes(currentColor) ? '' : 'disabled'} title="선택한 사용자 색상 삭제">− 삭제</button></div></div><div id="custom-swatches" class="swatches custom-swatches">${customColors.length ? customColors.map(c => `<button type="button" data-color="${c}" data-custom-swatch="${c}" style="--swatch:${c}" title="사용자 색상 ${c}" aria-label="사용자 색상 ${c}" class="swatch custom-swatch ${currentColor === c ? 'chosen' : ''}"></button>`).join('') : '<span class="palette-empty">색상을 고른 뒤 「+ 색상 추가」를 눌러 저장하세요.</span>'}</div><div class="custom-palette-creator"><input id="custom-palette-name" type="text" maxlength="40" placeholder="새 팔레트 이름 (예: 내 필기 세트)" aria-label="새 팔레트 이름"><button type="button" id="save-custom-palette" class="palette-mini-btn primary">+ 팔레트 저장</button></div></div>`
     + `<div class="palette-section color-picker-section"><div class="palette-bar"><span class="palette-label">컬러 피커</span><span class="color-preview-badge"><i id="color-preview-chip" style="background:${currentColor}"></i><code id="color-preview-text">${currentColor.toUpperCase()}</code></span></div><div id="color-picker-sv" class="color-picker-sv" style="--picker-hue:${pickerHsv.h}" role="slider" tabindex="0" aria-label="채도 및 명도 선택"><span id="color-picker-sv-thumb" class="color-picker-sv-thumb" style="left:${pickerHsv.s}%;top:${100 - pickerHsv.v}%"></span></div><div class="color-picker-hue-row"><input id="color-picker-hue" class="color-picker-hue" type="range" min="0" max="360" value="${pickerHsv.h}" aria-label="색상 (Hue)"><input type="color" id="custom-color" value="${currentColor}" title="시스템 색상 선택기" aria-label="사용자 색상"></div><div class="color-picker-inputs"><label class="color-input-field hex-field"><span>HEX</span><input id="color-hex" type="text" maxlength="7" value="${currentColor.toUpperCase()}" aria-label="HEX 색상 코드"></label><label class="color-input-field"><span>R</span><input id="color-r" type="number" min="0" max="255" value="${rgb.r}" aria-label="R (빨강)"></label><label class="color-input-field"><span>G</span><input id="color-g" type="number" min="0" max="255" value="${rgb.g}" aria-label="G (초록)"></label><label class="color-input-field"><span>B</span><input id="color-b" type="number" min="0" max="255" value="${rgb.b}" aria-label="B (파랑)"></label></div></div>`
     + textStyleSection(r);
@@ -1698,10 +1760,12 @@ function renderPalettePopoverContent(r) {
     if (chip) chip.style.background = norm;
     if (badgeText) badgeText.textContent = norm.toUpperCase();
     $$('.swatch', pop).forEach(b => b.classList.toggle('chosen', b.dataset.color?.toLowerCase() === norm));
+    $('[data-active-highlight-name]', pop).textContent = highlightNames.get(norm) || '';
     const removeBtn = $('#remove-custom-color', pop);
     if (removeBtn) removeBtn.disabled = !(preferences.annotation.customColors || []).includes(norm);
   };
   $$('[data-color]', pop).forEach(button => button.onclick = safely(() => applyColor(button.dataset.color)));
+  bindHighlightColorNames(pop, activePalette, highlightNames, r);
   $('#palette-preset', pop).onchange = safely(e => {
     changePreferences({annotation: {paletteId: e.target.value}});
     const nextPalette = getActivePalette();
@@ -2021,7 +2085,9 @@ function bindAppSidebarResize(panel) {
 }
 function restoreSidebar() {
   const r=reader();
-  if(!r?.doc||r.preparing||r.disposed||readerFocused||r.documentSidebarUI?.isConnected||r.appSidebarClosed)return;
+  if(!r?.doc||r.preparing||r.disposed||readerFocused)return;
+  if(r.documentSidebarUI?.isConnected){refreshAnnotationFilters();return;}
+  if(r.appSidebarClosed)return;
   renderSidebar(r.appSidebarMode||'outline',{focusSearch:false});
 }
 function renderOutlineTree(outline,r){
@@ -2097,7 +2163,8 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
   if(embedded&&$('#sidebar').annotationReader===r)closeSidebar({remember:false,clearSearch:false});
   for(const type of ['annotation','bookmark']){
     r[type+'TreeOpen'] ||= new Map();
-    if(panel.annotationReader===r)$$(`[data-${type}-group]`,panel).forEach(group=>r[type+'TreeOpen'].set(group.getAttribute(`data-${type}-group`),!!(group.open||group.hasAttribute('open'))));
+    const expansion = type === 'annotation' ? annotationExpansion(r) : r.bookmarkTreeOpen;
+    if(panel.annotationReader===r)$$(`[data-${type}-group]:not([hidden])`,panel).forEach(group=>expansion.set(group.getAttribute(`data-${type}-group`),!!(group.open||group.hasAttribute('open'))));
   }
   if(panel.annotationReader===r&&panel.sidebarMode==='outline')for(const group of $$('[data-outline-group]',panel)){r.outlineTreeOpen ||= new Map();r.outlineTreeOpen.set(group.dataset.outlineGroup,!!(group.open||group.hasAttribute('open')));}
   panel.annotationReader=r;
@@ -2119,8 +2186,13 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
       }
       if(['annotations','bookmarks'].includes(view)&&panel.sidebarMode===view){
         const type=view==='annotations'?'annotation':'bookmark';
-        panel.annotationReader?.[type+'TreeOpen']?.clear();
-        for(const group of $$(`[data-${type}-group]`,panel)){group.open=false;group.removeAttribute('open');}
+        const current = panel.annotationReader;
+        const expanded = type === 'annotation' ? annotationExpansion(current) : current.bookmarkTreeOpen;
+        expanded.clear();
+        for(const group of $$(`[data-${type}-group]`,panel)){
+          expanded.set(group.getAttribute(`data-${type}-group`), false);
+          group.open=false;group.removeAttribute('open');
+        }
         return;
       }
       return embedded?panel.annotationReader.showDocumentSidebarView(view):renderSidebar(view);
@@ -2195,16 +2267,16 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
     $$('[data-bookmark]',panel).forEach(button=>button.onclick=()=>r.jumpBookmark(button.dataset.bookmark));
     $$('[data-delete-bookmark]',panel).forEach(button=>button.onclick=()=>{r.metadata.bookmarks=r.metadata.bookmarks.filter(m=>m.id!==button.dataset.deleteBookmark);active().queue.schedule();if(embedded)r.showDocumentSidebarView('bookmarks');else renderSidebar('bookmarks');});q('add-bookmark').onclick=()=>toolAction('bookmark');
   }else{
-    const contexts=r.annotationContexts?.()||new Map();
-    const when=value=>Number.isFinite(value)?new Date(value).toLocaleString('ko-KR',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}):'';
-    // Type alone ("펜 그림") says nothing about where an annotation is. Show the text it marks or was
-    // drawn on, then the kind · the heading above it · when it was made.
-    const row=a=>{const c=contexts.get(a.id)||{quote:a.textAnchor?.quote||a.anchorTarget?.quote||'',heading:''};const main=a.text||c.quote;const meta=[(isVideoNote(a)?'시점 메모':ANNOTATION_LABELS[a.type])||'주석',c.heading,when(a.created)].filter(Boolean).join(' · '),metaHtml=[esc((isVideoNote(a)?'시점 메모':ANNOTATION_LABELS[a.type])||'주석'),c.heading?formatOutlineTitle(c.heading):'',esc(when(a.created))].filter(Boolean).join(' · ');return `<div class="annotation-row"><button class="annotation-item" data-annotation="${esc(a.id)}" title="${esc([main,meta].filter(Boolean).join('\n'))}"><span class="annotation-type" style="color:${a.color}">${icon(a.type==='pen'?'pen':a.type==='note'?'note':a.type==='highlight'?'highlight':a.type==='underline'?'underline':'shapes',16)}</span><span class="annotation-text">${main?`<span class="annotation-main">${esc(main)}</span>`:''}${a.text&&c.quote?`<span class="annotation-context">“${esc(c.quote)}”</span>`:''}<span class="annotation-meta">${metaHtml}</span></span></button><button class="icon-button" data-delete-annotation="${esc(a.id)}" aria-label="주석 삭제">${icon('trash',14)}</button></div>`;};
-    const tree=r.annotationTree?.(contexts)||[{id:'document',title:'문서 전체',count:r.metadata.annotations.length,annotations:r.metadata.annotations,children:[]}];
-    const branch=group=>`<details class="annotation-group" data-annotation-group="${esc(group.id)}"${r.annotationTreeOpen.get(group.id)?' open':''}><summary><span class="annotation-group-title">${formatOutlineTitle(group.title)}</span><span class="annotation-group-count" aria-label="${group.count}개 주석">${group.count}</span></summary><div class="annotation-group-body">${group.children.map(branch).join('')}${group.annotations.map(row).join('')}</div></details>`;
-    content.innerHTML=r.metadata.annotations.length?`<div class="annotation-tree" aria-label="목차별 주석">${tree.map(branch).join('')}</div>`:'<p class="panel-empty">아직 주석이 없어요.<br>툴바에서 도구를 골라 생각을 남겨보세요.</p>';
-    $$('[data-annotation-group]',panel).forEach(group=>group.ontoggle=()=>{if(group.isConnected)r.annotationTreeOpen.set(group.dataset.annotationGroup,!!(group.open||group.hasAttribute('open')));});
-    $$('[data-annotation]',panel).forEach(button=>button.onclick=()=>r.jumpAnnotation(button.dataset.annotation));$$('[data-delete-annotation]',panel).forEach(button=>button.onclick=()=>r.remove(button.dataset.deleteAnnotation));
+    renderAnnotationReview(content, r, () => namedHighlightColors(preferences.annotation));
+  }
+}
+function refreshAnnotationFilters() {
+  const current = reader();
+  if (!current) return;
+  for (const panel of [$('#sidebar'), current.documentSidebarUI]) {
+    if (panel?.annotationReader === current && panel.sidebarMode === 'annotations') {
+      panel.querySelector('[data-annotation-filters]')?.updateColors?.();
+    }
   }
 }
 async function startSidebarOutlineEdit(button,item,r,panel){
@@ -2580,7 +2652,7 @@ function bindUI() {
   window.addEventListener('pagehide',()=>savePositions(true));
   window.addEventListener('online',network);window.addEventListener('offline',network);
   window.addEventListener('focus',resumeBrowser);document.addEventListener('visibilitychange',resumeBrowser);
-  window.addEventListener('storage',()=>{try{preferences=loadPreferences(localStorage);applyTheme(preferences.theme,preferences.designTheme);renderLibrary();dataFolder?.schedule({settingsOnly:true});}catch(error){showError(error);}});
+  window.addEventListener('storage',()=>{try{reloadStoredPreferences();applyTheme(preferences.theme,preferences.designTheme);renderLibrary();dataFolder?.schedule({settingsOnly:true});}catch(error){showError(error);}});
   matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',()=>{if(preferences.theme==='system')applyTheme(preferences.theme,preferences.designTheme);});
   window.addEventListener('resize',()=>{
     stopAppSidebarResize();applyAppSidebarWidth();
@@ -2617,7 +2689,7 @@ async function initialize() {
   if(!supportsDataFolder(window,navigator)&&!iosStorage){chromeRequiredDialog();return;}
   document.documentElement.dataset.storageSetup='checking';updateAppInteraction();setStatusLeft('새 버전을 확인하는 중…');
   try{preferences=loadPreferences(localStorage);}catch(error){toast('설정 일부를 읽지 못했습니다. 연결한 데이터 폴더로 복원할 수 있습니다.',true);}
-  dataFolder=new DataFolder({storage:localStorage,report:state=>{if(state.handle)folder=state.handle;renderFolderState();},onRestored:async result=>{preferences=loadPreferences(localStorage);applyTheme(preferences.theme,preferences.designTheme);$('#library-sort').value=preferences.librarySort+':'+preferences.librarySortDirection;for(const tab of tabs)if(tab.reader)Object.assign(tab.reader,preferences.annotation);applyToolbarPosition();await refreshLibrary();if(result.recovered)toast('이전의 온전한 폴더 저장본에서 복원했습니다. 최신 변경 일부가 빠졌을 수 있습니다.',true);}});
+  dataFolder=new DataFolder({storage:localStorage,report:state=>{if(state.handle)folder=state.handle;renderFolderState();},onRestored:async result=>{reloadStoredPreferences();applyTheme(preferences.theme,preferences.designTheme);$('#library-sort').value=preferences.librarySort+':'+preferences.librarySortDirection;for(const tab of tabs)if(tab.reader)Object.assign(tab.reader,preferences.annotation);applyToolbarPosition();await refreshLibrary();if(result.recovered)toast('이전의 온전한 폴더 저장본에서 복원했습니다. 최신 변경 일부가 빠졌을 수 있습니다.',true);}});
   applyTheme(preferences.theme,preferences.designTheme);bindUI();setupSelectLabels();fitHeader();$('#library-sort').value=preferences.librarySort+':'+preferences.librarySortDirection;network();
   // The old app must be able to update before requesting access to its folder.
   // Data already committed to this device survives the version change.

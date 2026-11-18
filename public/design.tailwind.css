@@ -375,6 +375,16 @@ html[data-app-sidebar-resizing] iframe{pointer-events:none!important}
 :root[data-theme=dark] .palette-mini-btn.danger:hover:not(:disabled){background:#541e22;border-color:#991b1b;color:#fee2e2}
 .swatches.preset-swatches{display:grid;grid-template-columns:repeat(10,1fr);gap:5px;margin-bottom:4px}
 .swatches.preset-swatches .swatch{width:22px;height:22px;justify-self:center}
+.highlight-name-editor{margin-top:5px;font:inherit;font-size:12px}
+.highlight-name-editor summary{padding:5px 2px;color:var(--text);font-weight:600;cursor:pointer;overflow-wrap:anywhere}
+.highlight-name-editor summary span{color:var(--muted);font-weight:400}
+.highlight-name-editor summary span:not(:empty)::before{content:" · "}
+.highlight-name-editor form{display:grid;gap:5px;padding-block:4px}
+.highlight-name-row{display:grid;grid-template-columns:16px 8ch minmax(0,1fr);gap:6px;align-items:center}
+.highlight-name-sample{width:16px;height:16px;border:1px solid var(--line);border-radius:4px;background:var(--swatch)}
+.highlight-name-row input{min-width:0;height:32px;padding:3px 7px;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--text);font:inherit}
+.highlight-name-row input:focus-visible{outline:2px solid var(--color-control-accent);outline-offset:1px}
+.highlight-name-editor [data-save-highlight-names]{justify-self:end;min-height:30px}
 .swatches.custom-swatches{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;min-height:22px;align-items:center}
 .swatches.custom-swatches .swatch{width:20px;height:20px}
 .palette-empty{font-size:10px;color:var(--muted);line-height:1.4}
@@ -1061,3 +1071,20 @@ dialog:has(.theme-studio){width:min(860px,calc(100vw - 28px))}
   .theme-category-chip{padding:4px 8px;font-size:10px}
   .theme-search-box{flex-basis:100%}
 }
+
+/* Annotation search is shared by the app sidebar and the embedded book sidebar. */
+:is(#sidebar,[data-htmlmemo-doc-sidebar-ui]) .annotation-filters{
+  display:grid;gap:6px;margin:0 0 8px;min-width:0
+}
+:is(#sidebar,[data-htmlmemo-doc-sidebar-ui]) .annotation-filters select{
+  box-sizing:border-box;width:100%;min-width:0;min-height:30px;margin:0;padding:4px 26px 4px 9px;
+  border:1px solid var(--line);border-radius:6px;background-color:var(--surface);
+  color:var(--text);font:inherit;font-size:12px;line-height:1.5;text-overflow:ellipsis
+}
+:is(#sidebar,[data-htmlmemo-doc-sidebar-ui]) .annotation-filter-count{
+  margin:0 0 6px;color:var(--muted);font-size:11px;line-height:1.6
+}
+:is(#sidebar,[data-htmlmemo-doc-sidebar-ui]) :is(.annotation-row,.annotation-group,.annotation-filter-count,[data-annotation-color],[data-annotation-clear],[data-annotation-missing])[hidden]{display:none!important}
+.excerpt-action{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;margin:8px 0}
+.excerpt-action [data-excerpt-copy]{display:inline-flex;align-items:center;gap:6px}
+.excerpt-manual{box-sizing:border-box;width:100%;max-width:100%;min-height:5em;margin:0;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);font:inherit;font-size:12px;line-height:1.5;resize:vertical}

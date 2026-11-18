@@ -1,6 +1,6 @@
 import { createReadAloud } from './read-aloud.js';
 import {isVideoNote} from './youtube-notes.js';
-import {clock} from './youtube.js';
+import {clock, cueTimes} from './youtube.js';
 import { PdfReader } from './pdf-reader.js';
 import {bookmarkTextAnchor,captureBookmarkLocations,findBookmarkText} from './bookmark-location.js';
 import { SearchIndexCache } from './search-index.js';
@@ -4330,7 +4330,10 @@ export class Reader {
       const node = marked ? markedNodes.get(annotation.id) : this.resolveDrawingTarget(annotation,context);
       let index = node?.isConnected && node !== this.doc.body ? headingBefore(node) : -1;
       if (index < 0 && !marked) { const drawn = drawnNodes.get(annotation.id); if (drawn) index = headingAbove(drawn); }
+      const cue = this.metadata.youtube && node?.closest?.('.subtitle-cue');
+      const cueStart = cue && cueTimes(cue.querySelector('.subtitle-time')?.textContent)?.start;
       result.set(annotation.id, {quote:annotation.textAnchor?.quote || annotation.anchorTarget?.quote || (node?.isConnected ? this.drawingTargetQuote(node) : ''),
+        ...(Number.isFinite(cueStart) ? {videoSeconds: Math.floor(cueStart)} : {}),
         heading:index >= 0 ? (outline[index]?.title || headings[index].textContent.replace(/\s+/g, ' ').trim()) : '',path:index>=0?paths[index]:[]});
     }
     return result;

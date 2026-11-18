@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizePreferences, loadPreferences, storePreferences, serializeSettings, parseSettings, readSettingsFile, PREFERENCES_KEY, PRESET_COLORS, PRESET_PALETTES, normalizeHexColor, hexToRgb, rgbToHex, hexToHsv, hsvToHex } from '../public/src/preferences.js';
+import {namedHighlightColors} from '../public/src/highlight-color-names.js';
 const storage=()=>{const values=new Map();return {getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value),values};};
 test('pen and highlighter colors stay independent through storage and portable settings, rejecting malformed highlight colors',()=>{
   const local=storage(),preferences=storePreferences({annotation:{color:'#334155',highlightColor:'#F39DA2'}},local);
@@ -54,4 +55,37 @@ test('sort directions preserve legacy ordering and round-trip through preference
   const legacy={format:'HTMLMemo.settings',version:1,storage:'local',preferences:{librarySort:'title'}};
   assert.equal(parseSettings(JSON.stringify(legacy)).preferences.librarySortDirection,'asc');
   for(const librarySortDirection of ['sideways','ASC',12,false])assert.throws(()=>normalizePreferences({librarySortDirection}));
+});
+
+test('highlight names follow each preset, travel in settings and apply to stored colours', () => {
+  const local = storage();
+  const custom = {id:'custom-study', name:'시험 준비', colors:['#fde047','#7dd3fc']};
+  const first = storePreferences({annotation:{
+    paletteId:'preset-7', customPalettes:[custom],
+    highlightColorNames:{
+      'preset-7':{'#7DD3FC':'근거', '#FDE047':' 핵심 '},
+      'custom-study':{'#fde047':'질문', '#7dd3fc':'  '},
+    },
+  }},local).annotation;
+  const original = {type:'highlight', color:'#fde047'};
+  assert.deepEqual(namedHighlightColors(first), [
+    {color:original.color,name:'핵심'}, {color:'#7dd3fc',name:'근거'},
+  ]);
+  const copy = parseSettings(serializeSettings(loadPreferences(local))).preferences.annotation;
+  assert.deepEqual(copy, first);
+  assert.deepEqual(namedHighlightColors({...copy,paletteId:custom.id}), [{color:original.color,name:'질문'}]);
+  const removed = normalizePreferences({annotation:{...copy, paletteId:custom.id, customPalettes:[]}}).annotation;
+  assert.equal(removed.paletteId,'preset-7');
+  assert.equal(Object.hasOwn(removed.highlightColorNames,custom.id),false);
+  assert.deepEqual(namedHighlightColors(normalizePreferences().annotation),[]);
+});
+
+test('highlight names validate portable input, preserve literal text and omit blank colours', () => {
+  const input = settings => normalizePreferences({annotation:{paletteId:'preset-7',highlightColorNames:settings}}).annotation;
+  for(const invalid of [[],null,{'preset-7':[]},{'preset-7':{'background:red':'근거'}},{'preset-7':{'#fde047':42}},{'preset-7':{'#fde047':'가'.repeat(33)}},{'preset-7':{'#fde047':'첫\n줄'}}]) {
+    assert.throws(()=>input(invalid),/색 이름/);
+  }
+  assert.deepEqual(input({'preset-7':{'#fde047':'  '}}).highlightColorNames,{});
+  const literal='<질문> & "근거"';
+  assert.deepEqual(namedHighlightColors(input({'preset-7':{'#fde047':literal}})),[{color:'#fde047',name:literal}]);
 });

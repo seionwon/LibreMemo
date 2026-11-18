@@ -80,6 +80,16 @@ export function syncSettingsDifferences(local,remote){
   const sort=p=>({modified:'수정일',created:'저장일',title:'제목'})[p.librarySort]+' · '+(p.librarySortDirection==='asc'?'오름차순':'내림차순');add('서재 정렬',sort(pa),sort(pb));
   for(const [key,label,format]of [['color','펜 색상',v=>v],['highlightColor','형광펜 색상',v=>v],['width','펜 굵기',v=>v+''],['opacity','형광펜/채움 투명도',v=>Math.round(v*100)+'%'],['penTTL','펜 표시 시간',v=>v?v+'초':'계속 표시'],['customColors','사용자 색상',v=>v.length?v.join(', '):'없음'],['customPalettes','사용자 팔레트',v=>v.length?v.map(p=>p.name+': '+p.colors.join(', ')).join(' / '):'없음']])add(label,format(pa.annotation[key]),format(pb.annotation[key]));
   const palette=p=>(PRESET_PALETTES.find(v=>v.id===p.annotation.paletteId)||p.annotation.customPalettes.find(v=>v.id===p.annotation.paletteId))?.name||'사용자 팔레트';add('색상 팔레트',palette(pa),palette(pb),pa.annotation.paletteId!==pb.annotation.paletteId);
+  const localNames = pa.annotation.highlightColorNames, remoteNames = pb.annotation.highlightColorNames;
+  const palettes = [...PRESET_PALETTES, ...pa.annotation.customPalettes, ...pb.annotation.customPalettes];
+  for (const id of new Set([...Object.keys(localNames), ...Object.keys(remoteNames)])) {
+    const left = Object.hasOwn(localNames, id) ? localNames[id] : {};
+    const right = Object.hasOwn(remoteNames, id) ? remoteNames[id] : {};
+    const changed = [...new Set([...Object.keys(left), ...Object.keys(right)])].filter(color => left[color] !== right[color]);
+    if (!changed.length) continue;
+    const describe = names => changed.map(color => color + ' ' + (names[color] || '이름 없음')).join(', ');
+    add('형광펜 색 이름 · ' + palettes.find(item => item.id === id).name, describe(left), describe(right));
+  }
   const position=p=>p?Math.round(p.x*100)+'%, '+Math.round(p.y*100)+'%':'기본 위치';add('툴바 위치',position(pa.toolbarPosition),position(pb.toolbarPosition));add('사이드바 폭',pa.sidebarWidth+'px',pb.sidebarWidth+'px');
   const label=key=>key==='msuite_tts_rate'?'읽어주기 속도':key.startsWith('msuite_tts_voice_')?'읽어주기 음성':key.startsWith('htmlmemo_tts_lang_')?'읽어주기 언어':'본문 목차 폭';
   for(const key of new Set([...Object.keys(a),...Object.keys(b)]))if(![PREFERENCES_KEY,'htmlmemo-theme'].includes(key))add(label(key),a[key],b[key]);

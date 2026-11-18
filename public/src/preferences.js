@@ -3,6 +3,7 @@ import {validTextStyle,validTextStyles} from './text-style.js';
 import {DEFAULT_AI_SEARCH,normalizeAiSearch} from './ai-search.js';
 import {DEFAULT_READING_LAYOUT,normalizeReadingLayout} from './reading-layout.js';
 import {DEFAULT_DESIGN_THEME,normalizeDesignTheme} from './app-themes.js';
+import {normalizeHighlightColorNames} from './highlight-color-names.js';
 export const PREFERENCES_KEY = 'htmlmemo-preferences-v1';
 export const SETTINGS_FORMAT = 'HTMLMemo.settings';
 export const PRESET_COLORS = Object.freeze([
@@ -106,6 +107,9 @@ export function normalizePreferences(value = {}) {
       return {id: p.id, name: p.name.trim(), colors: [...new Set(p.colors.map(c => c.toLowerCase()))]};
     });
   }
+  const palettes = [...PRESET_PALETTES, ...(annotation.customPalettes || [])];
+  if (!palettes.some(palette => palette.id === annotation.paletteId)) annotation.paletteId = defaults.paletteId;
+  annotation.highlightColorNames = normalizeHighlightColorNames(input.highlightColorNames, palettes);
   // Memo box / free text look for new notes, and the learner's own saved looks.
   if (input.textStyle != null) {
     const style = validTextStyle(input.textStyle);

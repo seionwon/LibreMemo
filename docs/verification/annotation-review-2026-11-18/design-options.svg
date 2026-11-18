@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 116" role="img" aria-labelledby="title desc">
+  <title id="title">발췌 노트 아이콘과 색 후보</title>
+  <desc id="desc">A는 슬레이트색의 접힌 인용 메모지, B는 청록색의 발췌 카드 두 장입니다.</desc>
+  <rect width="512" height="116" rx="12" fill="#f6f7fb"/>
+  <g font-family="system-ui,sans-serif" font-size="15">
+    <g transform="translate(18 24) scale(2.65)" fill="none" stroke="#334155" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 2.75h8l5 5v12.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.75a1 1 0 0 1 1-1Zm8 0v5h5M8.5 17.5h6"/>
+      <path d="M11 10.5H9v2.75c0 1-.5 1.5-1 1.75m7-4.5h-2v2.75c0 1-.5 1.5-1 1.75"/>
+    </g>
+    <text x="95" y="50" fill="#202633">접힌 인용 메모지</text><text x="95" y="74" fill="#334155">슬레이트 #334155</text>
+    <g transform="translate(264 24) scale(2.65)" fill="none" stroke="#0f766e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 6V4a1 1 0 0 1 1-1h12M7 8h13a1 1 0 0 1 1 1v12H8a1 1 0 0 1-1-1ZM11 12h6M11 15h3M10 18h7"/>
+      <path d="M3 9v8a1 1 0 0 0 1 1"/>
+    </g>
+    <text x="340" y="50" fill="#202633">겹친 발췌 카드</text><text x="340" y="74" fill="#0f766e">청록 #0F766E</text>
+  </g>
+</svg>

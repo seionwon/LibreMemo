@@ -5,6 +5,8 @@ import {readFile} from 'node:fs/promises';
 import {DOMParser} from 'linkedom';
 import {$, $$, icon, escapeHTML,sidebarWidthAction,isSecurityWarning,splitOutlinePrefix,formatOutlineTitle} from '../public/src/utils.js';
 import {Reader} from '../public/src/reader.js';
+import {renderAnnotationReview, annotationExpansion} from '../public/src/annotation-review.js';
+import {namedHighlightColors} from '../public/src/highlight-color-names.js';
 import {isVideoNote} from '../public/src/youtube-notes.js';
 import {ANNOTATION_LABELS} from '../public/src/model.js';
 import {documentFor,installDOM} from './dom.mjs';
@@ -20,7 +22,7 @@ function sidebar() {
     outline:()=>[{node:'heading-1',level:1,title:'첫 번째 절'}],jump:node=>calls.headings.push(node),jumpAnnotation:id=>calls.annotations.push(id),jumpBookmark(id){const mark=this.metadata.bookmarks.find(m=>m.id===id);this.scrollTop=mark.top*this.zoom;this.scrollLeft=mark.left*this.zoom;},
     search(query){this.searchQuery=query;calls.search.push(query);this.searchResults=query?[{quote:'찾은 문장: '+query}]:[];this.searchPosition=this.searchResults.length?0:-1;return this.searchResults;},nextSearch(direction){calls.next.push(direction);if(this.searchResults?.length)this.searchPosition=Math.max(0,Math.min(this.searchResults.length-1,this.searchPosition+direction));}};
   let current=r;
-  const context=vm.createContext({ANNOTATION_LABELS,isVideoNote,sidebarWidthAction,isSecurityWarning,formatOutlineTitle,document:doc,$:(selector,root=doc)=>$(selector,root),$$:(selector,root=doc)=>$$(selector,root),icon,esc:escapeHTML,
+  const context=vm.createContext({ANNOTATION_LABELS,isVideoNote,renderAnnotationReview,annotationExpansion,namedHighlightColors,sidebarWidthAction,isSecurityWarning,formatOutlineTitle,document:doc,$:(selector,root=doc)=>$(selector,root),$$:(selector,root=doc)=>$$(selector,root),icon,esc:escapeHTML,
     reader:()=>current,active:()=>({queue:{schedule(){calls.saved++;}}}),closePopover(){},toolAction(){},innerWidth:1280,window:doc.createElement('div'),preferences:{sidebarWidth:300},changePreferences(patch){Object.assign(context.preferences,patch);calls.sizes.push(patch.sidebarWidth);context.applyAppSidebarWidth();},
     getComputedStyle:()=>({getPropertyValue:()=>''}),showError:error=>calls.errors.push(error.message),
     setTimeout(fn){const id=++timerId;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);}});
@@ -887,4 +889,98 @@ test('YouTube outline timestamps never wrap inside the sidebar row',async()=>{
   const css=await readFile(new URL('../public/design.tailwind.css',import.meta.url),'utf8');
   const rule=css.match(/\[data-youtube-outline\] \.outline-time\{([^}]*)\}/)?.[1]||'';
   for(const part of ['white-space:nowrap','overflow-wrap:normal','flex:none'])assert.ok(rule.includes(part),part);
+});
+
+test('annotation search combines quote, memo, heading, colour and video time in either sidebar without touching marks', () => {
+  for (const embedded of [false, true]) {
+    const a = embedded ? collapsibleSidebar() : sidebar();
+    const panel = embedded ? a.r.documentSidebarUI : a.doc.querySelector('#sidebar');
+    const notes = [
+      {id:'highlight',type:'highlight',color:'#FDE047',textAnchor:{quote:'다시 읽을 문장'}},
+      {id:'area',type:'area',color:'#ff7600',anchorTarget:{quote:'도표 속 단어'}},
+      {id:'note',type:'note',color:'#fde047',text:'다시 확인',textAnchor:{quote:'선택한 구절'}},
+      {id:'video',type:'note',color:'#fde047',text:'발표 장면',videoAnchor:{videoId:'M7lc1UVf-VE',seconds:83}}
+    ];
+    a.r.metadata.annotations = notes;
+    const group = (title, annotations) => ({id:title, title, annotations, children:[]});
+    a.r.annotationTree = () => [group('첫 장',notes.slice(0,3)),group('둘째 장',notes.slice(3))];
+    let contextCalls = 0;
+    a.r.annotationContexts = () => {
+      contextCalls++;
+      return new Map([['area',{heading:'그림 1',quote:'도표 속 단어'}]]);
+    };
+    a.context.preferences.annotation = {paletteId:'p',highlightColorNames:{p:{'#fde047':'핵심','#ff7600':'핵심'}}};
+    const original = structuredClone(a.r.metadata);
+    if (embedded) a.choose('annotations'); else a.open('annotations');
+    const q = panel.querySelector('[data-annotation-query]');
+    const select = panel.querySelector('[data-annotation-color]');
+    const visible = () => [...panel.querySelectorAll('.annotation-row:not([hidden]) [data-annotation]')].map(e => e.dataset.annotation);
+    const groupFor = name => panel.querySelector('[data-annotation-group="' + name + '"]');
+    const query = value => {q.value = value; q.oninput();};
+    const filter = value => {
+      for (const option of select.querySelectorAll('option')) option.toggleAttribute('selected', option.value === value);
+      select.onchange();
+    };
+    assert.equal(select.querySelectorAll('option').length, 2, 'colours sharing a name are one category');
+    query('다시'); assert.deepEqual(visible(), ['highlight','note']);
+    assert.ok(groupFor('둘째 장').hidden);
+    assert.ok(groupFor('첫 장').hasAttribute('open'), 'matching chapters open for navigation');
+    assert.equal(groupFor('첫 장').querySelector('.annotation-group-count').textContent, '2');
+    filter('#fde047'); assert.deepEqual(visible(), ['highlight']);
+    query('첫 장 핵심 도표'); assert.deepEqual(visible(), ['area']);
+    query('첫 장 확인'); assert.deepEqual(visible(), []);
+    assert.equal(panel.querySelector('[data-annotation-missing]').hidden, false);
+    filter(''); assert.deepEqual(visible(), ['note']);
+    panel.querySelector('[data-annotation=note]').onclick();
+    assert.deepEqual(a.calls.annotations, ['note']);
+    query('1:23 장면'); assert.deepEqual(visible(), ['video']);
+    query('선택한 구절'); assert.deepEqual(visible(), ['note']);
+    assert.equal(contextCalls, 1, 'typing reuses the existing location tree and searchable annotation fields');
+    panel.querySelector('[data-annotation-clear]').onclick();
+    assert.equal(q.value, ''); assert.deepEqual(visible(), ['highlight','area','note','video']);
+    assert.equal(panel.querySelector('[data-annotation-count]').hidden, true);
+    assert.equal(groupFor('첫 장').hasAttribute('open'), false, 'the original unfiltered folds are restored');
+    filter('#fde047'); assert.deepEqual(visible(), ['highlight','area']);
+    // A renamed category also updates an already-open embedded panel when returning to its tab.
+    a.context.preferences.annotation.highlightColorNames.p = {'#fde047':'인용'};
+    if (embedded) a.context.restoreSidebar(); else a.context.refreshAnnotationFilters();
+    assert.ok(select.querySelector('option[value="#fde047"]').textContent.includes('인용'));
+    assert.deepEqual(visible(), ['highlight']);
+    assert.strictEqual(panel.querySelector('[data-annotation-query]'), q);
+    assert.deepEqual(a.r.metadata, original);
+    assert.equal(a.calls.saved, 0);
+  }
+});
+
+test('a search belongs to its document when switching between open documents', () => {
+  const a = sidebar(), first = a.r;
+  const second = {...first, metadata:structuredClone(first.metadata)};
+  a.open('annotations');
+  const q = () => a.doc.querySelector('[data-annotation-query]');
+  q().value = '메모'; q().oninput();
+  a.setReader(second); a.open('annotations'); assert.equal(q().value, '');
+  q().value = '다른 검색'; q().oninput();
+  a.setReader(first); a.open('annotations'); assert.equal(q().value, '메모');
+});
+
+test('saving a matching annotation refreshes an active search and reveals its formerly empty chapter', () => {
+  const a = sidebar();
+  a.r.metadata.annotations = [
+    {id:'first',type:'note',color:'#334155',text:'찾을 말'},
+    {id:'second',type:'note',color:'#334155',text:'다른 글'}
+  ];
+  a.r.annotationTree = () => a.r.metadata.annotations.slice(0,2).map((note,index) => ({
+    id:note.id,title:index ? '다음 장' : '처음 장',annotations:index ? a.r.metadata.annotations.slice(1) : [note],children:[]
+  }));
+  a.open('annotations');
+  const input = a.doc.querySelector('[data-annotation-query]');
+  input.value = '찾을 말'; input.oninput();
+  assert.equal(a.doc.querySelector('[data-annotation-group=second]').hidden,true);
+  a.r.metadata.annotations.push({id:'new',type:'note',color:'#334155',text:'새로 찾을 말'});
+  a.open('annotations');
+  const nextChapter = a.doc.querySelector('[data-annotation-group=second]');
+  assert.strictEqual(a.doc.querySelector('[data-annotation-query]'),input);
+  assert.equal(nextChapter.hidden, false); assert.equal(nextChapter.hasAttribute('open'), true);
+  assert.equal(a.doc.querySelector('[data-annotation-count]').textContent,'2개 결과');
+  assert.equal(nextChapter.querySelector('[data-annotation=new]').parentElement.hidden,false);
 });

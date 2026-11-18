@@ -1,7 +1,10 @@
 import {archiveName,createDocumentArchive} from './document-archive.js';
 import {htmlExportName} from './local-files.js';
 import {serializeBookSource} from './document.js';
-import {download,escapeHTML as esc} from './utils.js';
+import {download,escapeHTML as esc,icon} from './utils.js';
+import {annotationOverview} from './annotation-review.js';
+import {isVideoNote, videoNoteURL, validVideoAnchor} from './youtube-notes.js';
+import {clock} from './youtube.js';
 
 export function exportTypes(mode){return [{description:{archive:'LibreMemo 원본 포함 보관 파일',html:'읽기용 HTML',pdf:'주석 포함 PDF'}[mode],accept:mode==='archive'?{'application/zip':['.librememo']}:mode==='pdf'?{'application/pdf':['.pdf']}:{'text/html':['.html']}}];}
 export async function annotatedPDF(reader,{signal,onProgress=()=>{}}={}){
@@ -66,18 +69,127 @@ export async function documentExportBlob(mode,reader,stored,{signal,onProgress=(
   return new Blob([reader.html()],{type:'text/html;charset=utf-8'});
 }
 
+function excerptEntry(note) {
+  const quote = ['highlight','underline','strike','note','text'].includes(note.type) ? note.textAnchor?.quote?.trim() : '';
+  const comment = note.text?.trim();
+  return quote || comment ? {note, quote, comment} : null;
+}
+
+// Render user-provided text literally, even when pasted into an editor that
+// enables Markdown links or inline HTML.
+function markdownLiteral(text) {
+  return String(text).replace(/\r\n?/g, '\n')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/([\\`*_\[\]~|])/g, '\\$1')
+    .replace(/^([ \t]*)([#+=\-])/gm, '$1\\$2')
+    .replace(/^([ \t]*\d+)([.)])(?=\s)/gm, '$1\\$2');
+}
+
+function excerptPosition(entry) {
+  const {note, scene} = entry;
+  if (scene) return scene.seconds;
+  // PDF text offsets are relative to the loaded page window. Page geometry
+  // remains stable when other pages enter or leave that window.
+  if (note.pdfPage || note.pdfRects?.length) return (note.pdfRects?.[0] || note.points?.[0])?.y ?? Infinity;
+  return Number.isFinite(note.textAnchor?.start) ? note.textAnchor.start : Infinity;
+}
+
+export function excerptMarkdown(reader, title) {
+  const {tree, contexts} = annotationOverview(reader);
+  const sections = [];
+  function visit(group, ancestors) {
+    const path = [...ancestors, group.title];
+    const entries = [];
+    for (const note of group.annotations) {
+      const entry = excerptEntry(note);
+      if (!entry) continue;
+      const context = contexts.get(note.id);
+      const scene = isVideoNote(note) ? note.videoAnchor :
+        {videoId:reader.metadata.youtube?.videoId, seconds:context?.videoSeconds};
+      if (validVideoAnchor(scene)) entry.scene = scene;
+      entries.push(entry);
+    }
+    if (entries.length) {
+      // Sort inside the real chapter/page tree. Equal or unknown positions keep
+      // their stored order. Do not mutate the reader's annotation array.
+      entries.sort((a, b) => excerptPosition(a) - excerptPosition(b));
+      const heading = path.map(value => String(value).replace(/\s+/g, ' ').trim()).filter(Boolean).join(' › ');
+      const blocks = entries.map(({note, quote, comment, scene}) => {
+        const parts = [];
+        if (scene) parts.push(`[${clock(scene.seconds)}](${videoNoteURL({videoAnchor:scene})})`);
+        const firstPage = note.pdfPage || note.pdfRects?.[0]?.page;
+        if (firstPage) {
+          const lastPage = note.pdfRects?.at(-1)?.page || firstPage;
+          if (lastPage !== firstPage) parts.push(`${firstPage}–${lastPage}쪽`);
+          else if (!path.includes(firstPage + '쪽')) parts.push(firstPage + '쪽');
+        }
+        if (quote) parts.push(markdownLiteral(quote).split('\n').map(line => '> ' + line).join('\n'));
+        if (comment) parts.push(markdownLiteral(comment));
+        return parts.join('\n\n');
+      });
+      sections.push('## ' + markdownLiteral(heading) + '\n\n' + blocks.join('\n\n'));
+    }
+    group.children.forEach(child => visit(child, path));
+  }
+  tree.forEach(group => visit(group, []));
+  if (!sections.length) return '';
+  const heading = String(title || reader.metadata.title || '발췌 노트').replace(/\s+/g, ' ').trim();
+  return '# ' + markdownLiteral(heading) + '\n\n' + sections.join('\n\n') + '\n';
+}
+
 export function openDocumentExport(tab,{modal,getDocument,onSaved,toast}){
   const r=tab.reader;
+  const hasExcerpts = r.metadata.annotations.some(note => excerptEntry(note) !== null);
   const options=[['archive','원본 포함 보관 파일','.librememo · 원본·주석·북마크·읽던 위치 보존. LibreMemo에서 이어서 편집합니다.'],['html','읽기용 HTML 사본','.html · 읽기 화면을 전달합니다. 원본 편집 구조는 보존하지 않습니다.'],['pdf','주석 포함 PDF',r.pdf?'.pdf · 표준 주석과 북마크로 저장해 다른 PDF 뷰어에서도 봅니다.':'PDF 원본 문서에서 사용할 수 있습니다.']];
-  modal(`<form data-document-export><div class="dialog-heading"><h2>문서 내보내기</h2><button class="icon-button" type="button" data-export-close aria-label="닫기">×</button></div><p class="dialog-description">${esc(tab.record.title||tab.record.name)} · 주석 ${r.metadata.annotations.length}개 · 북마크 ${r.metadata.bookmarks.length}개</p><fieldset style="border:0;padding:0;display:grid;gap:.6rem"><legend class="small">저장할 형식</legend>${options.map(([id,label,hint])=>`<label class="setting-row" style="cursor:pointer;align-items:flex-start;gap:.6rem;${id==='pdf'&&!r.pdf?'opacity:.5':''}"><input type="radio" name="export-format" value="${id}" ${id==='archive'?'checked':''} ${id==='pdf'&&!r.pdf?'disabled':''}><span><strong>${label}</strong><br><span class="small">${hint}</span></span></label>`).join('')}</fieldset><p class="dialog-description small" data-export-warning>${r.pdf?'읽기용 HTML은 PDF를 포함합니다. 브라우저에서 표시되지 않으면 포함된 PDF를 저장해 기기의 PDF 뷰어로 열 수 있습니다.':'원본 포함 보관 파일은 원본 형식과 현재 상태를 함께 보존합니다.'}</p><p class="small" data-export-progress role="status">문서 상태를 확인하는 중…</p><p class="save-error small" data-export-error role="alert" hidden></p><div class="dialog-actions"><button type="button" class="secondary-button" data-export-cancel>취소</button><button class="primary-button" type="submit" disabled data-export-save>내보내기</button></div></form>`,dialog=>{
+  modal(`<form data-document-export><div class="dialog-heading"><h2>문서 내보내기</h2><button class="icon-button" type="button" data-export-close aria-label="닫기">×</button></div><p class="dialog-description">${esc(tab.record.title||tab.record.name)} · 주석 ${r.metadata.annotations.length}개 · 북마크 ${r.metadata.bookmarks.length}개</p><fieldset style="border:0;padding:0;display:grid;gap:.6rem"><legend class="small">저장할 형식</legend>${options.map(([id,label,hint])=>`<label class="setting-row" style="cursor:pointer;align-items:flex-start;gap:.6rem;${id==='pdf'&&!r.pdf?'opacity:.5':''}"><input type="radio" name="export-format" value="${id}" ${id==='archive'?'checked':''} ${id==='pdf'&&!r.pdf?'disabled':''}><span><strong>${label}</strong><br><span class="small">${hint}</span></span></label>`).join('')}</fieldset><p class="dialog-description small" data-export-warning>${r.pdf?'읽기용 HTML은 PDF를 포함합니다. 브라우저에서 표시되지 않으면 포함된 PDF를 저장해 기기의 PDF 뷰어로 열 수 있습니다.':'원본 포함 보관 파일은 원본 형식과 현재 상태를 함께 보존합니다.'}</p><div class="excerpt-action"><button type="button" class="secondary-button" data-excerpt-copy title="표시한 문장과 메모를 마크다운으로 복사" disabled>${icon('excerpt-copy',16)} 발췌 노트 복사</button>
+    <span class="small" data-excerpt-status role="status">${hasExcerpts?'':'복사할 문장이나 메모가 없습니다.'}</span></div>
+    <textarea class="excerpt-manual" data-excerpt-manual aria-label="직접 복사할 마크다운 발췌 노트" rows="4" readonly hidden></textarea>
+    <p class="small" data-export-progress role="status">문서 상태를 확인하는 중…</p><p class="save-error small" data-export-error role="alert" hidden></p><div class="dialog-actions"><button type="button" class="secondary-button" data-export-cancel>취소</button><button class="primary-button" type="submit" disabled data-export-save>내보내기</button></div></form>`,dialog=>{
     const form=dialog.querySelector('form'),save=form.querySelector('[data-export-save]'),progress=form.querySelector('[data-export-progress]'),error=form.querySelector('[data-export-error]');let busy=false,controller=null,stored;
+    const copy = form.querySelector('[data-excerpt-copy]');
+    const copyStatus = form.querySelector('[data-excerpt-status]');
+    const manual = form.querySelector('[data-excerpt-manual]');
     const alive=()=>dialog.open&&form.isConnected&&dialog.contains(form);
     const close=()=>{controller?.abort();if(alive())dialog.close();};
     const cancel=event=>{event.preventDefault();close();},closed=()=>{if(alive())return;controller?.abort();dialog.removeEventListener('cancel',cancel);dialog.removeEventListener('close',closed);};
     form.querySelector('[data-export-close]').onclick=close;form.querySelector('[data-export-cancel]').onclick=close;dialog.addEventListener('cancel',cancel);dialog.addEventListener('close',closed);
-    getDocument(tab.record.id).then(value=>{if(!alive())return;if(!value)throw Error('문서가 삭제되었거나 이동되었습니다.');stored=value;save.disabled=false;progress.textContent='원본은 변경하지 않고 새 파일로 저장합니다.';if(value.originalExact===false||!value.originalFile&&!r.pdf)form.querySelector('[data-export-warning]').textContent+=' 이전에 원본 바이트를 보관하지 않은 문서는 현재 읽기용 사본을 보관합니다.';}).catch(e=>{if(alive()){error.hidden=false;error.textContent=e.message;progress.textContent='';}});
+    // The clipboard action only needs the open reader. Preparing the separate
+    // file export must neither delay copying nor hide missing-source warnings.
+    Promise.resolve(r.ready).then(()=>{if(alive())copy.disabled=!hasExcerpts;})
+      .catch(e=>{if(alive())copyStatus.textContent=e.message;});
+    getDocument(tab.record.id).then(value=>{
+      if(!alive())return;
+      if(!value||value.trashedAt)throw Error('문서가 삭제되었거나 이동되었습니다.');
+      stored=value;save.disabled=false;
+      progress.textContent='원본은 변경하지 않고 새 파일로 저장합니다.';
+      if(value.originalExact===false||!value.originalFile&&!r.pdf)form.querySelector('[data-export-warning]').textContent+=' 이전에 원본 바이트를 보관하지 않은 문서는 현재 읽기용 사본을 보관합니다.';
+    }).catch(e=>{if(alive()){error.hidden=false;error.textContent=e.message;progress.textContent='';}});
+    copy.onclick = async () => {
+      if (copy.disabled || busy) return;
+      let text;
+      try {text = excerptMarkdown(r, tab.record.title || tab.record.name);}
+      catch {copyStatus.textContent = '발췌 노트를 만들지 못했습니다. 문서를 다시 연 뒤 시도해주세요.'; return;}
+      if (!text) {copyStatus.textContent = '복사할 문장이나 메모가 없습니다.'; return;}
+      copy.disabled = true;
+      try {
+        await navigator.clipboard.writeText(text);
+        if (!alive()) return;
+        manual.hidden = true;
+        manual.value = '';
+        copyStatus.textContent = '마크다운 발췌 노트를 복사했습니다.';
+      } catch {
+        if (!alive()) return;
+        manual.value = text;
+        manual.hidden = false;
+        manual.focus();
+        manual.select();
+        copyStatus.textContent = '선택된 발췌 노트를 직접 복사하세요.';
+      } finally {
+        if (alive() && !busy) copy.disabled = false;
+      }
+    };
     form.onsubmit=async event=>{
-      event.preventDefault();if(busy||!stored)return;busy=true;save.disabled=true;form.querySelector('fieldset').disabled=true;error.hidden=true;controller=new AbortController();
+      event.preventDefault();if(busy||!stored)return;busy=true;save.disabled=true;copy.disabled=true;form.querySelector('fieldset').disabled=true;error.hidden=true;controller=new AbortController();
       const mode=form.querySelector('input:checked').value,name=mode==='html'?htmlExportName(stored.name,true):mode==='pdf'?archiveName(stored.name,'pdf').replace(/\.pdf$/,'-주석.pdf'):archiveName(stored.name);
       let handle;
       try{
@@ -91,7 +203,7 @@ export function openDocumentExport(tab,{modal,getDocument,onSaved,toast}){
         if(handle){const writer=await handle.createWritable(),cancel=()=>{void writer.abort().catch(()=>{});};controller.signal.addEventListener('abort',cancel,{once:true});try{await writer.write(blob);if(controller.signal.aborted)throw new DOMException('내보내기를 취소했습니다.','AbortError');await writer.close();}catch(e){await writer.abort().catch(()=>{});throw e;}finally{controller.signal.removeEventListener('abort',cancel);}}else download(blob,name);
         if(alive())dialog.close();toast(mode==='html'?'현재 주석을 포함한 HTML을 내보냈습니다. 저장한 .html 파일을 보내세요.':mode==='pdf'?'주석과 북마크를 포함한 PDF를 내보냈습니다.':'원본 포함 보관 파일을 내보냈습니다. LibreMemo에서 가져오기로 열어주세요.');onSaved?.(mode,name);
       }catch(e){if(e.name!=='AbortError'&&alive()){error.hidden=false;error.textContent=e.message;progress.textContent='입력한 형식으로 다시 시도하거나 다른 형식을 선택하세요.';}}
-      finally{busy=false;if(alive()){save.disabled=false;form.querySelector('fieldset').disabled=false;}}
+      finally{busy=false;if(alive()){save.disabled=false;copy.disabled=!hasExcerpts;form.querySelector('fieldset').disabled=false;}}
     };
   });
 }

@@ -44,7 +44,7 @@ test('header updates work without navigation elements in the library, document, 
     {id:'preview',page:'browser',label:'페이지 저장',disabled:false,tab:{type:'browser',title:'미리보기',url:'https://app.example/example.html',readable:true}},
     {id:'external',page:'browser',label:'Chrome에서 가져오기',disabled:false,tab:{type:'browser',title:'웹',url:'https://source.example/',external:true}},
     {id:'execution',page:'execution',label:'URL 복사',disabled:false}];
-  for(const state of states){context.activeId=state.id;context.tab=state.tab;assert.doesNotThrow(()=>context.updateChrome(),state.id);assert.equal(doc.querySelector('.chrome').dataset.page,state.page);const button=doc.querySelector('#save-page');assert.equal(button.getAttribute('aria-label'),state.label);assert.equal(button.disabled,state.disabled);assert.equal(button.hasAttribute('aria-description'),state.id==='document');assert.equal(button.title,state.id==='document'?'내보내기 · 원본 포함 보관 파일, 읽기용 HTML, 주석 포함 PDF':state.label);}
+  for(const state of states){context.activeId=state.id;context.tab=state.tab;assert.doesNotThrow(()=>context.updateChrome(),state.id);assert.equal(doc.querySelector('.chrome').dataset.page,state.page);const button=doc.querySelector('#save-page');assert.equal(button.getAttribute('aria-label'),state.label);assert.equal(button.disabled,state.disabled);assert.equal(button.hasAttribute('aria-description'),state.id==='document');assert.equal(button.title,state.id==='document'?'내보내기 · 원본 포함 보관 파일, 읽기용 HTML, 주석 포함 PDF, 발췌 노트 복사':state.label);}
   assert.equal(saved.length,1);
 });
 test('tabs share available width, retain a usable minimum and overflow only inside the header strip',async()=>{
