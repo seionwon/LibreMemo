@@ -15,19 +15,35 @@ test('real Chrome: Pages-only YouTube scene notes repeat, filter, export, edit, 
     const fill=async(selector,value)=>page.evaluate(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('input',{bubbles:true}));})()`);
     const state=()=>page.evaluate(`(async()=>{const s=await import('./src/storage.js'),list=await s.listDocuments(),r=list.find(r=>r.metadata.youtube);return r?{id:r.id,count:list.length,annotations:r.metadata.annotations,bookmarks:r.metadata.bookmarks,body:(await s.getDocument(r.id)).html}:null;})()`);
     const inFrame=expression=>page.evaluate(`(()=>{const d=document.querySelector('.document-host:not([hidden]) iframe').contentDocument;return ${expression};})()`);
-    const sceneAction=async(id,action)=>{
-      const selector=JSON.stringify(`[data-scene-row="${id}"]`),button=JSON.stringify(`[data-scene-${action}]`);
-      const clicked=await inFrame(`(()=>{
-        const row=d.querySelector(${selector}),summary=row.querySelector('[data-scene-menu]');
-        const menu=summary.closest('details');
-        if(menu.open||!summary.getClientRects().length)return false;
-        summary.click();
-        const control=menu.querySelector(${button});
-        if(!menu.open||!control?.getClientRects().length)return false;
-        control.click();
-        return true;
+    const clickSceneControl=async(id,action)=>{
+      const selector=`[data-scene-${action}="${id}"]`;
+      const point=await page.evaluate(`(async()=>{
+        const frame=document.querySelector('.document-host:not([hidden]) iframe.document-frame'),d=frame.contentDocument;
+        const selector=${JSON.stringify(selector)},control=d.querySelector(selector);
+        control.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        const r=control.getBoundingClientRect(),b=frame.getBoundingClientRect(),scale=b.width/frame.offsetWidth;
+        const cx=r.left+r.width/2,cy=r.top+r.height/2;
+        const x=b.left+(frame.clientLeft+cx)*scale,y=b.top+(frame.clientTop+cy)*scale;
+        const inner=d.elementFromPoint(cx,cy),outer=document.elementFromPoint(x,y);
+        if(!r.width||!r.height||!control.contains(inner)||outer!==frame){
+          throw Error('Unreachable scene control '+JSON.stringify({selector,x,y,inner:inner?.localName,outer:outer?.className,rect:r.toJSON(),frame:b.toJSON()}));
+        }
+        window.__trustedSceneClick=false;
+        control.addEventListener('click',event=>{window.__trustedSceneClick=event.isTrusted;},{once:true,capture:true});
+        return {x,y};
       })()`);
-      assert.equal(clicked,true,`the note action ${action} is accessible by opening ⋯`);
+      await page.send('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
+      await page.send('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',buttons:1,clickCount:1});
+      await page.send('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',buttons:0,clickCount:1});
+      assert.equal(await page.evaluate('window.__trustedSceneClick'),true,`real pointer input reaches ${selector}`);
+    };
+    const sceneAction=async(id,action)=>{
+      const menu=JSON.stringify(`[data-scene-menu="${id}"]`);
+      assert.equal(await inFrame(`d.querySelector(${menu}).closest('details').open`),false);
+      await clickSceneControl(id,'menu');
+      assert.equal(await inFrame(`d.querySelector(${menu}).closest('details').open`),true);
+      await clickSceneControl(id,action);
     };
     await page.click('#youtube-button');await page.click('[data-scene-save]');assert.match(await page.evaluate('document.querySelector("[data-scene-error]").textContent'),/주소/);
     await fill('[data-youtube-url]','https://youtu.be/M7lc1UVf-VE?t=83');assert.equal(await page.evaluate('document.querySelector("[data-scene-time]").value'),'1:23');
@@ -41,7 +57,7 @@ test('real Chrome: Pages-only YouTube scene notes repeat, filter, export, edit, 
     await fill('[data-scene-text]','두 번째 시점');await page.click('[data-scene-save]');await page.waitFor('!document.querySelector("#dialog").open');saved=await state();assert.equal(saved.annotations.length,2);const second=saved.annotations.find(a=>a.id!==first).id;
     await sceneAction(second,'edit');await fill('[data-scene-time]','1:35');await fill('[data-scene-text]','수정한 장면');await page.click('[data-scene-save]');await page.waitFor('!document.querySelector("#dialog").open');
     saved=await state();assert.equal(saved.annotations.find(a=>a.id===second).videoAnchor.seconds,95);assert.equal(saved.body,original,'notes never rewrite the immutable reading source');
-    await inFrame(`d.querySelector('[data-scene-play="${second}"]').click()`);assert.deepEqual(await page.evaluate('({time:window.__ytPlayers.at(-1).t,state:window.__ytPlayers.at(-1).state})'),{time:95,state:1});assert.equal(await page.evaluate('document.querySelectorAll(".tab").length'),1,'playing a scene never opens a browser tab');
+    await clickSceneControl(second,'play');assert.deepEqual(await page.evaluate('({time:window.__ytPlayers.at(-1).t,state:window.__ytPlayers.at(-1).state})'),{time:95,state:1});assert.equal(await page.evaluate('document.querySelectorAll(".tab").length'),1,'playing a scene never opens a browser tab');
     await sceneAction(second,'loop');
     const stopLoop='.document-host:not([hidden]) [data-yt=loop-stop]';
     const seekCount=()=>page.evaluate("window.__ytPlayers.at(-1).calls.filter(c=>c[0]==='seek').length");
@@ -67,8 +83,17 @@ test('real Chrome: Pages-only YouTube scene notes repeat, filter, export, edit, 
     await page.waitFor('document.querySelector("#status-left").textContent.includes("자동 저장됨")');
     // Append through the library entry again: no second document for the same video.
     await page.click('#library-tab');await page.click('#youtube-button');await fill('[data-youtube-url]','https://youtu.be/M7lc1UVf-VE?t=10');await fill('[data-scene-text]','링크로 추가한 장면');await page.click('[data-scene-save]');await page.waitFor('!document.querySelector("#dialog").open');saved=await state();assert.equal(saved.count,1);assert.equal(saved.annotations.length,3);
-    const roundtrip=await page.evaluate(`(async()=>{const s=await import('./src/storage.js'),{parseHTML,serializeHTML}=await import('./src/document.js'),{createDocumentArchive,readDocumentArchive}=await import('./src/document-archive.js');const r=await s.getDocument(${JSON.stringify(saved.id)}),d=document.querySelector('.document-host:not([hidden]) iframe').contentDocument,html=serializeHTML(d,r.metadata),again=parseHTML(html),archive=await readDocumentArchive(await createDocumentArchive({name:r.name,original:new Blob([r.html]),metadata:r.metadata}));return {times:again.metadata.annotations.map(a=>a.videoAnchor.seconds).sort((a,b)=>a-b),links:new DOMParser().parseFromString(html,'text/html').querySelectorAll('[data-htmlmemo-video-notes] a').length,archiveVideo:archive.metadata.youtube.videoId,archiveCount:archive.metadata.annotations.length};})()`);
-    assert.deepEqual(roundtrip,{times:[10,83,95],links:3,archiveVideo:'M7lc1UVf-VE',archiveCount:3});
+    const roundtrip=await page.evaluate(`(async()=>{
+      const s=await import('./src/storage.js'),{parseHTML,serializeHTML}=await import('./src/document.js');
+      const {createDocumentArchive,readDocumentArchive}=await import('./src/document-archive.js'),r=await s.getDocument(${JSON.stringify(saved.id)});
+      const d=document.querySelector('.document-host:not([hidden]) iframe.document-frame').contentDocument,html=serializeHTML(d,r.metadata);
+      const exported=new DOMParser().parseFromString(html,'text/html'),again=parseHTML(html);
+      const archive=await readDocumentArchive(await createDocumentArchive({name:r.name,original:new Blob([r.html]),metadata:r.metadata}));
+      return {times:again.metadata.annotations.map(a=>a.videoAnchor.seconds).sort((a,b)=>a-b),links:exported.querySelectorAll('[data-htmlmemo-video-notes] a').length,
+        lists:exported.querySelectorAll('.youtube-notes').length,liveControls:!!exported.querySelector('[data-scene-menu],[data-scene-loop]'),
+        archiveVideo:archive.metadata.youtube.videoId,archiveCount:archive.metadata.annotations.length};
+    })()`);
+    assert.deepEqual(roundtrip,{times:[10,83,95],links:3,lists:1,liveControls:false,archiveVideo:'M7lc1UVf-VE',archiveCount:3});
     await page.send('Browser.grantPermissions',{origin:new URL(url).origin,permissions:['clipboardReadWrite','clipboardSanitizedWrite']});
     await page.click('#save-page');await page.waitFor('!!document.querySelector("[data-excerpt-copy]:enabled")');
     await page.click('[data-excerpt-copy]');

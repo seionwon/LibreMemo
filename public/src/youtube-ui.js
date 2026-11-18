@@ -209,9 +209,9 @@ export class YouTubePane {
     }
     let box=this.notes;
     if(!box?.isConnected){
-      box=doc.createElement('div');box.setAttribute('data-htmlmemo-ui','');box.setAttribute('data-htmlmemo-preview','');
+      box=doc.createElement('div');box.setAttribute('data-htmlmemo-ui','video-notes');
       const article=doc.querySelector('[data-subtitles],[data-youtube-empty]');if(article)article.before(box);else doc.body.append(box);this.notes=box;
-      const style=doc.createElement('style');style.setAttribute('data-htmlmemo-ui','');style.setAttribute('data-htmlmemo-preview','');style.textContent=VIDEO_NOTES_CSS+SCENE_CONTROLS_STYLE;box.append(style);this.notesStyle=style;
+      const style=doc.createElement('style');style.textContent=VIDEO_NOTES_CSS+SCENE_CONTROLS_STYLE;this.notesStyle=style;
       box.addEventListener('toggle',()=>this.reader.measure?.(),true);
     }
     box.innerHTML=videoNotesHTML(this.reader.metadata,{interactive:true});box.prepend(this.notesStyle);

@@ -4,7 +4,7 @@ import {installDOM} from './dom.mjs';
 import {parseYouTubeInput,youtubeDocumentHTML} from '../public/src/youtube.js';
 import {parseVideoTime,makeVideoNote,isVideoNote,videoNotes,videoNotesHTML,matchingVideoRecords,findVideoNote} from '../public/src/youtube-notes.js';
 import {validateAnnotations,History} from '../public/src/model.js';
-import {parseHTML,serializeHTML,textIndex} from '../public/src/document.js';
+import {cleanAnnotations,parseHTML,serializeHTML,textIndex} from '../public/src/document.js';
 import {YouTubePane} from '../public/src/youtube-ui.js';
 import {createDocumentArchive,readDocumentArchive} from '../public/src/document-archive.js';
 installDOM();
@@ -38,7 +38,7 @@ test('readable HTML keeps safe clickable scene notes without changing reimported
 test('scene rendering is time-ordered and escapes notes, with explicit play, edit and delete controls',()=>{
   const a=makeVideoNote(id,83,'<img src=x onerror=alert(1)>'),b=makeVideoNote(id,0,'처음'),metadata={annotations:[a,b]};
   assert.deepEqual(videoNotes(metadata).map(n=>n.id),[b.id,a.id]);const doc=new DOMParser().parseFromString(videoNotesHTML(metadata,{interactive:true}),'text/html');
-  assert.equal(doc.querySelectorAll('[data-scene-play]').length,2);assert.equal(doc.querySelectorAll('[data-scene-edit]').length,2);assert.equal(doc.querySelectorAll('[data-scene-delete]').length,2);assert.equal(doc.querySelector('img'),null);assert.ok(doc.querySelector('[data-htmlmemo-ui][data-htmlmemo-preview]'));
+  assert.equal(doc.querySelectorAll('[data-scene-play]').length,2);assert.equal(doc.querySelectorAll('[data-scene-edit]').length,2);assert.equal(doc.querySelectorAll('[data-scene-delete]').length,2);assert.equal(doc.querySelector('img'),null);assert.ok(doc.querySelector('.youtube-notes[data-htmlmemo-ui]'));
 });
 
 test('a portable archive keeps the player identity and time notes, including when captions are replaced',async()=>{
@@ -71,6 +71,35 @@ test('scene notes do not enter caption text indexes or produce spatial annotatio
   const pane=Object.create(YouTubePane.prototype);Object.assign(pane,{reader:{doc,metadata:{annotations:[makeVideoNote(id,83,'시점 메모')]},measure(){}},callbacks:{}});
   pane.renderNotes();assert.equal(textIndex(doc).text,before);const box=pane.notes;pane.renderNotes();assert.equal(pane.notes,box);
   pane.reader.metadata.annotations=[];pane.renderNotes();assert.equal(doc.querySelectorAll('[data-scene-row]').length,0);assert.match(pane.notes.textContent,/현재 시점 메모/);
+});
+
+test('live scene controls survive annotation redraws and become a single static list on export',()=>{
+  const parsed=parseHTML(youtubeDocumentHTML('시점')),doc=new DOMParser().parseFromString(parsed.html,'text/html');
+  parsed.metadata.youtube={videoId:id};
+  parsed.metadata.annotations=[makeVideoNote(id,39,'중요한 장면')];
+  const pane=Object.create(YouTubePane.prototype);
+  Object.assign(pane,{reader:{doc,metadata:parsed.metadata},callbacks:{}});
+  pane.renderNotes();
+  const menu=doc.querySelector('[data-scene-menu]');
+  assert.ok(menu);
+  for(const control of pane.notes.querySelectorAll('summary,button')){
+    assert.equal(control.closest('[data-htmlmemo-preview]'),null,'reader preview overlays ignore pointer input');
+  }
+  cleanAnnotations(doc);
+  assert.equal(doc.querySelector('[data-scene-menu]'),menu,'an annotation redraw retains the live menu and focus');
+  const captured=parseHTML(doc.documentElement.outerHTML);
+  assert.equal(new DOMParser().parseFromString(captured.html,'text/html').querySelector('.youtube-notes'),null);
+
+  const exported=new DOMParser().parseFromString(serializeHTML(doc,parsed.metadata),'text/html');
+  assert.equal(exported.querySelectorAll('.youtube-notes').length,1);
+  assert.equal(exported.querySelector('[data-scene-menu],[data-scene-loop],[data-htmlmemo-ui="video-notes"]'),null);
+  assert.equal(exported.querySelector('[data-htmlmemo-video-notes] a').href,'https://www.youtube.com/watch?v='+id+'&t=39s');
+  const restored=parseHTML(exported.documentElement.outerHTML);
+  const reopened=Object.create(YouTubePane.prototype);
+  reopened.reader={metadata:restored.metadata,doc:new DOMParser().parseFromString(restored.html,'text/html')};
+  reopened.renderNotes();
+  assert.equal(reopened.reader.doc.querySelectorAll('.youtube-notes').length,1);
+  assert.equal(reopened.reader.doc.querySelectorAll('[data-scene-menu]').length,1);
 });
 
 

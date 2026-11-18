@@ -59,7 +59,7 @@ function sceneMenu(note,videoId){
 
 export function videoNotesHTML(metadata,{interactive=false}={}){
   const notes=videoNotes(metadata);
-  return `<section class="youtube-notes" ${interactive?'data-htmlmemo-ui data-htmlmemo-preview':'data-htmlmemo-video-notes'} aria-label="시점 메모">
+  return `<section class="youtube-notes" ${interactive?'data-htmlmemo-ui':'data-htmlmemo-video-notes'} aria-label="시점 메모">
     <div class="youtube-notes-heading"><strong>시점 메모 <small>${notes.length}</small></strong>${interactive?`<button type="button" data-scene-add>${icon('plus',16)} 현재 시점 메모</button>`:''}</div>
     ${interactive?'<p data-scene-status role="status" hidden></p>':''}
     ${notes.length?`<ol>${notes.map(note=>`<li data-scene-row="${esc(note.id)}"><div class="youtube-notes-row">

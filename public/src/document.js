@@ -84,11 +84,10 @@ export function cleanAnnotations(doc) {
   // marks, not when opening an unannotated book containing millions of nodes.
   if (unwrapped) doc.body?.normalize();
 }
-function clearReaderSidebarArtifacts(root) {
-  // Several short-lived reader builds added controls and layout overrides to
-  // the source document itself.  Clear only those namespaced artifacts when
-  // opening or exporting a file, leaving the document's real TOC untouched.
-  for(const node of root.querySelectorAll?.('#htmlmemo-toc-toggle-style,#htmlmemo-sidebar-style,#htmlmemo-toc-resize-style,#htmlmemo-doc-sidebar-style,#htmlmemo-reading-controls-style,#htmlmemo-reading-font-style,#htmlmemo-source-font-style,#htmlmemo-reading-theme-style,[data-htmlmemo-tts-paint],[data-htmlmemo-reading-controls],[data-htmlmemo-reading-font],[data-htmlmemo-font-reset]')||[])node.remove();
+function clearReaderArtifacts(root) {
+  // The reader inserts controls and layout overrides alongside the source.
+  // Remove its UI only when opening or exporting, so it survives annotation redraws.
+  for(const node of root.querySelectorAll?.('#htmlmemo-toc-toggle-style,#htmlmemo-sidebar-style,#htmlmemo-toc-resize-style,#htmlmemo-doc-sidebar-style,#htmlmemo-reading-controls-style,#htmlmemo-reading-font-style,#htmlmemo-source-font-style,#htmlmemo-reading-theme-style,[data-htmlmemo-tts-paint],[data-htmlmemo-reading-controls],[data-htmlmemo-reading-font],[data-htmlmemo-font-reset],[data-htmlmemo-ui="video-notes"]')||[])node.remove();
   for(const button of root.querySelectorAll?.('[data-htmlmemo-source-max],[data-htmlmemo-source-min],[data-htmlmemo-font-smaller],[data-htmlmemo-font-larger]')||[]){
     if(button.hasAttribute('data-htmlmemo-source-max'))button.toggleAttribute('disabled',button.getAttribute('data-htmlmemo-source-max')==='true');
     if(button.hasAttribute('data-htmlmemo-source-min'))button.toggleAttribute('disabled',button.getAttribute('data-htmlmemo-source-min')==='true');
@@ -234,7 +233,7 @@ function* prepareHTML(html, defaults, {includeMetadata = false, document: loaded
   if (book?.complete && !allowScripts) throw new Error('이 책은 화면 캡처로 보관하면 본문과 목차가 사라집니다. 완전한 원본 HTML 파일을 가져와 주세요.');
   const mayHaveArtifacts = typeof html !== 'string' || html.includes('htmlmemo-');
   if (mayHaveArtifacts) {
-    clearReaderSidebarArtifacts(doc);
+    clearReaderArtifacts(doc);
     cleanAnnotations(doc);
   }
   yield* sanitizeTree(doc, source,0,allowScripts);
@@ -330,7 +329,7 @@ export function serializeHTML(doc, metadata) {
   clone.removeAttribute('data-htmlmemo-picking');clone.removeAttribute('data-htmlmemo-moving');clone.removeAttribute('data-htmlmemo-text-marking');clone.querySelectorAll('[data-htmlmemo-drag-source]').forEach(node=>node.removeAttribute('data-htmlmemo-drag-source'));clone.querySelector('#'+LAYER_ID)?.style.removeProperty('--htmlmemo-hit-padding');
   // Reader-only sidebar controls and their grid/flex overrides must never
   // alter the source document's own TOC after it is saved and reopened.
-  clearReaderSidebarArtifacts(clone);
+  clearReaderArtifacts(clone);
   // Interactive editor-only styles should never change the standalone file.
   clone.querySelector('#htmlmemo-editor-style')?.remove();
   clone.querySelector('head').append(metadataElement(doc, metadata));

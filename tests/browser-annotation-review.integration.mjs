@@ -41,11 +41,14 @@ test('real Chrome: Pages-only annotated passages can be filtered by a saved pale
     await matches(['review-note','review-underline']);
     await page.click('#sidebar [data-annotation=review-underline]');
     await page.waitFor(`(() => {
-      const doc = document.querySelector('.document-host:not([hidden]) iframe').contentDocument;
-      const mark = doc.querySelector('[data-htmlmemo-mark][data-htmlmemo-id=review-underline]');
+      const frame = document.querySelector('.document-host:not([hidden]) iframe.document-frame');
+      const mark = frame.contentDocument.querySelector('[data-htmlmemo-mark][data-htmlmemo-id=review-underline]');
       if (!mark) return false;
-      const rect = mark.getBoundingClientRect();
-      return rect.bottom > 0 && rect.top < doc.documentElement.clientHeight;
+      const iframeRect = frame.getBoundingClientRect(), rect = mark.getBoundingClientRect();
+      const viewport = frame.closest('.reader-viewport').getBoundingClientRect();
+      const scale = iframeRect.width / frame.clientWidth;
+      const top = iframeRect.top + rect.top * scale, bottom = iframeRect.top + rect.bottom * scale;
+      return bottom > viewport.top && top < viewport.bottom;
     })()`);
     await fill(query, '없는말');
     await matches([]);
