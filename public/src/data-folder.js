@@ -253,10 +253,22 @@ async function recoverSnapshot(folder) {
 }
 function references(manifest) { return manifest?[manifest.settings,...manifest.documents.flatMap(e=>[e.source,e.state,e.history,e.original].filter(Boolean))]:[]; }
 function sameHead(a,b) { return a?.id===b?.id && a?.revision===b?.revision; }
-const defaultLock = action => {
+const defaultLock = (action,signal) => {
   if(!navigator.locks?.request)throw Error(CHROME_REQUIRED_MESSAGE);
+  if(signal)return navigator.locks.request('htmlmemo-data-folder',{signal},action);
   return navigator.locks.request('htmlmemo-data-folder',action);
 };
+async function connectionPermission(handle,signal) {
+  if(!signal)return permission(handle);
+  signal.throwIfAborted();
+  let abort;
+  const cancelled=new Promise((_,reject)=>{
+    abort=()=>reject(signal.reason);
+    signal.addEventListener('abort',abort,{once:true});
+  });
+  try{return await Promise.race([permission(handle),cancelled]);}
+  finally{signal.removeEventListener('abort',abort);}
+}
 
 /** Internal commits stay fast; one locked, incremental folder writer publishes a complete snapshot last. */
 export class DataFolder {
@@ -276,10 +288,13 @@ export class DataFolder {
     if(!this.handle||this.restoring||this.state==='error')return;
     this.publish('pending');clearTimeout(this.timer);this.timer=setTimeout(()=>this.flush().catch(()=>{}),this.delay);
   }
-  async connect(handle,{resume=false}={}) {
+  async connect(handle,{resume=false,signal}={}) {
     clearTimeout(this.timer);if(this.running)await this.running.catch(()=>{});
-    if(!await permission(handle)){this.handle=resume?handle:this.handle;const error=new DOMException('폴더 쓰기 권한이 필요합니다.','NotAllowedError');if(resume)this.publish('error',error);throw error;}
-    const oldHandle=this.handle,oldHead=this.head;this.historyVersions.clear();this.restoring=true;this.publish('saving');
+    const granted=await connectionPermission(handle,signal);
+    signal?.throwIfAborted();
+    if(!granted){this.handle=resume?handle:this.handle;const error=new DOMException('폴더 쓰기 권한이 필요합니다.','NotAllowedError');if(resume)this.publish('error',error);throw error;}
+    const oldHandle=this.handle,oldHead=this.head,oldState=this.state,oldError=this.error;
+    this.historyVersions.clear();this.restoring=true;this.publish('saving');
     try{
       await this.lock(async()=>{
         const checkpoint=await this.ops.getSetting(CHECKPOINT);
@@ -314,11 +329,13 @@ export class DataFolder {
         this.saved=0;this.revision++;this.allDirty=true;
         let recovering=!!snapshot?.recovered;
         while(this.saved<this.revision){const next=this.revision;await this.writeSnapshot({recovered:recovering});recovering=false;this.saved=next;}
-      });
+      },signal);
       this.dirty.clear();this.allDirty=false;this.publish('saved');
     }catch(error){
       if(this.handle!==handle){this.handle=oldHandle;this.head=oldHead;}
-      this.publish('error',error);throw error;
+      if(signal?.aborted&&error.name==='AbortError')this.publish(oldState,oldError);
+      else this.publish('error',error);
+      throw error;
     }finally{this.restoring=false;}
   }
   async flush() {

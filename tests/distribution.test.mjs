@@ -84,8 +84,14 @@ async function fileApp({address='file:///Users/beginner/LibreMemo.html',navigato
   const events=new Map();const window={addEventListener(name,fn){if(!events.has(name))events.set(name,[]);events.get(name).push(fn);},postMessage(){},dispatchEvent(){}};
   if(directoryPicker)window.showDirectoryPicker=directoryPicker;
   if(launchQueue!==undefined)window.launchQueue=launchQueue;
-  const context=vm.createContext({document:doc,window,indexedDB,localStorage:{get length(){return local.size;},key:index=>[...local.keys()][index]??null,getItem:key=>local.get(key)??null,setItem:(key,value)=>local.set(key,value)},location:new URL(address),navigator:{onLine:false,storage:{},locks:{request:async(name,action)=>action()},...navigator},URL:LocalURL,Blob,File,crypto,TextEncoder,TextDecoder,Uint8Array,DataView,atob,btoa,structuredClone,Event,DOMException,innerWidth:1200,innerHeight:850,matchMedia:()=>({matches:false}),setInterval(){},setTimeout(fn,ms){if(ms===800)queueMicrotask(fn);return 1;},clearTimeout(){},requestAnimationFrame:fn=>fn(),fetch:()=>{throw new Error('An embedded app must not fetch a server');}});
-  const script=[...doc.querySelectorAll('script')].find(el=>el.type!=='application/json');new vm.Script(script.textContent).runInContext(context);await new Promise(resolve=>setImmediate(resolve));if(!firstRun&&doc.querySelector('[data-folder-welcome]'))dialog.open=false;if(waitingForUpdate)assert.equal(doc.querySelector('#status-left').textContent,'새 버전을 확인하는 중…');else assert.match(doc.querySelector('#status-left').textContent,supportsDataFolder(window,context.navigator)||supportsIOSAppStorage(window,context.navigator)?/개의 문서/:/Chrome/);return {doc,context,blobs,local,get databaseOpens(){return databaseOpens;},settings:stores.get('settings'),emit:(name,event)=>events.get(name)?.forEach(fn=>fn(event))};
+  const context=vm.createContext({document:doc,window,indexedDB,localStorage:{get length(){return local.size;},key:index=>[...local.keys()][index]??null,getItem:key=>local.get(key)??null,setItem:(key,value)=>local.set(key,value)},location:new URL(address),navigator:{onLine:false,storage:{},locks:{request:async(name,options,action)=>(action||options)()},...navigator},URL:LocalURL,Blob,File,crypto,TextEncoder,TextDecoder,Uint8Array,DataView,atob,btoa,structuredClone,Event,DOMException,AbortController,innerWidth:1200,innerHeight:850,matchMedia:()=>({matches:false}),setInterval(){},setTimeout(fn,ms){if(ms===800)queueMicrotask(fn);return 1;},clearTimeout(){},requestAnimationFrame:fn=>fn(),fetch:()=>{throw new Error('An embedded app must not fetch a server');}});
+  const script=[...doc.querySelectorAll('script')].find(el=>el.type!=='application/json');new vm.Script(script.textContent).runInContext(context);await new Promise(resolve=>setImmediate(resolve));if(!firstRun&&doc.querySelector('[data-folder-welcome]'))dialog.open=false;if(waitingForUpdate)assert.equal(doc.querySelector('#status-left').textContent,'새 버전을 확인하는 중…');else {
+    const status=doc.querySelector('#status-left').textContent;
+    if(!supportsDataFolder(window,context.navigator)&&!supportsIOSAppStorage(window,context.navigator))assert.match(status,/Chrome/);
+    else if(doc.documentElement.dataset.storageSetup==='checking')assert.equal(status,'서재 준비 중…');
+    else assert.match(status,/개의 문서/);
+  }
+  return {doc,context,blobs,local,get databaseOpens(){return databaseOpens;},settings:stores.get('settings'),emit:(name,event)=>events.get(name)?.forEach(fn=>fn(event))};
 }
 function openExecution(app){app.doc.querySelector('#settings-button').onclick();app.doc.querySelector('#settings-execution').onclick();}
 test('execution shares only the canonical URL, with no app package or installation download',async()=>{
@@ -511,9 +517,10 @@ test('canceling while a native folder picker is pending ignores its late result 
 });
 
 test('canceling during a committed folder save finishes it safely but waits for the user before opening the app',async()=>{
-  const selected=memoryFolder('Finishing storage');let release,locked=false,pickers=0;
-  const app=await fileApp({firstRun:true,directoryPicker:async()=>{pickers++;return selected;},navigator:{locks:{request:async(name,action)=>{locked=true;await new Promise(resolve=>release=resolve);return action();}}}}),doc=app.doc;
-  doc.querySelector('#select-storage-folder').onclick();await settleUntil(()=>locked);doc.querySelector('#cancel-folder-setup').onclick();doc.querySelector('#dialog').onclose();
+  let release,pickers=0;
+  const selected=memoryFolder('Finishing storage',{onWrite:name=>name==='HTMLMemo-library.json'?new Promise(resolve=>{release=resolve;}):undefined});
+  const app=await fileApp({firstRun:true,directoryPicker:async()=>{pickers++;return selected;}}),doc=app.doc;
+  doc.querySelector('#select-storage-folder').onclick();await settleUntil(()=>typeof release==='function');doc.querySelector('#cancel-folder-setup').onclick();doc.querySelector('#dialog').onclose();
   assert.equal(doc.querySelector('#folder-setup-resume').disabled,true);assert.equal(doc.activeElement.id,'folder-setup-paused-title');release();await settleUntil(()=>!doc.querySelector('#folder-setup-resume').disabled);
   assert.ok(selected.children.has('HTMLMemo-library.json'));assert.equal(app.settings.get('folder'),selected);assert.equal(doc.documentElement.dataset.storageSetup,'paused');assert.equal(doc.querySelector('#app').hidden,true);assert.equal(doc.querySelector('#dialog').open,false);
   doc.querySelector('#folder-setup-resume').onclick();assert.equal(doc.documentElement.dataset.storageSetup,'ready');assert.equal(doc.querySelector('#app').hidden,false);assert.equal(doc.querySelector('#folder-setup-paused').hidden,true);assert.equal(doc.querySelector('#dialog').open,false);assert.equal(pickers,1);

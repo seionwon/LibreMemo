@@ -20,6 +20,25 @@ function manager(t,lib,storage=memoryLocal(),extra={}) { const backup=new DataFo
 const manifest=async folder=>JSON.parse(await (await (await folder.getFileHandle(FOLDER_MANIFEST)).getFile()).text());
 const readObject=async(folder,ref)=> (await(await(await folder.getDirectoryHandle(FOLDER_DATA)).getFileHandle(ref.name)).getFile()).text();
 
+test('canceling a stalled folder permission check permits retry and ignores its late response',async t=>{
+  const folder=memoryFolder('Saved library'),lib=library(),backup=manager(t,lib);
+  const controller=new AbortController();let answer;
+  folder.queryPermission=()=>new Promise(resolve=>{answer=resolve;});
+  const connecting=backup.connect(folder,{resume:true,signal:controller.signal});
+  await settleUntil(()=>typeof answer==='function');
+  controller.abort();
+  await assert.rejects(connecting,{name:'AbortError'});
+  assert.equal(folder.children.size,0);
+  assert.equal(backup.handle,null);
+
+  folder.queryPermission=async()=>'granted';
+  await backup.connect(folder,{resume:true});
+  const head=await manifest(folder);
+  answer('denied');await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(backup.handle,folder);assert.equal(backup.state,'saved');
+  assert.deepEqual(await manifest(folder),head);
+});
+
 test('all Office and ebook formats keep byte-identical originals and extensions through folder backup and fresh-device restore',async t=>{
   const fixtures={...await officeFixtures(),...await ebookFixtures()},idFor=format=>'office-'+format.replace(/\W/g,'-'),sender=library(Object.keys(fixtures).map(format=>({...document(idFor(format)),name:'원본.'+format}))),disk=memoryFolder();
   for(const [format,bytes] of Object.entries(fixtures))sender.contents.set(idFor(format),{html:'<!doctype html><h1>읽기 화면</h1><p>원본과 분리된 주석</p>',originalFile:new File([bytes],'원본.'+format)});

@@ -397,7 +397,7 @@ test('statusbar stays down for routine autosaves and rises for notices and save 
   document:doc,
   $:(sel,root=doc)=>root.querySelector(sel),
   tabs:[],
-  folderSetupBusy:false,
+  folderSetupController:null,
   requestAnimationFrame:fn=>fn(),
   setTimeout:(fn)=>{scheduledFn=fn;return 1;},
   clearTimeout:()=>{scheduledFn=null;},

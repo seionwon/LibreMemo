@@ -114,6 +114,55 @@ test('real Chrome: PWA startup updates install a waiting legacy release and reco
  finally{await writeFile(root+'/test-results/pwa-startup-waiting-update.json',JSON.stringify(report,null,2));await other?.close();if(otherId&&chrome)await chrome.page.send('Target.closeTarget',{targetId:otherId}).catch(()=>{});await chrome?.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });
 
+test('real Chrome: Pages-only folder setup remains clickable while another window holds the folder lock',{timeout:150000},async()=>{
+  await prepareAssets();
+  const {createServer:staticServer}=await import('../scripts/server.mjs'),server=staticServer();
+  let browser,second;
+  try{
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    browser=await launchChrome();
+    const first=browser.page,url=process.env.HTMLMEMO_SIDEBAR_TEST_URL||`http://127.0.0.1:${server.address().port}/`;
+    await first.navigate(url);await seed(first);
+    const before=await data(first);
+    await first.evaluate(`new Promise(acquired=>{
+      void navigator.locks.request('htmlmemo-data-folder',()=>new Promise(release=>{
+        window.finishFolderWrite=release;acquired();
+      }));
+    })`);
+
+    const {targetId}=await first.send('Target.createTarget',{url:'about:blank'});
+    const targets=await fetch('http://'+new URL(first.socket.url).host+'/json/list').then(r=>r.json());
+    second=await CDP.connect(targets.find(target=>target.id===targetId).webSocketDebuggerUrl);
+    await second.send('Page.enable');await second.send('Runtime.enable');foreground(second);
+    await second.navigate(url);
+    const queued="navigator.locks.query().then(locks=>locks.pending.some(lock=>lock.name==='htmlmemo-data-folder'))";
+    await second.waitFor('!!document.querySelector("[data-folder-connecting]")');
+    assert.ok(await second.evaluate(queued));
+    assert.equal(await second.evaluate('document.querySelector("#data-folder-status").textContent'),'폴더 연결 중…');
+    await second.click('#folder-reconnect #cancel-folder-setup');
+    await second.waitFor('document.documentElement.dataset.storageSetup==="paused"&&!document.querySelector("#folder-setup-resume").disabled');
+    assert.equal(await second.evaluate(queued),false);
+    assert.deepEqual(await data(second),before);
+
+    await second.click('#folder-setup-resume');await second.click('#resume-data-folder');
+    await second.waitFor(queued);
+    await first.evaluate('window.finishFolderWrite()');
+    await second.waitFor('document.documentElement.dataset.storageSetup==="ready"&&'+saved);
+    assert.deepEqual(await data(second),before);
+    await second.click('#settings-button');await second.click('#settings-help');
+    await second.waitFor('!!document.querySelector("#dialog[open] .help-browser")');
+    await second.click('.help-header [data-dialog-close]');
+    await second.click('[data-open="update-kept"]');
+    await second.waitFor('!document.querySelector("#toolbar").hidden');
+    const reopened=await data(second);
+    assert.equal(reopened.html,before.html);
+    assert.deepEqual(reopened.metadata.annotations,before.metadata.annotations);
+    assert.deepEqual(reopened.metadata.bookmarks,before.metadata.bookmarks);
+  }finally{
+    await second?.close();await browser?.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));
+  }
+});
+
 test('real Chrome: Pages-only PWA updater startup is silent when current and preserves the installed app offline',{timeout:90000},async()=>{
   await prepareAssets();const {createServer:staticServer}=await import('../scripts/server.mjs'),server=staticServer();let chrome;
   try{
