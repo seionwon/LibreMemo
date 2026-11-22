@@ -23,26 +23,44 @@ test('the app menu opens a closed compact native sidebar before toggling it shut
   Object.assign(r,{documentSidebarUI:doc.querySelector('main'),tocStrip:false,tocExpandedWidth:300,tocResize:{sidebar:doc.querySelector('main')},applyTocWidth:width=>widths.push(width),showDocumentSidebarView(){},syncAfterTocResize(){},updateReadingControls(){}});
   r.toggleDocumentSidebar();assert.equal(doc.documentElement.hasAttribute('data-htmlmemo-sidebar-open'),true);r.toggleDocumentSidebar();assert.equal(doc.documentElement.hasAttribute('data-htmlmemo-sidebar-open'),false);assert.deepEqual(widths,[300,8]);
 });
-test('speaker is immediately before A− while zoom and source font handlers stay intact',()=>{
+test('speaker precedes the A+, reset, A− group while zoom and source font handlers stay intact',()=>{
   const {r,doc,calls}=fixture('<header class="topbar"><strong>책</strong><div class="controls"><button id="prev">‹</button><button id="font">A−</button><button>A+</button></div></header>');
-  const font=doc.querySelector('#font'),handler=()=>{};font.onclick=handler;
+  const smaller=doc.querySelector('#font'),larger=smaller.nextElementSibling,handler=()=>{};smaller.onclick=handler;
   const text=textIndex(doc).text;r.setupReadingControls();
   assert.equal(r.readingControls.parentElement,doc.querySelector('.controls'));
   assert.equal(r.zoomControl.textContent,'125%');assert.equal(doc.querySelectorAll('[data-action=zoom]').length,1);
-  assert.equal(doc.querySelectorAll('[data-action=speak]').length,1);assert.strictEqual(font.onclick,handler);
-  assert.equal(font.previousElementSibling,r.speechControls);assert.equal(r.speechControls.previousElementSibling.id,'prev');
+  assert.equal(doc.querySelectorAll('[data-action=speak]').length,1);assert.strictEqual(smaller.onclick,handler);
+  assert.equal(larger.previousElementSibling,r.speechControls);assert.equal(r.speechControls.previousElementSibling.id,'prev');
+  assert.equal(larger.nextElementSibling.textContent,'A');assert.equal(larger.nextElementSibling.nextElementSibling,smaller);
   assert.equal(r.speechControl.textContent,'');assert.ok(r.speechControl.querySelector('svg path'));assert.equal(r.speechControl.getAttribute('aria-label'),'소리내어 읽기 (TTS 툴바)');
-  assert.equal(textIndex(doc).text,text);assert.equal(r.host.classList.contains('reader-controls-row'),false);
+  assert.equal(textIndex(doc).text,text.replace('A−A+','A+A−'));assert.equal(r.host.classList.contains('reader-controls-row'),false);
   r.zoomControl.onclick();assert.deepEqual(calls,[{action:'zoom',node:r.zoomControl}]);
   r.setupReadingControls();assert.equal(doc.querySelectorAll('[data-htmlmemo-reading-controls]').length,2);
+  assert.equal(larger.nextElementSibling.nextElementSibling,smaller);
+  const exported=documentFor(serializeHTML(doc,r.metadata));
+  assert.equal(textIndex(exported).text,text);
+  assert.deepEqual([...exported.querySelectorAll('.controls button')].map(button=>button.textContent),['‹','A−','A+']);
+});
+test('a book with its own reset keeps its font button slots and exported order',()=>{
+  for(const original of [['A−','A','A+'],['A+','A','A−']]){
+    const {r,doc}=fixture('<header class="reader-head"><div class="controls">'+original.map(label=>'<span><button>'+label+'</button></span>').join('')+'</div></header>');
+    const bar=doc.querySelector('.controls'),slots=[...bar.children],buttons=[...bar.querySelectorAll('button')];
+    r.setupReadingControls();r.setupReadingControls();
+    const {larger,reset,smaller}=r.findSourceFontControls();
+    assert.deepEqual([larger.parentNode,reset.parentNode,smaller.parentNode],slots);
+    assert.equal(larger.previousElementSibling,r.speechControls);assert.equal(reset,buttons[1]);
+    assert.equal(bar.querySelectorAll('[data-action=font-reset]').length,0);
+    const exported=documentFor(serializeHTML(doc,r.metadata)).querySelector('.controls');
+    assert.deepEqual([...exported.children].map(slot=>slot.textContent),original);
+  }
 });
 test('plain documents copy the HTML reader header with its title, navigation, position and theme controls',()=>{
   const {r,doc,outer,calls}=fixture();r.setupReadingControls();
   assert.equal(r.host.firstElementChild,r.readingControls);assert.equal(r.host.classList.contains('reader-controls-row'),true);
   assert.notEqual(r.readingControls.style.getPropertyValue('position'),'relative','the source toolbar must use the fixed CSS position instead of an inline relative offset');
-  assert.deepEqual([...r.readingControls.querySelectorAll('button')].map(node=>node.dataset.action),['toggle-sidebar','reading-back','previous-heading','next-heading','speak','font-smaller','font-reset','font-larger','reading-layout','zoom']);
-  assert.equal(r.plainReadingButtons.smaller.nextElementSibling,r.plainReadingButtons.reset);
-  assert.equal(r.plainReadingButtons.reset.nextElementSibling,r.plainReadingButtons.larger);
+  assert.deepEqual([...r.readingControls.querySelectorAll('button')].map(node=>node.dataset.action),['toggle-sidebar','reading-back','previous-heading','next-heading','speak','font-larger','font-reset','font-smaller','reading-layout','zoom']);
+  assert.equal(r.plainReadingButtons.larger.nextElementSibling,r.plainReadingButtons.reset);
+  assert.equal(r.plainReadingButtons.reset.nextElementSibling,r.plainReadingButtons.smaller);
   assert.equal(r.plainReadingButtons.reset.textContent,'A');assert.equal(r.plainReadingButtons.reset.disabled,true);
   assert.equal(r.readingControls.classList.contains('reader-head'),true);assert.equal(r.plainReadingButtons.back.textContent,'↶');
   assert.equal(r.plainReadingButtons.previous.disabled,true);assert.equal(r.plainReadingButtons.next.disabled,true);assert.equal(r.plainReadingButtons.back.disabled,true);
@@ -56,7 +74,7 @@ test('plain documents copy the HTML reader header with its title, navigation, po
   assert.ok(r.plainReadingButtons.font.querySelector('option[value="Pretendard"]'));
   assert.ok(r.plainReadingButtons.font.querySelector('option[value="D2Coding"]'));
   assert.equal(r.plainReadingButtons.font.disabled,false);
-  assert.equal(r.speechControl.nextElementSibling,r.plainReadingButtons.smaller);
+  assert.equal(r.speechControl.nextElementSibling,r.plainReadingButtons.larger);
   assert.ok(r.speechControl.querySelector('svg'));assert.equal(r.speechControls.isConnected,false);
   assert.equal(r.readingControls.ownerDocument,outer);assert.equal(doc.querySelector('[data-htmlmemo-reading-controls]'),null);
   r.speechControl.onclick();assert.deepEqual(calls,[{action:'speak',node:r.speechControl}]);
@@ -70,10 +88,10 @@ test('article headers, site navigation, search forms and hidden controls never r
   for(const header of ['<header class="header"><strong>문서 제목</strong><input type="search"><button>검색</button></header>','<header class="book-header"><h1>글 제목</h1></header>','<form><input type="search"><button>검색</button></form>','<div class="toolbar"><button>공유</button></div>','<header class="topbar" hidden><button>A+</button></header>']){
     const {r,doc}=fixture(header);r.outline=()=>[];r.setupReadingControls();r.setupReadingControls();
     assert.ok(r.plainReadingButtons);assert.equal(r.readingControls.parentElement,r.host);
-    assert.deepEqual([...r.readingControls.querySelectorAll('button')].map(node=>node.dataset.action),['toggle-sidebar','reading-back','previous-heading','next-heading','speak','font-smaller','font-reset','font-larger','reading-layout','zoom']);
-  assert.equal(r.plainReadingButtons.smaller.nextElementSibling,r.plainReadingButtons.reset);
-  assert.equal(r.plainReadingButtons.reset.nextElementSibling,r.plainReadingButtons.larger);
-  assert.equal(r.plainReadingButtons.reset.textContent,'A');assert.equal(r.plainReadingButtons.reset.disabled,true);
+    assert.deepEqual([...r.readingControls.querySelectorAll('button')].map(node=>node.dataset.action),['toggle-sidebar','reading-back','previous-heading','next-heading','speak','font-larger','font-reset','font-smaller','reading-layout','zoom']);
+    assert.equal(r.plainReadingButtons.larger.nextElementSibling,r.plainReadingButtons.reset);
+    assert.equal(r.plainReadingButtons.reset.nextElementSibling,r.plainReadingButtons.smaller);
+    assert.equal(r.plainReadingButtons.reset.textContent,'A');assert.equal(r.plainReadingButtons.reset.disabled,true);
     assert.equal(r.host.querySelectorAll('[data-htmlmemo-reading-controls]').length,1);assert.equal(doc.querySelector('[data-htmlmemo-reading-controls]'),null);
   }
 });
@@ -176,10 +194,11 @@ test('repeated header setup and content replacement retain exactly one app TTS b
   assert.equal(doc.querySelectorAll('[data-action=speak]').length,1);assert.strictEqual(doc.querySelector('[data-action=speak]'),button);assert.equal(font.isConnected,true);
   assert.equal(font.previousElementSibling,r.speechControls);
 });
-test('nested font groups and different minus labels keep the speaker directly before the original control',()=>{
+test('nested font groups and different minus labels keep the speaker directly before A+',()=>{
   for(const label of ['A-','A−','A–',' A − ']){
     const {r,doc}=fixture('<header class="topbar"><div class="controls"><button>‹</button><span class="fonts"><button id="smaller">'+label+'</button><button>A+</button></span></div></header>');
-    r.setupReadingControls();assert.equal(doc.querySelector('#smaller').previousElementSibling,r.speechControls);
+    r.setupReadingControls();assert.equal(r.findSourceFontControls().larger.previousElementSibling,r.speechControls);
+    assert.equal(r.findSourceFontControls().reset.nextElementSibling,doc.querySelector('#smaller'));
     assert.equal(r.speechControls.parentElement,doc.querySelector('.fonts'));assert.equal(r.readingControls.parentElement,doc.querySelector('.controls'));
     r.setupReadingControls();assert.equal(doc.querySelectorAll('[data-action=speak]').length,1);
   }
@@ -188,7 +207,8 @@ test('speaker recognizes an accessible font-decrease label and recovers when tha
   const {r,doc}=fixture('<header class="topbar"><div class="controls"><button>‹</button><button>A+</button></div></header>');
   r.setupReadingControls();assert.equal(doc.querySelector('.controls').firstElementChild,r.speechControls);
   const smaller=doc.createElement('button');smaller.setAttribute('aria-label','글자 작게');smaller.textContent='↓';doc.querySelector('.controls').insertBefore(smaller,r.readingControls);
-  r.setupReadingControls();assert.equal(smaller.previousElementSibling,r.speechControls);assert.equal(doc.querySelectorAll('[data-action=speak]').length,1);
+  r.setupReadingControls();const {larger,reset}=r.findSourceFontControls();assert.equal(larger.previousElementSibling,r.speechControls);
+  assert.equal(larger.nextElementSibling,reset);assert.equal(reset.nextElementSibling,smaller);assert.equal(doc.querySelectorAll('[data-action=speak]').length,1);
 });
 test('reader-only controls and styles never change export text offsets or the book toolbar',()=>{
   const {r,doc}=fixture('<header class="topbar"><button id="font" onclick="window.fontChanged=true">A+</button></header>');
@@ -245,7 +265,7 @@ test('source toolbar A+ extends 3 more steps beyond the book maximum and cleans 
   const smaller=doc.getElementById('reader-smaller'),larger=doc.getElementById('reader-larger');
   r.setupReadingControls();
   const reset=doc.querySelector('[data-htmlmemo-font-reset]');
-  assert.ok(reset);assert.equal(smaller.nextElementSibling,reset);assert.equal(reset.nextElementSibling,larger);assert.equal(reset.disabled,true);
+  assert.ok(reset);assert.equal(larger.nextElementSibling,reset);assert.equal(reset.nextElementSibling,smaller);assert.equal(reset.disabled,true);
   smaller.addEventListener('click',()=>{bookSize=Math.max(16,bookSize-4);doc.documentElement.style.setProperty('--read-size',bookSize+'px');larger.disabled=false;});
   larger.addEventListener('click',()=>{bookSize=Math.min(24,bookSize+4);doc.documentElement.style.setProperty('--read-size',bookSize+'px');if(bookSize>=24)larger.disabled=true;});
   larger.dispatchEvent(new (doc.defaultView?.Event||Event)('click',{bubbles:true,cancelable:true}));

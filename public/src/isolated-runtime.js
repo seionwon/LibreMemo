@@ -1,4 +1,4 @@
-import {SCRIPT_CSP,sanitizeRuntimeHTML,serializeBookSource} from './document.js';
+import {SCRIPT_CSP,restoreSourceReadingControls,sanitizeRuntimeHTML,serializeBookSource} from './document.js';
 import {cleanSourceStorage} from './model.js';
 
 const ID='data-htmlmemo-runtime-id',MAX_HTML=64*1024*1024;
@@ -346,6 +346,7 @@ export class IsolatedRuntime {
     // Restore original executable markup only into a detached export clone.
     // It never re-enters the live, scriptless reader or the app document.
     const clone=new DOMParser().parseFromString('<html><head></head><body></body></html>','text/html');clone.replaceChild(clone.importNode(this.doc.documentElement,true),clone.documentElement);
+    restoreSourceReadingControls(clone);
     for(const item of this.originalHandlers||[]){const target=locate(clone,item.target);if(target)for(const [name,value] of item.attributes)target.setAttribute(name,value);}
     for(const item of this.originalScripts||[]){if(item.node.id)clone.getElementById(item.node.id)?.remove();(locate(clone,item.parent)||clone.body).append(clone.importNode(item.node,true));}
     for(const node of clone.querySelectorAll('['+ID+'],[data-htmlmemo-isolated-runtime]')){node.removeAttribute(ID);node.removeAttribute('data-htmlmemo-isolated-runtime');}

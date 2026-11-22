@@ -84,10 +84,29 @@ export function cleanAnnotations(doc) {
   // marks, not when opening an unannotated book containing millions of nodes.
   if (unwrapped) doc.body?.normalize();
 }
+// Move the original buttons between their two slots, preserving handlers and intervening content.
+export function orderSourceFontButtons(bar, first, last) {
+  if (!first || !last || first.contains(last) || last.contains(first)) return false;
+  if (bar.querySelector('[data-htmlmemo-font-larger],[data-htmlmemo-font-smaller]') !== last) return false;
+  const slot = last.ownerDocument.createComment('');
+  last.replaceWith(slot);
+  first.replaceWith(last);
+  slot.replaceWith(first);
+  return true;
+}
+export function restoreSourceReadingControls(root) {
+  for (const node of root.querySelectorAll('[data-htmlmemo-reading-controls],[data-htmlmemo-reading-font],[data-htmlmemo-font-reset]')) node.remove();
+  for (const bar of root.querySelectorAll('[data-htmlmemo-font-swapped]')) {
+    const larger = bar.querySelector('[data-htmlmemo-font-larger]'), smaller = bar.querySelector('[data-htmlmemo-font-smaller]');
+    orderSourceFontButtons(bar, smaller, larger);
+    bar.removeAttribute('data-htmlmemo-font-swapped');
+  }
+}
 function clearReaderArtifacts(root) {
   // The reader inserts controls and layout overrides alongside the source.
   // Remove its UI only when opening or exporting, so it survives annotation redraws.
-  for(const node of root.querySelectorAll?.('#htmlmemo-toc-toggle-style,#htmlmemo-sidebar-style,#htmlmemo-toc-resize-style,#htmlmemo-doc-sidebar-style,#htmlmemo-reading-controls-style,#htmlmemo-reading-font-style,#htmlmemo-source-font-style,#htmlmemo-reading-theme-style,[data-htmlmemo-tts-paint],[data-htmlmemo-reading-controls],[data-htmlmemo-reading-font],[data-htmlmemo-font-reset],[data-htmlmemo-ui="video-notes"]')||[])node.remove();
+  restoreSourceReadingControls(root);
+  for(const node of root.querySelectorAll?.('#htmlmemo-toc-toggle-style,#htmlmemo-sidebar-style,#htmlmemo-toc-resize-style,#htmlmemo-doc-sidebar-style,#htmlmemo-reading-controls-style,#htmlmemo-reading-font-style,#htmlmemo-source-font-style,#htmlmemo-reading-theme-style,[data-htmlmemo-tts-paint],[data-htmlmemo-ui="video-notes"]')||[])node.remove();
   for(const button of root.querySelectorAll?.('[data-htmlmemo-source-max],[data-htmlmemo-source-min],[data-htmlmemo-font-smaller],[data-htmlmemo-font-larger]')||[]){
     if(button.hasAttribute('data-htmlmemo-source-max'))button.toggleAttribute('disabled',button.getAttribute('data-htmlmemo-source-max')==='true');
     if(button.hasAttribute('data-htmlmemo-source-min'))button.toggleAttribute('disabled',button.getAttribute('data-htmlmemo-source-min')==='true');
