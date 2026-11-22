@@ -7,6 +7,7 @@ import {tmpdir} from 'node:os';
 import {prepareAssets,root} from '../scripts/assets.mjs';
 import {createServer} from '../scripts/server.mjs';
 import {launchChrome} from './chrome.mjs';
+import {toggleDocumentSidebarFromToolbar} from './document-controls.mjs';
 
 test('real Chrome: Pages-only thin annotation picking keeps screen tolerance, text cursors, erasing and clean exports',{timeout:180000},async()=>{
   await prepareAssets();const directory=await mkdtemp(join(tmpdir(),'htmlmemo-picking-'));await cp(join(root,'public'),directory,{recursive:true});const server=createServer(directory);let browser;
@@ -117,4 +118,66 @@ test('real Chrome: Pages-only selection drags drawings, notes and text marks wit
     await writeFile(join(root,'test-results/pages-only-annotation-drag.json'),JSON.stringify({checks:metrics,annotations:expected.length,penFontAlignment:{before:beforeFont,after:afterFont},escapeCancels:true,touchDrag:true,touchCancel:true,touchTrace:await page.evaluate('window.annotationTouchProbe'),shortClickOpensEditor:true,reopen:true,exportReimport:true,errors:browser.errors},null,2));assert.deepEqual(browser.errors,[]);
   }catch(error){if(browser){await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,'test-results/pages-only-annotation-drag-failure.json'),JSON.stringify({message:error.message,stack:error.stack,errors:browser.errors,touchTrace:await browser.page.evaluate('window.annotationTouchProbe').catch(()=>null),state:await browser.page.evaluate(`({dialog:document.querySelector('#dialog')?.textContent,toast:document.querySelector('#toast')?.textContent,status:document.querySelector('#status-left')?.textContent,preview:!!document.querySelector('.document-frame')?.contentDocument?.querySelector('[data-htmlmemo-preview]')})`).catch(()=>null)},null,2));await writeFile(join(root,'test-results/pages-only-annotation-drag-failure.png'),await browser.page.screenshot());}throw error;}
   finally{await browser?.close();await new Promise(resolve=>server.close(resolve));await rm(directory,{recursive:true,force:true});}
+});
+
+test('real Chrome: Pages-only pen saves consecutive dots and fast strokes through capture changes and reload',{timeout:120000},async()=>{
+  await prepareAssets();
+  const server=createServer();let browser;
+  try{
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    browser=await launchChrome();
+    const page=browser.page,url=process.env.HTMLMEMO_SIDEBAR_TEST_URL||'http://127.0.0.1:'+server.address().port+'/';
+    const frame='document.querySelector(".document-host:not([hidden]) iframe.document-frame")';
+    const doc=frame+'.contentDocument',ready=frame+'?.style.visibility==="visible"&&'+doc+'.querySelector("#writing")';
+    const saved='document.querySelector("#data-folder-status").textContent==="폴더 저장 완료"';
+    const record="(await (await import('./src/storage.js')).getDocument('pen-input-fixture')).metadata.annotations";
+    const paths=doc+'.querySelectorAll("#htmlmemo-annotation-layer path[data-htmlmemo-id]:not([data-htmlmemo-preview])")';
+    const count=n=>page.waitFor(paths+'.length==='+n);
+    await page.send('Emulation.setDeviceMetricsOverride',{width:1280,height:800,deviceScaleFactor:1,mobile:false});
+    await page.navigate(url);await page.waitFor(saved);
+    const html='<html><head><title>펜 입력 확인</title><style>html,body{margin:0}main{padding:30px;min-height:100vh;box-sizing:border-box}#writing{display:block;height:340px}</style></head><body><main><h1>연속 필기</h1><p><span id="writing">필기 영역</span></p></main></body></html>';
+    await page.evaluate("(async()=>{const {parseHTML}=await import('./src/document.js'),{putDocumentRevision}=await import('./src/storage.js');const p=parseHTML("+JSON.stringify(html)+",{});await putDocumentRevision({id:'pen-input-fixture',title:p.metadata.title,name:'pen.html',created:1,modified:1,html:p.html,nativeScroll:true,metadata:p.metadata});})()");
+    await page.navigate(url);await page.click('[data-open=pen-input-fixture]');await page.waitFor(ready);
+    if(await page.evaluate('document.querySelector("#sidebar").hidden'))await toggleDocumentSidebarFromToolbar(page);
+    await page.click('#sidebar [data-sidebar-view=annotations]');
+    await page.click('#toolbar [data-action=pen]');
+    const base=await page.evaluate('(()=>{const f='+frame+',d=f.contentDocument,p=d.querySelector("#writing").getBoundingClientRect(),b=f.getBoundingClientRect(),scale=b.width/f.offsetWidth,x=p.left+90,y=p.top+60;return {x:b.left+x*scale,y:b.top+y*scale,hit:d.elementFromPoint(x,y)?.id};})()');
+    assert.equal(base.hit,'writing');
+    const mouse=(type,dx,dy,pointerType='mouse',clickCount=1)=>page.send('Input.dispatchMouseEvent',{
+      type,x:base.x+dx,y:base.y+dy,pointerType,button:'left',buttons:type==='mouseReleased'?0:1,clickCount,
+    });
+    await mouse('mousePressed',0,0);
+    assert.equal(await page.evaluate(doc+'.querySelectorAll("#htmlmemo-annotation-layer [data-htmlmemo-preview]").length'),1);
+    await mouse('mouseReleased',0,0);await count(1);
+    await page.evaluate('(()=>{const input=document.querySelector("#sidebar [data-annotation-query]");input.value="펜 그림";input.dispatchEvent(new Event("input",{bubbles:true}));})()');
+    await mouse('mousePressed',0,0,'mouse',2);await mouse('mouseReleased',0,0,'mouse',2);await count(2);
+    assert.equal(await page.evaluate('document.querySelector("#app").classList.contains("reader-focus")'),false);
+    await mouse('mousePressed',25,0);await mouse('mouseReleased',40,4);await count(3);
+
+    // The original span can be replaced by a book while the stylus remains down.
+    await page.evaluate(doc+'.addEventListener("pointerdown",e=>window.testPenPointer=e.pointerId,{capture:true,once:true})');
+    await mouse('mousePressed',0,28,'pen');await mouse('mouseMoved',12,31,'pen');
+    assert.ok(await page.evaluate(doc+'.documentElement.hasPointerCapture(window.testPenPointer)'));
+    await page.evaluate('(()=>{const d='+doc+',n=d.querySelector("#writing");n.replaceWith(n.cloneNode(true));d.body.dispatchEvent(new d.defaultView.PointerEvent("pointercancel",{bubbles:true,pointerType:"touch",pointerId:window.testPenPointer+50}));})()');
+    await mouse('mouseMoved',27,38,'pen');await mouse('mouseReleased',37,42,'pen');await count(4);
+
+    // Lose capture for real, then draw again without reselecting the tool.
+    await page.evaluate(doc+'.addEventListener("pointerdown",e=>window.testPenPointer=e.pointerId,{capture:true,once:true})');
+    await mouse('mousePressed',0,56);await mouse('mouseMoved',8,58);
+    await page.evaluate(doc+'.documentElement.releasePointerCapture(window.testPenPointer)');
+    await mouse('mouseMoved',12,60);await mouse('mouseReleased',16,60);await count(4);
+    await mouse('mousePressed',32,60);await mouse('mouseMoved',48,60);await mouse('mouseReleased',53,62);await count(5);
+    await page.send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
+    const touch=(type,points)=>page.send('Input.dispatchTouchEvent',{type,touchPoints:points.map(([dx,dy])=>({x:base.x+dx,y:base.y+dy,id:1}))});
+    await touch('touchStart',[[0,80]]);await touch('touchMove',[[18,86]]);await touch('touchEnd',[]);await count(6);
+    await page.waitFor('document.querySelector("#sidebar [data-annotation-count]").textContent==="6개 결과"');
+    await page.waitFor('(async()=>('+record+').length===6)()');await page.waitFor(saved);
+    const original=await page.evaluate('(async()=>'+record+')()');
+    assert.deepEqual(original.slice(0,3).map(a=>a.points.length),[1,1,2]);
+    assert.ok(original[3].points.length>=3);assert.ok(original.every(a=>a.type==='pen'));
+    await page.navigate(url);await page.waitFor(saved);await page.click('#library-tab');await page.click('[data-open=pen-input-fixture]');
+    await page.waitFor(ready);await count(6);
+    assert.deepEqual(await page.evaluate('(async()=>'+record+')()'),original);
+    assert.deepEqual(browser.errors,[]);
+  }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}
 });

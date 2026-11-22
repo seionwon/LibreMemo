@@ -18,6 +18,12 @@ import { LAYER_ID, LOCAL_CSP, parseHTML, savedMainFrame, prepareLoadedHTML, clea
 const NS = 'http://www.w3.org/2000/svg';
 const TOC_WIDTH_KEY = 'htmlmemo-doc-toc-width-v1', TOC_EXPANDED_WIDTH_KEY = 'htmlmemo-doc-toc-expanded-width-v1', TOC_MIN = 8, TOC_STRIP_SNAP = 48, TOC_MAX = 640, TOC_DEFAULT = 260;
 const svg = (doc, tag, attrs = {}) => { const node = doc.createElementNS(NS, tag); for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value)); return node; };
+function penPath(points) {
+  const coords = point => point.x.toFixed(2)+','+point.y.toFixed(2);
+  const first = coords(points[0]);
+  // A move alone paints nothing. Round caps paint a dot on a zero-length segment.
+  return points.length === 1 ? 'M'+first+' L'+first : points.map((point,i)=>(i?'L':'M')+coords(point)).join(' ');
+}
 export class Reader {
   constructor(host, parsed, callbacks) {
     this.host = host; this.metadata = parsed.metadata; this.callbacks = callbacks; this.history = new History(this.metadata.annotations);
@@ -475,11 +481,15 @@ export class Reader {
     this.doc.addEventListener('dragstart', event => { if(this.annotationDrag||this.tocDrag||this.isTocResizeTarget(event))event.preventDefault(); }, true);
     this.doc.addEventListener('pointermove', event => { this.moveTocLongPress(event); if(this.tocDrag)return; if(this.moveMiddleScroll(event))return;this.pointerMove(event); }, true);
     this.doc.addEventListener('pointerup', event => { this.clearTocLongPress(); if(this.tocDrag)return; if(this.endMiddleScroll(event))return;this.pointerUp(event); }, true);
-    this.doc.addEventListener('pointercancel', () => { this.clearTocLongPress(); this.cancelTextMarkGesture();this.cancelAnnotationDrag();this.stopMiddleScroll();this.cancelDrawingGesture();this.touchErase=null; });
+    this.doc.addEventListener('pointercancel', event => this.pointerCancel(event), true);
     // Touch starts with implicit capture on the mark. Moving capture to the
     // document root also releases that mark; only losing our own capture cancels.
-    this.doc.addEventListener('lostpointercapture', event => {if(event.target===this.doc.documentElement){if(this.annotationDrag?.pointerId===event.pointerId)this.cancelAnnotationDrag();if(this.textMarkGesture?.pointerId===event.pointerId)this.cancelTextMarkGesture();}});
-    this.doc.defaultView?.addEventListener?.('blur',()=>{this.clearTocLongPress();this.cancelTextMarkGesture();this.cancelAnnotationDrag();});
+    this.doc.addEventListener('lostpointercapture', event => {
+      if(event.target!==this.doc.documentElement)return;
+      if(this.gesture?.pointerId===event.pointerId&&event.target.hasPointerCapture?.(event.pointerId))return;
+      this.pointerCancel(event);
+    });
+    this.doc.defaultView?.addEventListener?.('blur',()=>{this.clearTocLongPress();this.cancelTextMarkGesture();this.cancelAnnotationDrag();this.cancelDrawingGesture();});
     this.doc.addEventListener('auxclick', event => {if(event.button===1&&!event.target.closest?.('a,button,input,textarea,select,[contenteditable]'))event.preventDefault();}, true);
     this.doc.addEventListener('selectionchange', () => this.captureTextSelection());
     this.doc.addEventListener('keydown', event => {if(event.target?.closest?.('[data-outline-edit-input]'))return;if(event.key==='Escape'&&this.textMarkGesture){this.cancelTextMarkGesture();event.preventDefault();event.stopPropagation();return;}if(event.key==='Escape'&&this.annotationDrag){this.cancelAnnotationDrag();event.preventDefault();event.stopPropagation();return;}if(this.handleTocKeydown(event))return; if(event.key==='Escape'&&this.middleScroll){this.stopMiddleScroll();event.preventDefault();return;}this.callbacks.onKey?.(event);}, true);
@@ -2619,6 +2629,15 @@ export class Reader {
       if (!root.scrollBy) { root.scrollLeft+=left;root.scrollTop+=top; }
     } else this.viewport.scrollBy({left:left*(touch?this.zoom:1),top:top*(touch?this.zoom:1),behavior:'instant'});
   }
+  pointerCancel(event) {
+    const id=event.pointerId;
+    this.clearTocLongPress();
+    if(this.textMarkGesture?.pointerId===id)this.cancelTextMarkGesture();
+    if(this.annotationDrag?.pointerId===id)this.cancelAnnotationDrag();
+    if(this.middleScroll?.pointerId===id)this.stopMiddleScroll();
+    if(this.gesture?.pointerId===id)this.cancelDrawingGesture();
+    if(this.touchErase?.pointerId===id)this.touchErase=null;
+  }
   cancelDrawingGesture() {
     if(!this.gesture)return;
     const gesture=this.gesture;this.gesture=null;
@@ -2632,6 +2651,10 @@ export class Reader {
     return touches.map(t=>({id:t.identifier,x:t.clientX+(bounds?.left||0)/scale,y:t.clientY+(bounds?.top||0)/scale}));
   }
   startTouchScroll(event) {
+    if(this.gesture?.pointerType==='pen'){
+      if(event.cancelable)event.preventDefault();
+      return;
+    }
     if(event.touches.length<2&&!this.touchScroll){if(this.textMarkGesture&&event.cancelable)event.preventDefault();return;}
     this.touchErase=null;
     if(!this.touchScroll){
@@ -2861,6 +2884,7 @@ export class Reader {
     if (toggled) this.focusTapToggledAt = now;
   }
   focusDocument(event) {
+    if(this.tool==='pen')return false;
     // A double tap already toggled; ignore the browser's own dblclick for it.
     if(event.type==='dblclick'&&performance.now()-(this.focusTapToggledAt||-Infinity)<700)return false;
     if(this.annotationDrag||performance.now()-(this.annotationDragEndedAt||-Infinity)<500)return;
@@ -3163,14 +3187,16 @@ export class Reader {
   // A packed book shows one section at a time. Recording it keeps a common phrase from being
   // marked in other sections, and tells a later edition where to look.
   sectionAnchor(anchor) { const section = currentSection(this.doc); return section ? {...anchor, section} : anchor; }
-  commit(annotations) {
-    this.metadata.annotations = this.history.commit(annotations); this.render(); this.callbacks.onChange?.(); this.callbacks.onView?.();
+  commit(annotations,{drawingOnly=false}={}) {
+    this.metadata.annotations = this.history.commit(annotations);
+    if(drawingOnly){this.selectedId=null;this.renderDrawingLayer();}
+    else this.render();
+    this.callbacks.onChange?.(); this.callbacks.onView?.();
   }
   undo() { if (this.history.canUndo) { this.metadata.annotations = this.history.undo(); this.render(); this.callbacks.onChange?.(); this.callbacks.onView?.(); } }
   redo() { if (this.history.canRedo) { this.metadata.annotations = this.history.redo(); this.render(); this.callbacks.onChange?.(); this.callbacks.onView?.(); } }
   remove(id) { this.commit(this.metadata.annotations.filter(a => a.id !== id)); if (this.selectedId === id) this.selectedId = null; }
-  point(event) {
-    const origin = this.layerOrigin();
+  point(event,origin=this.layerOrigin()) {
     return {x:event.clientX - origin.left, y:event.clientY - origin.top};
   }
   anchorBox(element, origin = this.layerOrigin()) {
@@ -3440,11 +3466,12 @@ export class Reader {
   /** The memo box or free text under the pointer, found by position: other tools turn annotation picking off. */
   noteAtPoint(event) {
     const layer=this.doc?.getElementById(LAYER_ID);if(!layer)return null;
-    for(const node of [...layer.querySelectorAll('[data-htmlmemo-id]')].reverse()){
-      const id=node.getAttribute('data-htmlmemo-id'),annotation=this.metadata.annotations.find(a=>a.id===id);
-      if(!annotation||!['note','text'].includes(annotation.type))continue;
+    for(const node of [...layer.querySelectorAll('g[data-htmlmemo-id]:not([data-htmlmemo-preview])')].reverse()){
       const rect=node.getBoundingClientRect();
-      if(rect.width&&event.clientX>=rect.left&&event.clientX<=rect.right&&event.clientY>=rect.top&&event.clientY<=rect.bottom)return id;
+      if(rect.width&&event.clientX>=rect.left&&event.clientX<=rect.right&&event.clientY>=rect.top&&event.clientY<=rect.bottom){
+        const id=node.getAttribute('data-htmlmemo-id');
+        if(this.metadata.annotations.some(a=>a.id===id&&['note','text'].includes(a.type)))return id;
+      }
     }
     return null;
   }
@@ -3622,8 +3649,15 @@ export class Reader {
     return true;
   }
   pointerDown(event) {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || this.disposed || this.host?.hidden || this.preparing) return;
     if(this.touchScroll&&event.pointerType==='touch')return;
+    if(this.gesture){
+      // A primary down is a new stroke even if the preceding release never arrived.
+      // A second finger, or a palm alongside a stylus, does not own the current stroke.
+      if(event.pointerId!==this.gesture.pointerId && (event.isPrimary===false ||
+        (event.pointerType!==this.gesture.pointerType && event.pointerType!=='pen')))return;
+      this.cancelDrawingGesture();
+    }
     this.suppressAnnotationClick=0;
     if(this.annotationDrag){this.cancelAnnotationDrag();return;}
     if(this.tool==='select'&&this.startAnnotationDrag(event))return;
@@ -3635,37 +3669,60 @@ export class Reader {
     if (this.isInteractiveControl(event.target)) return;
     if(this.startTextMarkGesture(event))return;
     if (DRAW_TOOLS.includes(this.tool) || ['note','text'].includes(this.tool)) {
-      if (this.gesture) { this.cancelDrawingGesture(); return; }
+      if(event.isPrimary===false)return;
       const container = this.drawableContainer(event.target);
       if (!container) return;
       const scrollHost = this.findAnnotationScrollHost();
       if (!this.layer?.isConnected || (scrollHost && this.layer.parentElement !== scrollHost)) this.renderDrawingLayer();
       const origin = this.layerOrigin(scrollHost);
-      const rawPoint = this.point(event);
+      const rawPoint = this.point(event,origin);
       const anchor = this.elementAnchor(event.target,true,rawPoint);
       const bounds = this.drawingBounds(container, anchor, origin);
       if (bounds?.measured && (rawPoint.x < bounds.x || rawPoint.x > bounds.x + bounds.width || rawPoint.y < bounds.y || rawPoint.y > bounds.y + bounds.height)) return;
       event.preventDefault(); event.stopPropagation();
       const p = this.clampDrawingPoint(rawPoint, bounds, this.tool, this.width);
-      this.gesture = {pointerId:event.pointerId, target:event.target, container, bounds, type:this.tool, anchor, points:[p]};
+      const target=this.doc.documentElement;
+      this.gesture = {pointerId:event.pointerId, pointerType:event.pointerType, target, container, scrollHost, bounds, type:this.tool, anchor, points:[p]};
       this.callbacks.onAnnotationInput?.();
-      event.target.setPointerCapture?.(event.pointerId);
+      // Source readers may replace the paragraph or text mark underneath a moving pen.
+      try{target.setPointerCapture?.(event.pointerId);}catch{/* The document listeners still receive available events. */}
+      if(this.tool==='pen')this.updateDrawingPreview(this.gesture);
     }
+  }
+  appendPenPoint(gesture,event,bounds,origin,final=false) {
+    if(!Number.isFinite(event.clientX)||!Number.isFinite(event.clientY))return;
+    const p=this.clampDrawingPoint(this.point(event,origin),bounds,'pen',this.width);
+    const last=gesture.points.at(-1),distance=Math.hypot(p.x-last.x,p.y-last.y);
+    if(distance>=1 || (final&&distance>0))gesture.points.push(p);
+  }
+  updateDrawingPreview(gesture) {
+    if(gesture.type==='pen'&&this.preview){
+      this.preview.setAttribute('d',penPath(gesture.points));
+    }else{
+      this.preview?.remove();
+      this.preview=this.drawAnnotation(this.annotation(gesture.type,{points:gesture.points}),true);
+      this.preview?.setAttribute('data-htmlmemo-preview','');
+    }
+    if(this.preview&&this.preview.parentNode!==this.layer)this.layer.append(this.preview);
   }
   pointerMove(event) {
     if(this.touchScroll&&event.pointerType==='touch')return;
     if(this.moveTextMarkGesture(event))return;
     if(this.moveAnnotationDrag(event))return;
     if (!this.gesture || this.gesture.pointerId !== event.pointerId) return;
-    this.callbacks.onAnnotationInput?.();
-    event.preventDefault();
     const g = this.gesture;
-    const bounds = g.container ? this.drawingBounds(g.container, g.anchor) : g.bounds;
-    const p = this.clampDrawingPoint(this.point(event), bounds, g.type, this.width);
-    if (g.type === 'pen') { if (Math.hypot(p.x - g.points.at(-1).x, p.y - g.points.at(-1).y) >= 1) g.points.push(p); }
-    else g.points[1] = p;
-    this.preview?.remove(); this.preview = this.drawAnnotation(this.annotation(g.type, {points:g.points}), true);
-    if (this.preview) { this.preview.setAttribute('data-htmlmemo-preview', ''); this.layer.append(this.preview); }
+    if(event.buttons===0 && ['mouse','pen'].includes(event.pointerType)){this.cancelDrawingGesture();return;}
+    event.preventDefault();
+    const origin=this.layerOrigin(g.scrollHost);
+    const bounds = g.container ? this.drawingBounds(g.container, g.anchor,origin) : g.bounds;
+    if (g.type === 'pen') {
+      const count=g.points.length;
+      for(const sample of event.getCoalescedEvents?.()||[])this.appendPenPoint(g,sample,bounds,origin);
+      this.appendPenPoint(g,event,bounds,origin);
+      if(g.points.length===count)return;
+    }else g.points[1]=this.clampDrawingPoint(this.point(event,origin),bounds,g.type,this.width);
+    this.callbacks.onAnnotationInput?.();
+    this.updateDrawingPreview(g);
   }
   async pointerUp(event) {
     if(this.touchScroll&&event.pointerType==='touch')return;
@@ -3673,14 +3730,22 @@ export class Reader {
     if(this.finishTextMarkGesture(event))return;
     if(this.finishAnnotationDrag(event))return;
     if (this.gesture && this.gesture.pointerId === event.pointerId) {
-      event.preventDefault(); const g = this.gesture; this.gesture = null; this.preview?.remove(); this.preview = null;
-      const bounds = g.container ? this.drawingBounds(g.container, g.anchor) : g.bounds;
+      event.preventDefault();
+      const g=this.gesture;
+      this.cancelDrawingGesture();
+      const origin=this.layerOrigin(g.scrollHost);
+      const bounds = g.container ? this.drawingBounds(g.container, g.anchor,origin) : g.bounds;
+      // Some touch releases report the viewport origin instead of a final contact.
+      if(g.type==='pen'){
+        this.suppressAnnotationClick=performance.now()+500;
+        if(!(event.pointerType==='touch'&&event.clientX===0&&event.clientY===0))this.appendPenPoint(g,event,bounds,origin,true);
+      }
       const clampedPoints = bounds ? g.points.map(p => this.clampDrawingPoint(p, bounds, g.type, this.width)) : g.points;
       const points = clampedPoints.map(p => ({x:(p.x - g.anchor.x) / g.anchor.width, y:(p.y - g.anchor.y) / g.anchor.height}));
       if (['note','text'].includes(g.type)) {
         const text = await this.callbacks.requestText?.(g.type);
         if (text?.trim()) this.commit([...this.metadata.annotations, this.annotation(g.type, {anchor:g.anchor.key, anchorTarget:g.anchor.target, points:[points[0]], text:text.trim()})]);
-      } else if (clampedPoints.length > 1) {
+      } else if (g.type==='pen' || clampedPoints.length > 1) {
         const penBasis = g.type === 'pen' && g.anchor.fontSize ? {width:g.anchor.width,height:g.anchor.height,fontSize:g.anchor.fontSize} : null;
         const next = this.annotation(g.type, {anchor:g.anchor.key, anchorTarget:g.anchor.target, points, ...(penBasis ? {penBasis} : {})});
         if(penBasis && this.doc){
@@ -3689,9 +3754,12 @@ export class Reader {
           if(textAnchor)penBasis.textAnchor=textAnchor;
         }
         if (g.type === 'pen' && this.penTTL > 0) {
-          const temporary = this.drawAnnotation(next);
-          if (temporary) { temporary.dataset.htmlmemoPreview = ''; this.layer.append(temporary);setTimeout(() => temporary.remove(), this.penTTL * 1000); }
-        } else this.commit([...this.metadata.annotations, next]);
+          this.temporaryPens ||= new Set();
+          const entry={annotation:next};
+          this.temporaryPens.add(entry);
+          this.paintTemporaryPen(entry);
+          entry.timer=setTimeout(()=>{entry.node?.remove();this.temporaryPens.delete(entry);},this.penTTL*1000);
+        } else this.commit([...this.metadata.annotations, next],{drawingOnly:g.type==='pen'});
       }
       return;
     }
@@ -3897,7 +3965,7 @@ export class Reader {
     const {points:p,scale} = preview ? {points:annotation.points,scale:1} : geometry || this.drawingGeometry(annotation); if (!p?.length) return null;
     const attrs = {stroke:annotation.color, 'stroke-width':annotation.width * (annotation.type === 'pen' ? scale : 1), fill:'none', ...(FILL_TOOLS.includes(annotation.type)&&annotation.fill===true?{fill:annotation.color,'fill-opacity':annotation.fillOpacity}:{}), opacity:annotation.opacity, 'stroke-linecap':'round', 'stroke-linejoin':'round', 'data-htmlmemo-id':annotation.id, style:'pointer-events:visiblePainted;cursor:pointer'};
     const first = p[0]; const last = p.at(-1);
-    if (annotation.type === 'pen') return svg(this.doc, 'path', {...attrs, d:p.map((point,i) => `${i ? 'L':'M'}${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ')});
+    if (annotation.type === 'pen') return svg(this.doc, 'path', {...attrs, d:penPath(p)});
     if (['rect','area'].includes(annotation.type)) return svg(this.doc, 'rect', {...attrs, x:Math.min(first.x,last.x), y:Math.min(first.y,last.y), width:Math.abs(first.x-last.x), height:Math.abs(first.y-last.y), ...(annotation.type === 'area' ? {fill:annotation.color, stroke:'none'} : {})});
     if (annotation.type === 'area-underline') return svg(this.doc, 'path', {...attrs, d:`M${first.x},${first.y}L${last.x},${last.y}`});
     if (annotation.type === 'ellipse') return svg(this.doc, 'ellipse', {...attrs, cx:(first.x+last.x)/2, cy:(first.y+last.y)/2, rx:Math.abs(first.x-last.x)/2, ry:Math.abs(first.y-last.y)/2});
@@ -3917,6 +3985,11 @@ export class Reader {
       lines.forEach((line,i) => { const span = svg(this.doc, 'tspan', {x:x+look.pad,dy:i===0?0:look.lineHeight}); span.textContent = line || ' '; text.append(span); }); group.append(text); return group;
     }
     return null;
+  }
+  paintTemporaryPen(entry) {
+    const node=this.drawAnnotation(entry.annotation);
+    entry.node?.remove();entry.node=node;
+    if(node){node.setAttribute('data-htmlmemo-preview','');this.layer.append(node);}
   }
   renderDrawingLayer() {
     if (!this.doc || this.disposed || this.preparing) return;
@@ -3957,6 +4030,8 @@ export class Reader {
       layer.replaceChildren(...drawings.flatMap((a,i)=>{const node=this.drawAnnotation(a,false,geometry[i]);if(!node)return [];const hit=this.drawingHitArea(node,a.id);return hit?[node,hit]:[node];}));
       this.drawingContentKey=contentKey;this.drawingLayoutKey=layoutKey;
     }
+    if(this.temporaryPens)for(const entry of this.temporaryPens)this.paintTemporaryPen(entry);
+    if(this.gesture && this.preview && this.preview.parentNode!==layer)layer.append(this.preview);
     if(scrollHost){
       if(layer.style.left!=='0px')layer.style.left='0px';
       if(layer.style.top!=='0px')layer.style.top='0px';
@@ -4653,6 +4728,7 @@ export class Reader {
   }
   stopSpeech() { this.readAloud?.close(); this.host?.ownerDocument?.defaultView?.speechSynthesis?.cancel(); }
   dispose() {
+    if(this.temporaryPens){for(const entry of this.temporaryPens)clearTimeout(entry.timer);this.temporaryPens.clear();}
     this.pdf?.dispose();
     this.readingThemeQuery?.removeEventListener?.('change',this.readingThemeChange);
     this.cancelTextMarkGesture();this.cancelAnnotationDrag();

@@ -700,7 +700,7 @@ function bindTabs() {
 function activate(id) {
   const sameTab=id===activeId,sameSidebar=sameTab&&!$('#sidebar').hidden&&reader()&&$('#sidebar').annotationReader===reader();
   if(!sameTab){
-    reader()?.flushPosition();reader()?.stopSpeech();historyRequest++;
+    reader()?.cancelDrawingGesture?.();reader()?.flushPosition();reader()?.stopSpeech();historyRequest++;
     const dialog=$('#dialog');if(dialog.open&&dialog.querySelector('[data-history-document]'))dialog.close();
   }
   if(readerFocused && !sameTab)void leaveReaderFocus();

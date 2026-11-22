@@ -25,6 +25,76 @@ function fixture(type='rect',extra={}){
   r.render();
   return {r,doc,from,to,set hit(value){hit=value;},set caret(value){caret=value;},get changes(){return changes;},get inputs(){return inputs;},get captured(){return captured;},event(x=80,y=40,options={}){return {button:0,pointerId:1,clientX:x,clientY:y,target:doc.querySelector('[data-htmlmemo-id=moving]'),preventDefault(){},stopPropagation(){},...options};}};
 }
+function penInput(){
+  const f=fixture('pen'),{r,from}=f;
+  Object.assign(r,{width:3,color:'#334155',penTTL:0});
+  r.setTool('pen');
+  const at=(x,y,options={})=>f.event(x,y,{target:from,pointerType:'mouse',isPrimary:true,buttons:1,...options});
+  return {...f,r,at};
+}
+test('the pen records the release position on fast strokes and shows round dots from press through save',async()=>{
+  const {r,doc,at}=penInput();
+  for(const type of ['mouse','pen','touch']){
+    const start=at(110,130,{pointerType:type}),end=at(118,132,{pointerType:type,buttons:0});
+    r.pointerDown(start);
+    assert.ok(r.preview?.isConnected,'even the initial contact should show ink');
+    await r.pointerUp(end);
+    const stroke=r.metadata.annotations.at(-1);
+    assert.deepEqual(r.absolutePoints(stroke),[{x:110,y:130},{x:118,y:132}]);
+    r.pointerDown(start);await r.pointerUp({...start,buttons:0});
+    const dot=r.metadata.annotations.at(-1);
+    assert.deepEqual(r.absolutePoints(dot),[{x:110,y:130}]);
+    assert.equal(doc.querySelector('[data-htmlmemo-id="'+dot.id+'"]').getAttribute('d'),'M110.00,130.00 L110.00,130.00');
+  }
+  assert.equal(r.metadata.annotations.length,7);
+  assert.equal(validateAnnotations(r.metadata.annotations).length,7);
+  const saved=parseHTML(serializeHTML(doc,r.metadata));
+  assert.deepEqual(saved.metadata.annotations,r.metadata.annotations);
+});
+test('a fresh pen press recovers an interrupted stroke immediately and ignores unrelated contacts',async()=>{
+  const {r,doc,at}=penInput();
+  const pen=(x,y)=>at(x,y,{pointerId:8,pointerType:'pen'});
+  r.pointerDown(pen(110,130));r.pointerMove(pen(120,135));
+  const owned=r.gesture;
+  r.pointerDown(at(150,140,{pointerId:13,pointerType:'touch'}));
+  assert.ok(r.gesture===owned,'a resting finger cannot take over the stylus');
+  r.pointerCancel({pointerId:13});
+  assert.ok(r.gesture===owned);
+  assert.ok(owned.target===doc.documentElement);
+  r.pointerDown(pen(190,140));
+  assert.deepEqual(r.gesture.points,[{x:190,y:140}],'the very next press is the new stroke');
+  await r.pointerUp({...pen(215,145),buttons:0});
+  assert.equal(r.metadata.annotations.length,2);
+  assert.deepEqual(r.absolutePoints(r.metadata.annotations.at(-1)),[{x:190,y:140},{x:215,y:145}]);
+  r.pointerDown(pen(200,145));r.pointerMove(pen(210,146));r.pointerCancel({pointerId:8});
+  assert.equal(r.gesture,null);assert.equal(r.preview,null);
+  await r.pointerUp(pen(220,150));assert.equal(r.metadata.annotations.length,2);
+});
+test('two close pen strokes cannot trigger document fullscreen and a touch release at the origin keeps the last ink point',async()=>{
+  const {r,from,at}=penInput();let focused=0;
+  r.callbacks.onDocumentFocus=()=>focused++;r.textAtClick=()=>null;
+  r.focusDocument({...at(120,140),target:from,type:'dblclick'});
+  assert.equal(focused,0);
+  const touch=(x,y)=>at(x,y,{pointerType:'touch'});
+  r.pointerDown(touch(120,140));r.pointerMove(touch(160,150));await r.pointerUp(touch(0,0));
+  assert.deepEqual(r.absolutePoints(r.metadata.annotations.at(-1)),[{x:120,y:140},{x:160,y:150}]);
+});
+test('timed ink survives document redraws until each stroke expires, without entering storage or undo',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const {r,doc,at}=penInput(),initial=structuredClone(r.metadata.annotations);
+  const visible=()=>doc.querySelectorAll('[data-htmlmemo-preview]').length;
+  r.penTTL=3;
+  r.pointerDown(at(110,130));await r.pointerUp(at(130,135));
+  t.mock.timers.tick(1000);
+  r.pointerDown(at(140,130));await r.pointerUp(at(140,130));
+  assert.equal(visible(),2);r.render();assert.equal(visible(),2);
+  assert.deepEqual(parseHTML(serializeHTML(doc,r.metadata)).metadata.annotations,initial);
+  assert.equal(r.history.canUndo,false);
+  t.mock.timers.tick(1999);assert.equal(visible(),2);
+  t.mock.timers.tick(1);assert.equal(visible(),1);
+  r.renderDrawingLayer();assert.equal(visible(),1);
+  t.mock.timers.tick(1000);assert.equal(visible(),0);assert.equal(r.temporaryPens.size,0);
+});
 test('all drawing and memo annotations move as one saved edit with their appearance and ID intact',async()=>{
   for(const type of ['pen','area-underline','arrow','rect','ellipse','circle','area','note','text']){
     const f=fixture(type,{fill:undefined}),{r,doc}=f,original=structuredClone(r.metadata.annotations),geometry=r.drawingGeometry(r.metadata.annotations[0]);
