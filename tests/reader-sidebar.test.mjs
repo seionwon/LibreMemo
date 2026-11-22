@@ -199,7 +199,9 @@ test('explicit close remains closed on tab return, and manual reopen restores th
 
 test('shared sidebar retains the same outline tab with and without headings on document switches',()=>{
   const a=sidebar();a.r.doc={};a.r.outline=()=>[];a.open('outline');assert.equal(a.doc.querySelector('#sidebar').sidebarMode,'outline');assert.equal(a.doc.querySelector('[data-sidebar-view=outline]').hidden,false);
+  const rename=a.doc.querySelector('[data-outline-rename]');assert.equal(rename.hidden,false);assert.equal(rename.disabled,true);
   const other={...a.r,outline:()=>[{node:'new-heading',level:1,title:'새 제목'}],metadata:{annotations:[],bookmarks:[]}};a.setReader(other);a.open('outline');assert.equal(a.doc.querySelector('[data-sidebar-view=outline]').hidden,false);assert.equal(a.doc.querySelector('#sidebar-title').textContent,'목차');assert.equal(a.doc.querySelector('[data-sidebar-count=annotations]').textContent,'0');
+  assert.equal(rename.disabled,false);a.choose('search');assert.equal(rename.hidden,true);
   a.setReader(a.r);a.context.restoreSidebar();assert.equal(a.doc.querySelector('[data-sidebar-view=outline]').hidden,false);assert.equal(a.doc.querySelector('[data-sidebar-count=annotations]').textContent,'1');
 });
 

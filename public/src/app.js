@@ -2278,9 +2278,9 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
   const title={search:'검색',outline:'목차',annotations:'주석',bookmarks:'북마크'}[mode];
   if(!$('.sidebar-views',panel)){
     const views=[['outline','list','목차'],['search','search','검색'],['annotations','note','주석'],['bookmarks','bookmark','북마크']];
-    const renameButton=`<button type="button" data-outline-rename title="목차 이름 편집" aria-label="목차 이름 편집" aria-pressed="false" hidden>${icon('pen',14)}</button>`;
+    const renameControl=`<button type="button" data-outline-rename title="목차 이름 편집" aria-label="목차 이름 편집" aria-pressed="false" hidden>${icon('pen',14)}</button>`;
     const renameHint='<p data-outline-rename-hint role="status" hidden>이름을 바꿀 목차 항목을 선택하세요.</p>';
-    panel.innerHTML=`<h2 id="${id('sidebar-title')}" hidden></h2><div class="sidebar-views" role="group" aria-label="사이드바 보기">${views.map(([view,name,label])=>`<button type="button" data-sidebar-view="${view}" title="${label}" aria-label="${label}" aria-pressed="false" aria-controls="${id('sidebar-content')}">${icon(name,14)}${['annotations','bookmarks'].includes(view)?`<span class="sidebar-nav-count" data-sidebar-count="${view}" aria-hidden="true"></span>`:''}</button>`).join('')}${renameButton}<button type="button" class="icon-button" id="${id('close-sidebar')}" data-sidebar-close title="패널 닫기" aria-label="패널 닫기">${icon('close',14)}</button></div>${renameHint}<div id="${id('sidebar-content')}" class="sidebar-content" role="region" aria-labelledby="${id('sidebar-title')}"></div>`;
+    panel.innerHTML=`<h2 id="${id('sidebar-title')}" hidden></h2><div class="sidebar-views" role="group" aria-label="사이드바 보기">${views.map(([view,name,label])=>`<button type="button" data-sidebar-view="${view}" title="${label}" aria-label="${label}" aria-pressed="false" aria-controls="${id('sidebar-content')}">${icon(name,14)}${['annotations','bookmarks'].includes(view)?`<span class="sidebar-nav-count" data-sidebar-count="${view}" aria-hidden="true"></span>`:''}</button>`).join('')}${renameControl}<button type="button" class="icon-button" id="${id('close-sidebar')}" data-sidebar-close title="패널 닫기" aria-label="패널 닫기">${icon('close',14)}</button></div>${renameHint}<div id="${id('sidebar-content')}" class="sidebar-content" role="region" aria-labelledby="${id('sidebar-title')}"></div>`;
     $('[data-outline-rename]',panel).onclick=()=>toggleOutlineRename(panel,panel.annotationReader,embedded);
     q('close-sidebar').onclick=()=>embedded?r.toggleDocumentSidebar(false):closeSidebar();
     $$('[data-sidebar-view]',panel).forEach(button=>button.onclick=()=>{
@@ -2309,7 +2309,9 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
   if(!embedded)bindAppSidebarResize(panel);
   q('sidebar-title').textContent=embedded&&mode==='outline'?'목차':title;panel.setAttribute('aria-labelledby',id('sidebar-title'));
   $('[data-sidebar-view="outline"]',panel).hidden=false;
-  $('[data-outline-rename]',panel).hidden=mode!=='outline'||(!embedded&&!outline.length);
+  const renameButton=$('[data-outline-rename]',panel);
+  renameButton.hidden=mode!=='outline';
+  renameButton.disabled=!embedded&&!outline.length;
   $$('[data-sidebar-view]',panel).forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.sidebarView===mode)));
   updateSidebarCounts(panel,r);
   const content=$('.sidebar-content',panel);content.dataset.uiFontView=mode;content.hidden=false;
