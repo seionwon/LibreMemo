@@ -700,6 +700,7 @@ function bindTabs() {
 function activate(id) {
   const sameTab=id===activeId,sameSidebar=sameTab&&!$('#sidebar').hidden&&reader()&&$('#sidebar').annotationReader===reader();
   if(!sameTab){
+    reader()?.documentSidebarUI?.cancelOutlineRename?.();
     reader()?.cancelDrawingGesture?.();reader()?.flushPosition();reader()?.stopSpeech();historyRequest++;
     const dialog=$('#dialog');if(dialog.open&&dialog.querySelector('[data-history-document]'))dialog.close();
   }
@@ -2098,6 +2099,7 @@ function bindToolbarDrag() {
 function closeSidebar({remember=true,clearSearch=true}={}) {
   stopAppSidebarResize();
   const panel=$('#sidebar'),wasOpen=!panel.hidden,r=panel.annotationReader;
+  panel.cancelOutlineRename?.();
   clearTimeout(panel.sidebarSearchTimer);panel.sidebarMode='';sidebarMode='';panel.hidden=true;$('#workspace')?.removeAttribute('data-app-sidebar');
   r?.plainReadingButtons?.menu?.setAttribute('aria-expanded','false');
   if(wasOpen&&r){if(remember)r.appSidebarClosed=true;if(clearSearch&&r.documentSidebarMode!=='search'){r.sidebarSearchQuery='';r.search('');}}
@@ -2106,7 +2108,8 @@ function appSidebarMaxWidth() {return Math.max(8,Math.min(640,innerWidth-(innerW
 function applyAppSidebarWidth(value=preferences.sidebarWidth) {
   const width=Math.round(Math.max(8,Math.min(appSidebarMaxWidth(),Number(value)||300))),root=document.documentElement,handle=$('#sidebar-resizer');
   if(root.style.getPropertyValue('--app-sidebar-width')!==width+'px')root.style.setProperty('--app-sidebar-width',width+'px');
-  $('#sidebar')?.toggleAttribute('data-app-sidebar-strip',width===8);
+  const panel=$('#sidebar');panel?.toggleAttribute('data-app-sidebar-strip',width===8);
+  if(width===8)panel?.cancelOutlineRename?.();
   if(width>=48)$('#sidebar').sidebarExpandedWidth=width;
   if(handle)for(const [name,value] of Object.entries({'aria-valuemin':8,'aria-valuemax':appSidebarMaxWidth(),'aria-valuenow':width,'aria-valuetext':width+'픽셀'}))handle.setAttribute(name,String(value));
   return width;
@@ -2216,8 +2219,48 @@ function youtubeOutlineStyle(panel,r){
   const muted=r.doc?.documentElement?getComputedStyle(r.doc.documentElement).getPropertyValue('--htmlmemo-reader-muted').trim():'';
   if(muted&&readerDark===appDark)panel.style.setProperty('--youtube-time',muted);else panel.style.removeProperty('--youtube-time');
 }
+function toggleOutlineRename(panel,r,embedded) {
+  if(panel.cancelOutlineRename){panel.cancelOutlineRename();return;}
+  const button=panel.querySelector('[data-outline-rename]'),hint=panel.querySelector('[data-outline-rename-hint]');
+  const sidebar=embedded?r.tocResize.sidebar:panel;
+  // The reader and the app have separate event trees. Leave selection mode when
+  // focus or a pointer moves out of the sidebar in either document.
+  const windows=new Set([document.defaultView,r.doc?.defaultView].filter(Boolean));
+  const nativeWindow=embedded?sidebar.ownerDocument.defaultView:null;
+  function cancel(){
+    panel.cancelOutlineRename=null;
+    button.setAttribute('aria-pressed','false');hint.hidden=true;
+    for(const win of windows){
+      win.removeEventListener('pointerdown',leaveSidebar,true);
+      win.removeEventListener('focusin',leaveSidebar,true);
+      win.removeEventListener('keydown',cancelOnEscape,true);
+    }
+    nativeWindow?.removeEventListener('click',chooseNativeTitle,true);
+  }
+  function leaveSidebar(event){if(!sidebar.contains(event.target))cancel();}
+  function cancelOnEscape(event){
+    if(event.key!=='Escape'||event.isComposing)return;
+    event.preventDefault();event.stopImmediatePropagation();cancel();button.focus();
+  }
+  // Intercept only the chosen source item, before the book follows its link.
+  function chooseNativeTitle(event){
+    const node=r.findTocEditableNode(event.target);
+    if(!node)return;
+    event.preventDefault();event.stopImmediatePropagation();cancel();
+    void r.startTocNodeEdit(node);
+  }
+  panel.cancelOutlineRename=cancel;
+  button.setAttribute('aria-pressed','true');hint.hidden=false;
+  for(const win of windows){
+    win.addEventListener('pointerdown',leaveSidebar,true);
+    win.addEventListener('focusin',leaveSidebar,true);
+    win.addEventListener('keydown',cancelOnEscape,true);
+  }
+  nativeWindow?.addEventListener('click',chooseNativeTitle,true);
+}
 function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=reader(),focusSearch=true}={}) {
   const r=documentReader;if(!r)return;
+  panel.cancelOutlineRename?.();
   youtubeOutlineStyle(panel,r);
   if(!embedded)stopAppSidebarResize();
   const outline=embedded?[]:r.outline();
@@ -2235,9 +2278,13 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
   const title={search:'검색',outline:'목차',annotations:'주석',bookmarks:'북마크'}[mode];
   if(!$('.sidebar-views',panel)){
     const views=[['outline','list','목차'],['search','search','검색'],['annotations','note','주석'],['bookmarks','bookmark','북마크']];
-    panel.innerHTML=`<h2 id="${id('sidebar-title')}" hidden></h2><div class="sidebar-views" role="group" aria-label="사이드바 보기">${views.map(([view,name,label])=>`<button type="button" data-sidebar-view="${view}" title="${label}" aria-label="${label}" aria-pressed="false" aria-controls="${id('sidebar-content')}">${icon(name,14)}${['annotations','bookmarks'].includes(view)?`<span class="sidebar-nav-count" data-sidebar-count="${view}" aria-hidden="true"></span>`:''}</button>`).join('')}<button type="button" class="icon-button" id="${id('close-sidebar')}" data-sidebar-close title="패널 닫기" aria-label="패널 닫기">${icon('close',14)}</button></div><div id="${id('sidebar-content')}" class="sidebar-content" role="region" aria-labelledby="${id('sidebar-title')}"></div>`;
+    const renameButton=`<button type="button" data-outline-rename title="목차 이름 편집" aria-label="목차 이름 편집" aria-pressed="false" hidden>${icon('pen',14)}</button>`;
+    const renameHint='<p data-outline-rename-hint role="status" hidden>이름을 바꿀 목차 항목을 선택하세요.</p>';
+    panel.innerHTML=`<h2 id="${id('sidebar-title')}" hidden></h2><div class="sidebar-views" role="group" aria-label="사이드바 보기">${views.map(([view,name,label])=>`<button type="button" data-sidebar-view="${view}" title="${label}" aria-label="${label}" aria-pressed="false" aria-controls="${id('sidebar-content')}">${icon(name,14)}${['annotations','bookmarks'].includes(view)?`<span class="sidebar-nav-count" data-sidebar-count="${view}" aria-hidden="true"></span>`:''}</button>`).join('')}${renameButton}<button type="button" class="icon-button" id="${id('close-sidebar')}" data-sidebar-close title="패널 닫기" aria-label="패널 닫기">${icon('close',14)}</button></div>${renameHint}<div id="${id('sidebar-content')}" class="sidebar-content" role="region" aria-labelledby="${id('sidebar-title')}"></div>`;
+    $('[data-outline-rename]',panel).onclick=()=>toggleOutlineRename(panel,panel.annotationReader,embedded);
     q('close-sidebar').onclick=()=>embedded?r.toggleDocumentSidebar(false):closeSidebar();
     $$('[data-sidebar-view]',panel).forEach(button=>button.onclick=()=>{
+      panel.cancelOutlineRename?.();
       const view=button.dataset.sidebarView;
       // Only an explicit re-click collapses the TOC, never a view change or restore.
       if(view==='outline'&&panel.sidebarMode==='outline'){
@@ -2262,6 +2309,7 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
   if(!embedded)bindAppSidebarResize(panel);
   q('sidebar-title').textContent=embedded&&mode==='outline'?'목차':title;panel.setAttribute('aria-labelledby',id('sidebar-title'));
   $('[data-sidebar-view="outline"]',panel).hidden=false;
+  $('[data-outline-rename]',panel).hidden=mode!=='outline'||(!embedded&&!outline.length);
   $$('[data-sidebar-view]',panel).forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.sidebarView===mode)));
   updateSidebarCounts(panel,r);
   const content=$('.sidebar-content',panel);content.dataset.uiFontView=mode;content.hidden=false;
@@ -2285,38 +2333,17 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
     content.innerHTML=embedded?'':outline.length?renderOutlineTree(outline,r):'<p class="panel-empty">이 문서에 제목 목차가 없습니다.</p>';
     $$('[data-outline-group]',panel).forEach(group=>group.ontoggle=()=>r.outlineTreeOpen.set(group.dataset.outlineGroup,!!group.open));
     $$('[data-heading]',panel).forEach(button=>{
-      let pressTimer=null,startX=0,startY=0;
-      const clearPress=()=>{if(pressTimer){clearTimeout(pressTimer);pressTimer=null;}};
       button.onclick=event=>{
         if(event?.target?.closest?.('[data-outline-edit-input]')){event.stopPropagation();return;}
-        if(button.dataset.suppressOutlineClick==='true'){delete button.dataset.suppressOutlineClick;event?.preventDefault();event?.stopPropagation();return;}
         event?.preventDefault();event?.stopPropagation();
+        const item=outline[Number(button.dataset.heading)];
+        if(panel.cancelOutlineRename){
+          panel.cancelOutlineRename();void startSidebarOutlineEdit(button,item,r,panel);return;
+        }
         const group=button.parentElement?.localName==='summary'?button.parentElement.parentElement:null;
         if(group?.matches('details[data-outline-group]')){const open=!(group.open||group.hasAttribute('open'));group.open=open;group.toggleAttribute('open',open);r.outlineTreeOpen.set(group.dataset.outlineGroup,open);}
-        const node=outline[Number(button.dataset.heading)].node,result=r.navigateSourceTarget?r.navigateSourceTarget(node):r.jump(node);updateOutlineLocation(panel,r);return result;
+        const node=item.node,result=r.navigateSourceTarget?r.navigateSourceTarget(node):r.jump(node);updateOutlineLocation(panel,r);return result;
       };
-      button.ondblclick=event=>{
-        clearPress();event?.preventDefault();event?.stopPropagation();
-        void startSidebarOutlineEdit(button,outline[Number(button.dataset.heading)],r,panel);
-      };
-      button.onpointerdown=event=>{
-        clearPress();
-        if((event.button!=null&&event.button!==0)||event.target?.closest?.('[data-outline-edit-input]'))return;
-        startX=Number(event.clientX)||0;startY=Number(event.clientY)||0;
-        pressTimer=setTimeout(()=>{
-          pressTimer=null;
-          button.dataset.suppressOutlineClick='true';
-          setTimeout(()=>{delete button.dataset.suppressOutlineClick;},1200);
-          void startSidebarOutlineEdit(button,outline[Number(button.dataset.heading)],r,panel);
-        },480);
-      };
-      button.onpointermove=event=>{
-        if(!pressTimer)return;
-        const dx=(Number(event.clientX)||0)-startX,dy=(Number(event.clientY)||0)-startY;
-        if(dx*dx+dy*dy>64)clearPress();
-      };
-      button.onpointerup=clearPress;
-      button.onpointercancel=clearPress;
     });
     updateOutlineLocation(panel,r);
   }else if(mode==='bookmarks'){
@@ -2372,6 +2399,7 @@ async function startSidebarOutlineEdit(button,item,r,panel){
   for(const type of ['click','dblclick','pointerdown','mousedown'])input.addEventListener(type,e=>e.stopPropagation());
   input.addEventListener('keydown',e=>{
     e.stopPropagation();
+    if(e.isComposing||e.keyCode===229)return;
     if(e.key==='Enter'){e.preventDefault();finish(true);}
     else if(e.key==='Escape'){e.preventDefault();finish(false);}
   });

@@ -468,7 +468,7 @@ export class Reader {
     this.doc.addEventListener('dragover',event=>{if([...event.dataTransfer?.types||[]].includes('Files'))event.preventDefault();});
     this.doc.addEventListener('drop',event=>this.callbacks.onDrop?.(event));
     this.startFontObserver();
-    this.doc.addEventListener('wheel', event => { this.clearTocLongPress(); if(this.pager?.wheel(event))return; this.forwardWheel(event); }, {capture:true,passive:false});
+    this.doc.addEventListener('wheel', event => { if(this.pager?.wheel(event))return; this.forwardWheel(event); }, {capture:true,passive:false});
     this.doc.addEventListener('touchstart', event => this.pager?.touchStart(event), {capture:true,passive:true});
     this.doc.addEventListener('touchend', event => this.pager?.touchEnd(event), {capture:true,passive:true});
     this.doc.addEventListener('click', event => this.pager?.click(event));
@@ -476,11 +476,11 @@ export class Reader {
     this.doc.addEventListener('touchmove', event => this.moveTouchScroll(event), {capture:true,passive:false});
     this.doc.addEventListener('touchend', event => this.endTouchScroll(event), true);
     this.doc.addEventListener('touchcancel', event => this.endTouchScroll(event), true);
-    this.doc.addEventListener('pointerdown', event => { const activeEdit=this.doc.querySelector?.('[data-outline-edit-input]'); if(activeEdit&&!event.target?.closest?.('[data-outline-edit-input]'))activeEdit.blur?.(); if(this.startTocResize(event))return; this.startTocLongPress(event); if(this.startMiddleScroll(event))return;this.stopMiddleScroll();this.callbacks.onSelectionDismiss?.(); this.dismissMobileSidebar(event); this.pointerDown(event); }, true);
+    this.doc.addEventListener('pointerdown', event => { const activeEdit=this.doc.activeElement; if(activeEdit?.matches?.('[data-outline-edit-input]')&&!activeEdit.contains(event.target))activeEdit.blur(); if(this.startTocResize(event))return; if(this.startMiddleScroll(event))return;this.stopMiddleScroll();this.callbacks.onSelectionDismiss?.(); this.dismissMobileSidebar(event); this.pointerDown(event); }, true);
     this.doc.addEventListener('mousedown', event => { if(this.startTocResize(event))return;this.selectSentenceAtClick(event); }, true);
     this.doc.addEventListener('dragstart', event => { if(this.annotationDrag||this.tocDrag||this.isTocResizeTarget(event))event.preventDefault(); }, true);
-    this.doc.addEventListener('pointermove', event => { this.moveTocLongPress(event); if(this.tocDrag)return; if(this.moveMiddleScroll(event))return;this.pointerMove(event); }, true);
-    this.doc.addEventListener('pointerup', event => { this.clearTocLongPress(); if(this.tocDrag)return; if(this.endMiddleScroll(event))return;this.pointerUp(event); }, true);
+    this.doc.addEventListener('pointermove', event => { if(this.tocDrag)return; if(this.moveMiddleScroll(event))return;this.pointerMove(event); }, true);
+    this.doc.addEventListener('pointerup', event => { if(this.tocDrag)return; if(this.endMiddleScroll(event))return;this.pointerUp(event); }, true);
     this.doc.addEventListener('pointercancel', event => this.pointerCancel(event), true);
     // Touch starts with implicit capture on the mark. Moving capture to the
     // document root also releases that mark; only losing our own capture cancels.
@@ -489,7 +489,7 @@ export class Reader {
       if(this.gesture?.pointerId===event.pointerId&&event.target.hasPointerCapture?.(event.pointerId))return;
       this.pointerCancel(event);
     });
-    this.doc.defaultView?.addEventListener?.('blur',()=>{this.clearTocLongPress();this.cancelTextMarkGesture();this.cancelAnnotationDrag();this.cancelDrawingGesture();});
+    this.doc.defaultView?.addEventListener?.('blur',()=>{this.cancelTextMarkGesture();this.cancelAnnotationDrag();this.cancelDrawingGesture();});
     this.doc.addEventListener('auxclick', event => {if(event.button===1&&!event.target.closest?.('a,button,input,textarea,select,[contenteditable]'))event.preventDefault();}, true);
     this.doc.addEventListener('selectionchange', () => this.captureTextSelection());
     this.doc.addEventListener('keydown', event => {if(event.target?.closest?.('[data-outline-edit-input]'))return;if(event.key==='Escape'&&this.textMarkGesture){this.cancelTextMarkGesture();event.preventDefault();event.stopPropagation();return;}if(event.key==='Escape'&&this.annotationDrag){this.cancelAnnotationDrag();event.preventDefault();event.stopPropagation();return;}if(this.handleTocKeydown(event))return; if(event.key==='Escape'&&this.middleScroll){this.stopMiddleScroll();event.preventDefault();return;}this.callbacks.onKey?.(event);}, true);
@@ -505,7 +505,6 @@ export class Reader {
     this.viewport.addEventListener('scroll',()=>this.updateReadingControls(),{passive:true});
     this.doc.addEventListener('click', event => {
       if(this.showEbookNote(event))return;
-      if(this.suppressTocClickUntil&&performance.now()<this.suppressTocClickUntil){this.suppressTocClickUntil=0;event.preventDefault();event.stopPropagation();event.stopImmediatePropagation?.();return;}
       if(this.suppressAnnotationClick&&event.detail!==0&&performance.now()<this.suppressAnnotationClick){this.suppressAnnotationClick=0;event.preventDefault();event.stopImmediatePropagation();return;}
       const target = event.target?.nodeType === 1 ? event.target : event.target?.parentElement;
       if(target?.closest?.('[data-outline-edit-input]')){event.stopPropagation();return;}
@@ -2156,7 +2155,10 @@ export class Reader {
     }
     if (!persist && this.tocApplied && width === this.tocWidth && strip === this.tocStrip) return width;
     const prevStrip = !!this.tocStrip;
-    if (strip && !prevStrip) this.tocScrollTop = info.sidebar.scrollTop || 0;
+    if (strip && !prevStrip) {
+      this.documentSidebarUI?.cancelOutlineRename?.();
+      this.tocScrollTop = info.sidebar.scrollTop || 0;
+    }
     this.tocWidth = width;
     this.tocResizedWidth = width;
     this.tocStrip = strip;
@@ -2423,48 +2425,11 @@ export class Reader {
       this.resetTocWidth();
       return true;
     }
-    const node = this.findTocEditableNode(event.target);
-    if (!node) return false;
-    event.preventDefault?.();
-    void this.startTocNodeEdit(node);
-    return true;
-  }
-  startTocLongPress(event) {
-    this.clearTocLongPress();
-    if (this.disposed || (event.button != null && event.button !== 0)) return;
-    const node = this.findTocEditableNode(event.target);
-    if (!node || node.querySelector?.('[data-outline-edit-input]')) return;
-    const point = event.touches?.[0] || event;
-    const startX = Number(point?.clientX) || 0, startY = Number(point?.clientY) || 0;
-    this.tocLongPress = {
-      node,
-      pointerId: event.pointerId,
-      startX,
-      startY,
-      timer: setTimeout(() => {
-        if (!this.tocLongPress || this.disposed) return;
-        const targetNode = this.tocLongPress.node;
-        this.tocLongPress = null;
-        this.suppressTocClickUntil = performance.now() + 1200;
-        void this.startTocNodeEdit(targetNode);
-      }, 480)
-    };
-  }
-  moveTocLongPress(event) {
-    if (!this.tocLongPress) return;
-    if (this.tocLongPress.pointerId != null && event.pointerId != null && event.pointerId !== this.tocLongPress.pointerId) return;
-    const point = event.touches?.[0] || event;
-    const dx = (Number(point?.clientX) || 0) - this.tocLongPress.startX;
-    const dy = (Number(point?.clientY) || 0) - this.tocLongPress.startY;
-    if (dx * dx + dy * dy > 64) this.clearTocLongPress();
-  }
-  clearTocLongPress() {
-    if (!this.tocLongPress) return;
-    clearTimeout(this.tocLongPress.timer);
-    this.tocLongPress = null;
+    return false;
   }
   findTocEditableNode(target) {
-    const el = target?.nodeType === 1 ? target : target?.parentElement;
+    const hit = target?.nodeType === 1 ? target : target?.parentElement;
+    const el = hit?.closest?.('[data-htmlmemo-toc-edit]')?.parentElement || hit;
     const sidebar = this.tocResize?.sidebar;
     if (!el || !sidebar?.isConnected || !sidebar.contains(el)) return null;
     if (el.closest?.('[data-htmlmemo-ui],[data-htmlmemo-toc-resizer],[data-htmlmemo-toc-resizer-bound],#reader-close,[data-htmlmemo-redundant-toc-title],input,textarea,select')) return null;
@@ -2573,6 +2538,7 @@ export class Reader {
     }
     input.addEventListener('keydown', e => {
       e.stopPropagation();
+      if (e.isComposing || e.keyCode === 229) return;
       if (e.key === 'Enter') { e.preventDefault(); finish(true); }
       else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
     });
@@ -2631,7 +2597,6 @@ export class Reader {
   }
   pointerCancel(event) {
     const id=event.pointerId;
-    this.clearTocLongPress();
     if(this.textMarkGesture?.pointerId===id)this.cancelTextMarkGesture();
     if(this.annotationDrag?.pointerId===id)this.cancelAnnotationDrag();
     if(this.middleScroll?.pointerId===id)this.stopMiddleScroll();
@@ -4732,7 +4697,7 @@ export class Reader {
     this.pdf?.dispose();
     this.readingThemeQuery?.removeEventListener?.('change',this.readingThemeChange);
     this.cancelTextMarkGesture();this.cancelAnnotationDrag();
-    this.clearTocLongPress();this.cancelDrawingGesture();this.touchScroll=null;this.touchErase=null;
+    this.documentSidebarUI?.cancelOutlineRename?.();this.cancelDrawingGesture();this.touchScroll=null;this.touchErase=null;
     this.searchGeneration=(this.searchGeneration||0)+1;this.searchIndexCache?.dispose();
     this.cancelBookSearchJump?.();this.documentBookSearchObserver?.disconnect();if(this.documentBookSearchResults)this.clearDocumentBookSearchHighlight();
     closeReadingLayoutPanel(this);closeEbookNote(this);this.pager?.clear();this.autoScrollBar?.remove();this.autoScrollBar=null;

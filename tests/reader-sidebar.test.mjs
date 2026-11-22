@@ -748,7 +748,7 @@ test('sidebar distinguishes slide numbers and part/chapter/section prefixes whil
   assert.equal(plainBtn.textContent,'부록 및 참고문헌');
 });
 
-test('sidebar outline items can be edited via double-click or long-press and persist in metadata without modifying source DOM',async()=>{
+test('outline navigation and long presses only rename after choosing the pencil, one title at a time',async()=>{
   installDOM();const a=sidebar();
   const raw='<html><head></head><body><h1 id="c1" data-htmlmemo-anchor="n1">제1장 서론</h1><p data-htmlmemo-anchor="n2">서론 본문 문장입니다.</p><h2 id="c2" data-htmlmemo-anchor="n3">1.1 배경</h2><p data-htmlmemo-anchor="n4">배경 본문 문장입니다.</p></body></html>';
   const parsed=parseHTML(raw),doc=documentFor(parsed.html);
@@ -757,47 +757,50 @@ test('sidebar outline items can be edited via double-click or long-press and per
   a.r.readingHeadingState=undefined;
   a.r.doc=doc;a.r.metadata=parsed.metadata;
   a.r.callbacks={onChange(){a.calls.saved++;}};
+  a.r.navigateSourceTarget=a.r.jump;
   a.open('outline');
   const panel=a.doc.querySelector('#sidebar');
-  const firstBtn=panel.querySelector('[data-heading="0"]');
+  const firstBtn=panel.querySelector('[data-heading="0"]'),toggle=panel.querySelector('[data-outline-rename]');
+  const hint=panel.querySelector('[data-outline-rename-hint]'),selector='[data-outline-edit-input]';
+  const send=(node,type,fields={})=>{
+    const event=a.doc.createEvent('Event');event.initEvent(type,true,true);Object.assign(event,fields);node.dispatchEvent(event);
+  };
   assert.equal(firstBtn.textContent,'제1장 서론');
+  firstBtn.click();firstBtn.click();send(firstBtn,'dblclick');
+  assert.equal(firstBtn.closest('details').hasAttribute('open'),false);
+  send(firstBtn,'pointerdown',{button:0,pointerType:'touch'});a.flush();send(firstBtn,'pointerup');firstBtn.click();
+  assert.equal(firstBtn.closest('details').hasAttribute('open'),true);
+  assert.equal(panel.querySelector(selector),null);
+  assert.equal(a.calls.headings.length,3);
 
-  // Double-click opens inline input; Escape cancels without saving.
-  firstBtn.ondblclick({preventDefault(){},stopPropagation(){}});
-  let input=firstBtn.querySelector('[data-outline-edit-input]');
-  assert.ok(input);
-  assert.equal(input.value,'제1장 서론');
-  input.value='취소할 제목';
-  const escEvent=a.doc.createEvent('Event');escEvent.initEvent('keydown',true,true);escEvent.key='Escape';
-  input.dispatchEvent(escEvent);
-  assert.equal(a.r.metadata.outlineEdits,undefined);
-  assert.equal(firstBtn.textContent,'제1장 서론');
+  toggle.click();assert.equal(hint.hidden,false);assert.equal(toggle.getAttribute('aria-pressed'),'true');
+  send(toggle,'keydown',{key:'Escape'});assert.equal(hint.hidden,true);
+  toggle.click();toggle.click();assert.equal(toggle.getAttribute('aria-pressed'),'false');
+  toggle.click();send(doc.body,'pointerdown');assert.equal(hint.hidden,true,'clicking the reading pane disarms renaming');
+  toggle.click();a.choose('search');assert.equal(toggle.hidden,true);
+  a.choose('outline');assert.equal(toggle.hidden,false);assert.equal(hint.hidden,true);
 
-  // Double-click and Enter commits the edited outline title.
-  firstBtn.ondblclick({preventDefault(){},stopPropagation(){}});
-  input=firstBtn.querySelector('[data-outline-edit-input]');
-  input.value='제1장 내가 고친 서론';
-  const enterEvent=a.doc.createEvent('Event');enterEvent.initEvent('keydown',true,true);enterEvent.key='Enter';
-  input.dispatchEvent(enterEvent);
+  const first=()=>panel.querySelector('[data-heading="0"]');
+  toggle.click();first().click();
+  let input=first().querySelector(selector);
+  assert.ok(input);assert.equal(input.value,'제1장 서론');assert.equal(hint.hidden,true);
+  input.value='취소할 제목';send(input,'keydown',{key:'Escape'});
+  assert.equal(a.r.metadata.outlineEdits,undefined);assert.equal(first().textContent,'제1장 서론');
+  assert.equal(a.calls.headings.length,3,'choosing an edit target does not navigate');
+
+  toggle.click();first().click();input=first().querySelector(selector);
+  input.value='제1장 내가 고친 서론';send(input,'keydown',{key:'Enter',isComposing:true});
+  assert.equal(first().querySelector(selector),input);
+  send(input,'keydown',{key:'Enter'});
   assert.equal(a.r.metadata.outlineEdits?.length,1);
-  assert.equal(a.r.metadata.outlineEdits[0].title,'제1장 내가 고친 서론');
   assert.equal(a.r.metadata.outlineEdits[0].originalTitle,'제1장 서론');
   assert.equal(a.r.outline()[0].title,'제1장 내가 고친 서론');
-  assert.equal(doc.getElementById('c1').textContent,'제1장 서론','source DOM heading remains untouched');
-  assert.equal(panel.querySelector('[data-heading="0"]').textContent,'제1장 내가 고친 서론');
-
-  // Long-press on second heading opens inline input and suppresses the release click.
-  const secondBtn=panel.querySelector('[data-heading="1"]');
-  secondBtn.onpointerdown({button:0,clientX:20,clientY:20});
-  a.flush();
-  const secondInput=secondBtn.querySelector('[data-outline-edit-input]');
-  assert.ok(secondInput,'long-press opens inline editor');
-  const navBefore=a.calls.headings.length;
-  secondBtn.onclick({target:secondBtn,preventDefault(){},stopPropagation(){}});
-  assert.equal(a.calls.headings.length,navBefore,'release click after long-press does not navigate');
-  secondInput.value='1.1 새로 붙인 배경 제목';
-  const enterEvent2=a.doc.createEvent('Event');enterEvent2.initEvent('keydown',true,true);enterEvent2.key='Enter';
-  secondInput.dispatchEvent(enterEvent2);
+  assert.equal(doc.getElementById('c1').textContent,'제1장 서론');
+  assert.equal(first().textContent,'제1장 내가 고친 서론');
+  const second=panel.querySelector('[data-heading="1"]');
+  second.click();assert.equal(panel.querySelector(selector),null);assert.equal(a.calls.headings.length,4);
+  toggle.click();second.click();input=second.querySelector(selector);
+  input.value='1.1 새로 붙인 배경 제목';send(input,'blur');
   assert.equal(a.r.metadata.outlineEdits?.length,2);
   assert.equal(a.r.outline()[1].title,'1.1 새로 붙인 배경 제목');
 
@@ -828,7 +831,10 @@ test('embedded native TOC items can be edited without shifting textIndex offsets
 
   const summary=doc.querySelector('#reader-tree summary');
   const link=doc.querySelector('#reader-tree a');
-  await a.r.startTocNodeEdit(link);
+  const toggle=doc.querySelector('[data-outline-rename]');
+  assert.equal(a.r.handleTocDblClick({target:link}),false);
+  link.click();assert.equal(link.querySelector('[data-outline-edit-input]'),null);
+  toggle.click();link.click();
   const input=link.querySelector('[data-outline-edit-input]');
   assert.ok(input);
   assert.equal(textIndex(doc).text,beforeIndex.text,'textIndex is unchanged while editing');
@@ -837,6 +843,13 @@ test('embedded native TOC items can be edited without shifting textIndex offsets
   input.dispatchEvent(enter);
 
   assert.equal(link.textContent,'1장 사용자 수정 제목');
+  toggle.click();link.querySelector('[data-htmlmemo-toc-edit]').click();
+  const renamedInput=link.querySelector('[data-outline-edit-input]');
+  assert.equal(renamedInput.value,'1장 사용자 수정 제목','a renamed label remains editable');
+  renamedInput.value='저장하지 않을 이름';
+  const escape=doc.createEvent('Event');escape.initEvent('keydown',true,true);escape.key='Escape';renamedInput.dispatchEvent(escape);
+  assert.equal(link.textContent,'1장 사용자 수정 제목');
+  assert.equal(toggle.getAttribute('aria-pressed'),'false');
   assert.equal(textIndex(doc).text,beforeIndex.text,'textIndex remains identical after editing embedded TOC');
   assert.deepEqual(textIndex(doc).nodes.map(n=>[n.start,n.end]),beforeIndex.nodes.map(n=>[n.start,n.end]));
 

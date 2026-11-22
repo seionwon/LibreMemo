@@ -3221,3 +3221,78 @@ test('real Chrome: Pages-only UI font sizes persist and reach both kinds of side
     await chrome?.close();await new Promise(resolve=>server.close(resolve));
   }
 });
+
+test('real Chrome: Pages-only — only the pencil starts TOC renaming in app and book sidebars',{timeout:120000},async()=>{
+  await prepareAssets();
+  const server=createServer();let chrome;
+  try{
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    chrome=await launchChrome();
+    const page=chrome.page,url=process.env.HTMLMEMO_SIDEBAR_TEST_URL||'http://127.0.0.1:'+server.address().port+'/';
+    const frame='document.querySelector(".document-host:not([hidden]) iframe.document-frame")',book=frame+'.contentDocument';
+    const input='[data-outline-edit-input]',pencil='[data-outline-rename]',saved='document.querySelector("#data-folder-status")?.textContent==="폴더 저장 완료"';
+    const key=async(key,code)=>{
+      for(const type of ['keyDown','keyUp'])await page.send('Input.dispatchKeyEvent',{type,key,code:key,windowsVirtualKeyCode:code});
+    };
+    const point=(selector,native)=>page.evaluate(`(()=>{
+      const frame=${native?frame:'null'},doc=frame?.contentDocument||document,node=doc.querySelector(${JSON.stringify(selector)});
+      const rect=node.getBoundingClientRect(),offset=frame?.getBoundingClientRect(),scale=frame?offset.width/frame.offsetWidth:1;
+      const x=rect.left+rect.width/2,y=rect.top+rect.height/2;
+      if(!node.contains(doc.elementFromPoint(x,y)))throw Error('목차 항목이 가려져 있습니다');
+      return {x:(offset?.left||0)+x*scale,y:(offset?.top||0)+y*scale};
+    })()`);
+    await page.send('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false});
+    await page.navigate(url);await page.waitFor(saved);
+    await page.click('#paste-button');
+    await page.evaluate('document.querySelector("#paste-text").value="# 첫 항목\\n\\n목차 검사 본문\\n\\n# 둘째 항목"');
+    await page.click('#paste-save');
+    await page.waitFor(frame+'?.style.visibility==="visible"&&document.querySelector("#sidebar [data-heading]")');
+    const appRow='#sidebar [data-heading="0"]';
+    for(const native of [false,true]){
+      const doc=native?book:'document',row=native?'#reader-nav>a':appRow;
+      if(native){
+        const source=await readFile(join(root,'tests/fixtures/source-toolbar.html'),'utf8');
+        await page.evaluate(`(()=>{const t=new DataTransfer();t.items.add(new File([${JSON.stringify(source)}],'목차 검증.html',{type:'text/html'}));const n=document.querySelector('#file-input');n.files=t.files;n.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+        await page.waitFor(frame+'?.style.visibility==="visible"&&'+book+'?.querySelector("#reader-nav>a")');
+        await revealDocumentControl(page,row);
+      }else if(await page.evaluate('document.querySelector("#sidebar").hidden'))await toggleDocumentSidebarFromToolbar(page);
+      const inside=selector=>doc+'.querySelector('+JSON.stringify(selector)+')';
+      const click=selector=>native?clickDocumentControl(page,selector):page.click(selector);
+      const name=native?'책의 새 이름':'앱의 새 이름',original=await page.evaluate(inside(row)+'.textContent');
+      const mouse=async(type,count)=>page.send('Input.dispatchMouseEvent',{type,...await point(row,native),button:'left',clickCount:count});
+      for(const count of [1,2]){await mouse('mousePressed',count);await mouse('mouseReleased',count);}
+      assert.equal(await page.evaluate('!!'+inside(input)),false);
+      await mouse('mousePressed',1);await new Promise(resolve=>setTimeout(resolve,650));
+      assert.equal(await page.evaluate('!!'+inside(input)),false);
+      await mouse('mouseReleased',1);
+      await click(pencil);await page.waitFor(inside(pencil)+'.getAttribute("aria-pressed")==="true"');
+      await key('Escape',27);await page.waitFor(inside(pencil)+'.getAttribute("aria-pressed")==="false"');
+      await click(pencil);await click(row);await page.waitFor(doc+'.activeElement?.matches("[data-outline-edit-input]")');
+      await page.send('Input.insertText',{text:name});await key('Enter',13);
+      await page.waitFor(inside(row)+'.textContent==='+JSON.stringify(name));
+      assert.equal(await page.evaluate(book+'.querySelector("main h1,article h1,h1").textContent'),original);
+      await click(row);assert.equal(await page.evaluate('!!'+inside(input)),false);
+      await click(pencil);await click(native?row+' [data-htmlmemo-toc-edit]':row);
+      await page.waitFor(inside(input)+'?.value==='+JSON.stringify(name));
+      await page.send('Input.insertText',{text:'취소할 이름'});await key('Escape',27);
+      assert.equal(await page.evaluate(inside(row)+'.textContent'),name);
+
+      if(!native){
+        await page.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+        await page.send('Emulation.setTouchEmulationEnabled',{enabled:true});
+        if(await page.evaluate('document.querySelector("#sidebar").hidden'))await toggleDocumentSidebarFromToolbar(page);
+        const touch=async(selector,hold=false)=>{
+          await page.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[await point(selector,false)]});
+          if(hold){await new Promise(resolve=>setTimeout(resolve,650));assert.equal(await page.evaluate('!!'+inside(input)),false);}
+          await page.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+        };
+        await touch(row,true);await touch(pencil);await page.waitFor(inside(pencil)+'.getAttribute("aria-pressed")==="true"');
+        await touch(row);await page.waitFor(inside(input)+'?.value==='+JSON.stringify(name));
+        await key('Escape',27);
+        await page.send('Emulation.setTouchEmulationEnabled',{enabled:false});
+        await page.send('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false});
+      }
+    }
+    assert.deepEqual(chrome.errors,[]);
+  }finally{if(chrome)await chrome.close();await new Promise(resolve=>server.close(resolve));}
+});
