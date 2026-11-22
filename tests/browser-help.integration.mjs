@@ -85,9 +85,13 @@ test('real Chrome: Pages-only help and search reopen offline after a complete ap
   await page.evaluate('window.helpBeforeReload=true');await page.send('Network.enable');await page.send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:-1,uploadThroughput:-1});
   await page.navigate(f.url);assert.equal(await page.evaluate('window.helpBeforeReload'),undefined);await openHelp(page);await search(page,'휴지통 영구 삭제');await page.click('.help-results [data-help-open="trash"]');
   assert.match(await page.evaluate('document.querySelector(".help-article").textContent'),/되돌릴 수 없습니다/);assert.equal(await fits(page),true);assert.deepEqual(await preserved(page),before);
-  await search(page,'발췌 노트');
+  await page.send('Emulation.setDeviceMetricsOverride',{width:320,height:568,deviceScaleFactor:1,mobile:true});
+  await search(page,'새 기능');
   await page.click('.help-results [data-help-open="review-tutorial"]');
-  assert.match(await page.evaluate('document.querySelector(".help-article").textContent'),/현재 문서 전체/);
+  assert.equal(await page.evaluate('document.querySelector("#help-article-title").textContent'),'새 기능 따라 하기');
+  const guide=await page.evaluate('document.querySelector(".help-article").textContent');
+  for(const phrase of ['내 주석에서 찾기','형광펜 색 이름','현재 문서 전체','이 장면 10초 반복','UI 글자 크기','목차 이름 편집','펜 표시 시간','저장 폴더 연결'])assert.ok(guide.includes(phrase),phrase);
+  assert.equal(await fits(page),true);
   await mkdir(root+'/test-results',{recursive:true});await writeFile(root+'/test-results/pages-only-help-offline.png',await page.screenshot());
   await page.click('[data-help-related="youtube"]');
   assert.match(await page.evaluate('document.querySelector(".help-article").textContent'),/이 장면 10초 반복/);
