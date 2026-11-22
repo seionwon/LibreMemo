@@ -21,6 +21,8 @@ import { InstallController, isIOS, installableLocation, installationURL, publicA
 import { APP_VERSION } from './version.js';
 import {UpdateController} from './updates.js';
 import { openDeviceSync } from './sync-ui.js';
+import {uiFontStyle,applyUIFontStyle} from './ui-fonts.js';
+import {openUIFontPanel} from './ui-fonts-panel.js';
 import {openHelp} from './help.js';
 import { DataFolder, supportsDataFolder, supportsIOSAppStorage, openIOSAppStorage, isIOSAppStorageHandle, CHROME_REQUIRED_MESSAGE, createStorageSubfolder, storageFolderName } from './data-folder.js';
 import {validateFolders,folderPath,folderDescendants,editLibraryFolders,nextStarredAt,LibraryIndex} from './library-folders.js';
@@ -43,6 +45,7 @@ const libraryIndex=new LibraryIndex();let libraryIndexVersion=0,libraryTreeVersi
 let libraryFolderById=new Map(),libraryFolderChildren=new Map(),libraryFolderCounts=new Map();
 let preferences=normalizePreferences(), settingsFileHandle=null, settingsFolderHint='';
 let dataFolder, browserStorageProtection;
+let currentUIFontStyle = '';
 const FOLDER_WELCOME_KEY='htmlmemo-data-folder-welcome-v1';
 let folderSetupPending=false,folderSetupController=null,lastSetupAttempt=null;const folderSetupWaiters=[];
 let sharingApp=false, installController;
@@ -359,16 +362,25 @@ function designThemeDialog(initialCategory='all') {
   });
 }
 function settingsDialog() {
-  modal(`<div class="dialog-heading"><h2>LibreMemo 설정</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><div class="settings-app-actions" role="group" aria-label="앱 실행과 정보"><button id="settings-help" class="secondary-button" type="button" aria-haspopup="dialog">${icon('help',15)} 도움말</button><button id="settings-execution" class="secondary-button" type="button">${icon('external',15)} 실행과 앱 전달</button><button id="settings-about" class="secondary-button" type="button" aria-haspopup="dialog">${icon('info',15)} About</button></div><div class="setting-row"><div><strong>기기 간 동기화</strong><p>문서·주석·북마크·읽기 위치·이력을 주고받고, 앱 설정도 선택해 맞춥니다. 휴지통은 제외합니다.</p></div><button id="settings-sync" class="secondary-button">연결</button></div><p class="local-only-note">${icon('check',15)} 문서·주석·설정은 기기에 저장합니다. 기기 간 동기화는 연결할 때만 암호화해 전송합니다.</p><div class="setting-row"><div><strong>AI 검색</strong><p>선택한 글을 보낼 LLM을 등록하고 사용할 것을 체크합니다.</p></div><button id="settings-ai-search" class="secondary-button">관리</button></div><div class="setting-row"><div><strong>데이터 폴더</strong><p id="settings-folder-status">${esc(folderStatusText())}</p></div><button id="settings-folder" class="secondary-button">${folder||usingIOSAppStorage()?'관리':'폴더 연결'}</button></div>${dataFolderGuide()}<div class="setting-row"><div><strong>화면 테마</strong><p>서재와 도구의 밝기를 선택하세요.</p></div><select id="appearance"><option value="light">밝게</option><option value="dark">어둡게</option><option value="system">시스템</option></select></div><div class="setting-row"><div><strong>디자인 테마</strong><p id="settings-design-theme-summary"><span class="theme-inline-dots" aria-hidden="true"><i style="background:var(--bg)"></i><i style="background:var(--surface)"></i><i style="background:var(--green)"></i></span>${esc(describeDesignTheme(preferences.designTheme))} · 80종 테마와 질감·모서리·글꼴 조합</p></div><button id="settings-design-theme" class="secondary-button" type="button" aria-haspopup="dialog">테마 선택</button></div><details class="settings-backup"><summary>이전 설정 JSON 파일 사용 (선택 사항)</summary><p class="dialog-description small">데이터 폴더를 연결했다면 설정 파일을 따로 저장하거나 불러올 필요가 없습니다. 예전에 저장한 설정 JSON을 옮길 때만 사용하세요.</p><p id="settings-file-name" class="settings-file-name">${settingsFileHandle?esc(settingsFileHandle.name):'연결한 설정 파일이 없습니다.'}</p><div class="settings-file-actions"><button id="settings-save" class="secondary-button">${icon('save',15)} 설정 파일 저장</button><button id="settings-load" class="secondary-button">${icon('folder',15)} 설정 파일 불러오기</button><button id="settings-reload" class="secondary-button" ${settingsFileHandle?'':'disabled'}>${icon('reload',15)} 다시 불러오기</button></div></details><p class="dialog-description small">${usingIOSAppStorage()?'웹사이트 데이터를 지우면 이 앱의 내부 보관함도 함께 지워집니다. 지우기 전에 다른 기기에 동기화한 서재나 파일 앱에 내보낸 문서를 확인하세요.':'브라우저 데이터를 지운 뒤에는 연결하던 전용 폴더를 다시 선택해 복원할 수 있습니다. 기기를 바꾸거나 폴더를 잃을 때를 대비해 전용 폴더 전체를 다른 저장장치에도 복사하세요.'}</p>`,()=>{
+  modal(`<div class="dialog-heading"><h2>LibreMemo 설정</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><div class="settings-app-actions" role="group" aria-label="앱 실행과 정보"><button id="settings-help" class="secondary-button" type="button" aria-haspopup="dialog">${icon('help',15)} 도움말</button><button id="settings-execution" class="secondary-button" type="button">${icon('external',15)} 실행과 앱 전달</button><button id="settings-about" class="secondary-button" type="button" aria-haspopup="dialog">${icon('info',15)} About</button></div><div class="setting-row"><div><strong>기기 간 동기화</strong><p>문서·주석·북마크·읽기 위치·이력을 주고받고, 앱 설정도 선택해 맞춥니다. 휴지통은 제외합니다.</p></div><button id="settings-sync" class="secondary-button">연결</button></div><p class="local-only-note">${icon('check',15)} 문서·주석·설정은 기기에 저장합니다. 기기 간 동기화는 연결할 때만 암호화해 전송합니다.</p><div class="setting-row"><div><strong>AI 검색</strong><p>선택한 글을 보낼 LLM을 등록하고 사용할 것을 체크합니다.</p></div><button id="settings-ai-search" class="secondary-button">관리</button></div><div class="setting-row"><div><strong>데이터 폴더</strong><p id="settings-folder-status">${esc(folderStatusText())}</p></div><button id="settings-folder" class="secondary-button">${folder||usingIOSAppStorage()?'관리':'폴더 연결'}</button></div>${dataFolderGuide()}<div class="setting-row"><div><strong>화면 테마</strong><p>서재와 도구의 밝기를 선택하세요.</p></div><select id="appearance"><option value="light">밝게</option><option value="dark">어둡게</option><option value="system">시스템</option></select></div><div class="setting-row"><div><strong>디자인 테마</strong><p id="settings-design-theme-summary"><span class="theme-inline-dots" aria-hidden="true"><i style="background:var(--bg)"></i><i style="background:var(--surface)"></i><i style="background:var(--green)"></i></span>${esc(describeDesignTheme(preferences.designTheme))} · 80종 테마와 질감·모서리·글꼴 조합</p></div><button id="settings-design-theme" class="secondary-button" type="button" aria-haspopup="dialog">테마 선택</button></div><div class="setting-row"><div><strong>UI 글자 크기</strong><p>화면 전체와 사이드바·서재·도구의 글자 크기를 조절합니다.</p></div><button id="settings-ui-font" type="button" class="secondary-button" aria-haspopup="dialog">크기 조절</button></div><details class="settings-backup"><summary>이전 설정 JSON 파일 사용 (선택 사항)</summary><p class="dialog-description small">데이터 폴더를 연결했다면 설정 파일을 따로 저장하거나 불러올 필요가 없습니다. 예전에 저장한 설정 JSON을 옮길 때만 사용하세요.</p><p id="settings-file-name" class="settings-file-name">${settingsFileHandle?esc(settingsFileHandle.name):'연결한 설정 파일이 없습니다.'}</p><div class="settings-file-actions"><button id="settings-save" class="secondary-button">${icon('save',15)} 설정 파일 저장</button><button id="settings-load" class="secondary-button">${icon('folder',15)} 설정 파일 불러오기</button><button id="settings-reload" class="secondary-button" ${settingsFileHandle?'':'disabled'}>${icon('reload',15)} 다시 불러오기</button></div></details><p class="dialog-description small">${usingIOSAppStorage()?'웹사이트 데이터를 지우면 이 앱의 내부 보관함도 함께 지워집니다. 지우기 전에 다른 기기에 동기화한 서재나 파일 앱에 내보낸 문서를 확인하세요.':'브라우저 데이터를 지운 뒤에는 연결하던 전용 폴더를 다시 선택해 복원할 수 있습니다. 기기를 바꾸거나 폴더를 잃을 때를 대비해 전용 폴더 전체를 다른 저장장치에도 복사하세요.'}</p>`,()=>{
     $('#settings-help').onclick=helpDialog;$('#settings-execution').onclick=()=>{$('#dialog').close();activate('execution');$('#execution h1').focus({preventScroll:true});};$('#settings-about').onclick=aboutDialog;
     $('#settings-sync').onclick=deviceSyncDialog;$('#settings-ai-search').onclick=aiSearchDialog;
     $('#settings-folder').onclick=safely(()=>chooseFolder({onConnected:settingsDialog}));
     $('#appearance').value=preferences.theme; $('#appearance').onchange=safely(e=>changePreferences({theme:e.target.value}));
     $('#settings-design-theme').onclick=()=>designThemeDialog();
+    $('#settings-ui-font').onclick=()=>openUIFontPanel({modal,settings:()=>preferences.uiFontSizes,preview:displayUIFonts,save:safely(sizes=>changePreferences({uiFontSizes:sizes})),onBack:()=>{settingsDialog();$('#settings-ui-font').focus();}});
     $('#settings-save').onclick=safely(saveSettingsBackup);$('#settings-load').onclick=safely(importSettingsBackup);$('#settings-reload').onclick=safely(async()=>{await restoreSettings(settingsFileHandle);settingsDialog();});
   });
 }
-function applyTheme(theme=preferences.theme,designTheme=preferences.designTheme) { const resolved=applyDesignThemeToDocument(document,currentBrightness(theme),designTheme);ensureBundledThemeFont(resolved.usesBundledFont);stopAppSidebarResize();applyAppSidebarWidth();for(const tab of tabs){if(tab.reader?.documentSidebarUI)styleNativeSidebar(tab.reader.documentSidebarUI);if(tab.reader&&$('#sidebar').annotationReader===tab.reader)youtubeOutlineStyle($('#sidebar'),tab.reader);tab.reader?.syncSourceThemeControls?.();tab.reader?.updateReadingControls?.();} }
+function displayUIFonts(sizes) {
+  const css = uiFontStyle(sizes);
+  if (css === currentUIFontStyle) return;
+  currentUIFontStyle = css;
+  document.documentElement.toggleAttribute('data-custom-ui-fonts',!!css);
+  applyUIFontStyle(document,css);
+  for (const tab of tabs) if (tab.reader?.doc) applyUIFontStyle(tab.reader.doc,css);
+}
+function applyTheme(theme=preferences.theme,designTheme=preferences.designTheme) { displayUIFonts(preferences.uiFontSizes);const resolved=applyDesignThemeToDocument(document,currentBrightness(theme),designTheme);ensureBundledThemeFont(resolved.usesBundledFont);stopAppSidebarResize();applyAppSidebarWidth();for(const tab of tabs){if(tab.reader?.documentSidebarUI)styleNativeSidebar(tab.reader.documentSidebarUI);if(tab.reader&&$('#sidebar').annotationReader===tab.reader)youtubeOutlineStyle($('#sidebar'),tab.reader);tab.reader?.syncSourceThemeControls?.();tab.reader?.updateReadingControls?.();} }
 function applyToolbarPosition(){const bar=$('#toolbar'),p=preferences.toolbarPosition;if(!p){bar.style.left='50%';bar.style.top='';bar.style.bottom='';bar.style.transform='';return;}bar.style.transform='none';bar.style.bottom='auto';bar.style.left=(8+p.x*Math.max(0,innerWidth-bar.offsetWidth-16))+'px';bar.style.top=(8+p.y*Math.max(0,innerHeight-bar.offsetHeight-42))+'px';}
 function changePreferences(patch){
   const nextDesignTheme=patch.designTheme?{...preferences.designTheme,...patch.designTheme}:preferences.designTheme;
@@ -385,6 +397,7 @@ function changePreferences(patch){
 function reloadStoredPreferences() {
   const previous = preferences.annotation;
   preferences = loadPreferences(localStorage);
+  $('#dialog .ui-font-panel')?.dispatchEvent(new Event('ui-fonts-restored'));
   const current = preferences.annotation, r = reader();
   if (!r) return;
   const changedPreset = previous.paletteId !== current.paletteId;
@@ -796,6 +809,7 @@ async function openRecord(record, prepared = null, {deferReady = false, sourceId
     onSidebarView:(mode,panel,documentReader)=>renderSidebar(mode,{panel,embedded:true,documentReader}),
     onSidebarCounts:(panel,documentReader)=>updateSidebarCounts(panel,documentReader),
     sidebarWidth:()=>preferences.sidebarWidth,
+    uiFontStyle:()=>currentUIFontStyle,
     readingLayoutDefault:()=>preferences.readingLayout,
     onReadingLayoutDefault:layout=>changePreferences({readingLayout:layout}),
     viewerPresets:()=>preferences.viewerPresets,viewerDefaults:()=>preferences.viewerDefaults,
@@ -2250,7 +2264,7 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
   $('[data-sidebar-view="outline"]',panel).hidden=false;
   $$('[data-sidebar-view]',panel).forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.sidebarView===mode)));
   updateSidebarCounts(panel,r);
-  const content=$('.sidebar-content',panel);content.hidden=false;
+  const content=$('.sidebar-content',panel);content.dataset.uiFontView=mode;content.hidden=false;
   if(mode==='search'){
     content.innerHTML=`<div class="search-field loaded-search-field"><input id="${id('document-search')}" aria-label="불러온 부분 검색어" placeholder="불러온 부분에서 찾기" autocomplete="off"><button type="button" id="${id('search-clear')}" class="icon-button loaded-search-clear" aria-label="불러온 부분 검색어 지우기" title="검색어 지우기" hidden>${icon('close',14)}</button></div><div class="search-navigation loaded-search-navigation"><span id="${id('search-count')}" role="status" aria-live="polite">검색어를 입력하세요.</span><button id="${id('search-prev')}" class="icon-button" aria-label="이전 검색 결과" disabled>${icon('back')}</button><button id="${id('search-next')}" class="icon-button" aria-label="다음 검색 결과" disabled>${icon('forward')}</button></div><div id="${id('search-results')}"></div>`;
     const input=q('document-search'),clear=q('search-clear');input.value=r.sidebarSearchQuery??r.searchQuery??'';clear.hidden=!input.value;

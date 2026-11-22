@@ -12,7 +12,7 @@ test('pen and highlighter colors stay independent through storage and portable s
 });
 test('all portable preferences round trip through a local settings file',async()=>{const preferences=normalizePreferences({theme:'dark',librarySort:'title',librarySortDirection:'desc',libraryView:'list',annotation:{color:'#123456',width:9,opacity:.7,penTTL:10},toolbarPosition:{x:.2,y:.8}});const json=serializeSettings(preferences,'My HTML');const result=await readSettingsFile(new File([json],'settings.json'));assert.deepEqual(result,{preferences,folderName:'My HTML'});assert.equal(JSON.parse(json).storage,'local');});
 test('preferences stay in local storage and migrate the existing theme',()=>{const local=storage();local.setItem('htmlmemo-theme','dark');assert.equal(loadPreferences(local).theme,'dark');const expected=storePreferences({theme:'system',librarySort:'created'},local);assert.deepEqual(loadPreferences(local),expected);assert.ok(local.values.has(PREFERENCES_KEY));});
-test('a backup contains no document data, file handles or arbitrary properties',()=>{const text=serializeSettings({theme:'light',documents:['PRIVATE-DOCUMENT'],fileHandle:{name:'PRIVATE-PATH'},annotation:{color:'#123456',secret:'PRIVATE-TOKEN'}},'folder');assert.ok(!text.includes('PRIVATE'));assert.deepEqual(Object.keys(JSON.parse(text).preferences),['readingLayout','aiSearch','viewerPresets','viewerDefaults','theme','designTheme','librarySort','librarySortDirection','libraryView','annotation','toolbarPosition','sidebarWidth']);});
+test('a backup contains no document data, file handles or arbitrary properties',()=>{const text=serializeSettings({theme:'light',documents:['PRIVATE-DOCUMENT'],fileHandle:{name:'PRIVATE-PATH'},annotation:{color:'#123456',secret:'PRIVATE-TOKEN'}},'folder');assert.ok(!text.includes('PRIVATE'));assert.deepEqual(Object.keys(JSON.parse(text).preferences),['readingLayout','aiSearch','viewerPresets','viewerDefaults','theme','designTheme','uiFontSizes','librarySort','librarySortDirection','libraryView','annotation','toolbarPosition','sidebarWidth']);});
 test('sidebar width migrates old settings, round-trips with portable preferences and rejects invalid values',()=>{
   const local=storage();assert.equal(loadPreferences(local).sidebarWidth,300);assert.equal(normalizePreferences({}).sidebarWidth,300);
   const preferences=storePreferences({sidebarWidth:420.4},local);assert.equal(loadPreferences(local).sidebarWidth,420);assert.equal(parseSettings(serializeSettings(preferences)).preferences.sidebarWidth,420);
@@ -88,4 +88,23 @@ test('highlight names validate portable input, preserve literal text and omit bl
   assert.deepEqual(input({'preset-7':{'#fde047':'  '}}).highlightColorNames,{});
   const literal='<질문> & "근거"';
   assert.deepEqual(namedHighlightColors(input({'preset-7':{'#fde047':literal}})),[{color:'#fde047',name:literal}]);
+});
+
+test('UI type sizes retain independent overrides through local storage, backup and device sync', async()=>{
+  const {effectiveUIFonts,uiFontStyle}=await import('../public/src/ui-fonts.js');
+  const {syncSettingsDifferences,sameSyncSettings}=await import('../public/src/sync-adapter.js');
+  const settings={all:111,sidebar:135,outline:100,search:157,'library-title':72};
+  const local=storage(), saved=storePreferences({uiFontSizes:settings},local);
+  assert.deepEqual(loadPreferences(local).uiFontSizes,settings);
+  assert.deepEqual(parseSettings(serializeSettings(saved)).preferences.uiFontSizes,settings);
+  const values=effectiveUIFonts(saved.uiFontSizes);
+  assert.equal(values.outline,100);assert.equal(values.annotations,135);assert.equal(values.search,157);
+  assert.equal(values.reader,111);assert.equal(values['library-title'],72);
+  const pack=uiFontSizes=>({entries:{[PREFERENCES_KEY]:JSON.stringify({uiFontSizes})}});
+  assert.ok(sameSyncSettings(pack({}),pack({all:100})));
+  assert.ok(!sameSyncSettings(pack(settings),pack({all:111,sidebar:135})));
+  assert.ok(syncSettingsDifferences(pack(settings),pack({})).some(row=>row.label.includes('목차')&&row.local==='100%'));
+  assert.equal(uiFontStyle({}), '');assert.doesNotMatch(uiFontStyle(settings),/:root\{font-size/);
+  for(const value of [0,59,201,100.5,'120',null,{}])assert.throws(()=>normalizePreferences({uiFontSizes:{sidebar:value}}),/UI 글자 크기/);
+  assert.deepEqual(normalizePreferences({}).uiFontSizes,{});
 });

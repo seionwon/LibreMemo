@@ -3152,3 +3152,72 @@ test('real Chrome: Pages-only TTS diagram paint stays thin and leaves SVG glyphs
   }catch(error){if(chrome){await mkdir(join(root,'test-results'),{recursive:true});await writeFile(join(root,'test-results/pages-only-tts-diagram-failure.png'),await chrome.page.screenshot());await writeFile(join(root,'test-results/pages-only-tts-diagram-failure.json'),JSON.stringify({message:error.message,stack:error.stack,errors:chrome.errors,state:await chrome.page.evaluate('({speech:window.diagramSpeech?.map(u=>u.text),toast:document.querySelector("#toast")?.textContent})').catch(()=>null)},null,2));}throw error;}
   finally{await chrome?.close();await new Promise(resolve=>server.close(resolve));await rm(folder,{recursive:true,force:true});}
 });
+
+test('real Chrome: Pages-only UI font sizes persist and reach both kinds of sidebar independently of the body',{timeout:120000},async()=>{
+  await prepareAssets();
+  const server=createServer();let chrome;
+  try {
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    chrome=await launchChrome();
+    const page=chrome.page,url=process.env.HTMLMEMO_SIDEBAR_TEST_URL||'http://127.0.0.1:'+server.address().port+'/';
+    const frame='document.querySelector(".document-host:not([hidden]) iframe.document-frame")';
+    const doc=frame+'.contentDocument',ready=frame+'?.style.visibility==="visible"';
+    const cssSize=selector=>page.evaluate('(()=>{const n='+selector+';return parseFloat(n.ownerDocument.defaultView.getComputedStyle(n).fontSize)})()');
+    const outer=s=>'document.querySelector('+JSON.stringify(s)+')';
+    const inside=s=>doc+'.querySelector('+JSON.stringify(s)+')';
+    const field=async(key,value)=>{
+      const selector='#ui-font-'+key;
+      await page.evaluate('(()=>{const n=document.querySelector('+JSON.stringify(selector)+');n.value='+JSON.stringify(String(value))+';n.dispatchEvent(new Event("input",{bubbles:true}));n.dispatchEvent(new Event("change",{bubbles:true}));})()');
+    };
+    const saved='document.querySelector("#data-folder-status").textContent==="폴더 저장 완료"';
+    await page.send('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false});
+    await page.navigate(url);await page.waitFor(saved);
+    await page.click('#paste-button');
+    await page.evaluate('document.querySelector("#paste-text").value="# 첫 항목\\n\\n글자 크기 비교 본문입니다.\\n\\n## 둘째 항목"');
+    await page.click('#paste-save');await page.waitFor(ready+'&&document.querySelector("#sidebar [data-heading]")');
+    const bodyBefore=await cssSize(inside('p')),outline=outer('#sidebar [data-heading]'),baseline=await cssSize(outline);
+    await clickSettingsAction(page,'#settings-ui-font');
+    await field('all',111);await field('sidebar',131);await field('outline',157);await field('search',143);
+    assert.equal(await page.evaluate('document.querySelector("#ui-font-bookmarks").value'),'131');
+    await page.click('#dialog [data-dialog-close]');
+    assert.ok(Math.abs(await cssSize(outline)-baseline*1.57)<.05);
+    assert.equal(await cssSize(inside('p')),bodyBefore);
+    assert.ok(Math.abs(await cssSize(outer('.document-host:not([hidden]) [data-action=font-larger]'))-13.32)<.05);
+    if(await page.evaluate('document.querySelector("#sidebar").hidden'))await toggleDocumentSidebarFromToolbar(page);
+    await page.click('#sidebar [data-sidebar-view=search]');
+    assert.ok(Math.abs(await cssSize(outer('#document-search'))-17.16)<.05);
+    await page.click('#sidebar [data-sidebar-view=bookmarks]');
+    assert.ok(Math.abs(await cssSize(outer('#add-bookmark'))-15.72)<.05);
+    const source=await readFile(join(root,'tests/fixtures/source-toolbar.html'),'utf8');
+    await page.evaluate('(()=>{const t=new DataTransfer();t.items.add(new File(['+JSON.stringify(source)+'],"UI-font-book.html",{type:"text/html"}));const n=document.querySelector("#file-input");n.files=t.files;n.dispatchEvent(new Event("change",{bubbles:true}));})()');
+    await page.waitFor(ready+'&&'+doc+'.querySelector("[data-htmlmemo-native-sidebar] a")');
+    assert.ok(Math.abs(await cssSize(inside('#reader-nav>a'))-18.84)<.05);
+    assert.ok(Math.abs(await cssSize(inside('#reader-larger'))-13.32)<.05);
+    const nativeBody=await cssSize(inside('main p'));
+    await clickSettingsAction(page,'#settings-ui-font');
+    await page.click('[data-font-inherit=outline]');
+    assert.ok(Math.abs(await cssSize(inside('#reader-nav>a'))-15.72)<.05);
+    assert.equal(await cssSize(inside('main p')),nativeBody);
+    await page.click('#dialog [data-dialog-close]');
+    await page.waitFor(saved);await page.click('#library-tab');
+    await page.waitFor('!!document.querySelector(".document-grid .list-filename")');
+    await clickSettingsAction(page,'#settings-ui-font');
+    await page.click('.ui-font-group:nth-of-type(2)>summary');
+    await field('library-title',164);await field('library-info',81);
+    assert.ok(Math.abs(await cssSize(outer('.document-grid .list-title'))-19.68)<.05);
+    assert.ok(Math.abs(await cssSize(outer('.document-grid .list-filename'))-7.29)<.05);
+    await page.click('#dialog [data-dialog-close]');await page.waitFor(saved);
+    await page.navigate(url);await page.waitFor(saved);await clickSettingsAction(page,'#settings-ui-font');
+    assert.equal(await page.evaluate('document.querySelector("#ui-font-all").value'),'111');
+    assert.equal(await page.evaluate('document.querySelector("#ui-font-outline").value'),'131');
+    assert.equal(await page.evaluate('document.querySelector("#ui-font-search").value'),'143');
+    await page.send('Emulation.setDeviceMetricsOverride',{width:320,height:568,deviceScaleFactor:1,mobile:false});
+    await field('all',200);
+    assert.ok(await page.evaluate('(()=>{const d=document.querySelector("#dialog"),p=d.querySelector(".ui-font-panel"),r=d.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1&&p.scrollWidth<=p.clientWidth+1})()'));
+    await page.click('#ui-font-reset');assert.equal(await page.evaluate('document.querySelector("#ui-font-search").value'),'100');
+    assert.equal(await page.evaluate('!!document.querySelector("#htmlmemo-ui-font-style")'),false);
+    assert.deepEqual(chrome.errors,[]);
+  } finally {
+    await chrome?.close();await new Promise(resolve=>server.close(resolve));
+  }
+});

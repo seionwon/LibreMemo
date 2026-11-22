@@ -1,3 +1,4 @@
+import {UI_FONT_FIELDS} from './ui-fonts.js';
 import {listDocuments,getDocument,listRevisions,readLibrary,commitDeviceSync,syncRecordSnapshot,documentSource} from './storage.js';
 import {portableRecord,validateState,validateSettings,folderSettings} from './data-folder.js';
 import {localFileIdentity,localFileWithType,sameLocalFile} from './local-files.js';
@@ -77,6 +78,10 @@ export function syncSettingsDifferences(local,remote){
   const add=(label,x,y,different=JSON.stringify(x)!==JSON.stringify(y))=>{if(different)rows.push({label,local:String(x??'기본값'),remote:String(y??'기본값')});};
   const themes={light:'밝게',dark:'어둡게',system:'시스템 설정'},views={card:'카드',list:'목록'};
   add('화면 테마',themes[pa.theme],themes[pb.theme]);add('디자인 테마',describeDesignTheme(pa.designTheme),describeDesignTheme(pb.designTheme),JSON.stringify(pa.designTheme)!==JSON.stringify(pb.designTheme));add('서재 보기',views[pa.libraryView],views[pb.libraryView]);
+  for(const [key,label,parent] of UI_FONT_FIELDS){
+    const format=p=>p.uiFontSizes[key]===undefined?(parent?'상위 설정 따름':'100%'):p.uiFontSizes[key]+'%';
+    add('UI 글자 크기 · '+label,format(pa),format(pb));
+  }
   const sort=p=>({modified:'수정일',created:'저장일',title:'제목'})[p.librarySort]+' · '+(p.librarySortDirection==='asc'?'오름차순':'내림차순');add('서재 정렬',sort(pa),sort(pb));
   for(const [key,label,format]of [['color','펜 색상',v=>v],['highlightColor','형광펜 색상',v=>v],['width','펜 굵기',v=>v+''],['opacity','형광펜/채움 투명도',v=>Math.round(v*100)+'%'],['penTTL','펜 표시 시간',v=>v?v+'초':'계속 표시'],['customColors','사용자 색상',v=>v.length?v.join(', '):'없음'],['customPalettes','사용자 팔레트',v=>v.length?v.map(p=>p.name+': '+p.colors.join(', ')).join(' / '):'없음']])add(label,format(pa.annotation[key]),format(pb.annotation[key]));
   const palette=p=>(PRESET_PALETTES.find(v=>v.id===p.annotation.paletteId)||p.annotation.customPalettes.find(v=>v.id===p.annotation.paletteId))?.name||'사용자 팔레트';add('색상 팔레트',palette(pa),palette(pb),pa.annotation.paletteId!==pb.annotation.paletteId);

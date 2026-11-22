@@ -628,12 +628,12 @@ export function createReadAloud(reader) {
     bar.appendChild(makeBtn('⏮', lb('prev', 'Previous sentence'), function () { jumpBy(-1); }));
     bar.appendChild(makeBtn('⏭', lb('next', 'Next sentence'), function () { jumpBy(1); }));
     btnRate = makeBtn(rate + '×', lb('speed', 'Reading speed'), cycleRate);
-    btnRate.style.fontSize = '10px'; btnRate.style.fontWeight = '700';
+    btnRate.classList.add('mstts-speed'); btnRate.style.fontWeight = '700';
     bar.appendChild(btnRate);
     var gear=makeBtn('⚙', lb('settings', 'Read-aloud settings'), togglePanel);gear.setAttribute('data-tts-gear','');bar.appendChild(gear);
     bar.appendChild(makeBtn('⏹', lb('stop', 'Stop'), stop));
     cnt = U.createElement('span'); cnt.className = 'mstts-count'; bar.appendChild(cnt);
-    var closer=makeBtn('✕', lb('close', 'Close the player'), close);closer.style.fontSize='11px';bar.appendChild(closer);
+    var closer=makeBtn('✕', lb('close', 'Close the player'), close);closer.classList.add('mstts-close');bar.appendChild(closer);
     // Drag by the bar itself (buttons stop propagation), mirroring the in-app player.
     var drag = null;
     bar.addEventListener('pointerdown', function (e) {

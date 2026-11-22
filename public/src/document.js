@@ -106,7 +106,7 @@ function clearReaderArtifacts(root) {
   // The reader inserts controls and layout overrides alongside the source.
   // Remove its UI only when opening or exporting, so it survives annotation redraws.
   restoreSourceReadingControls(root);
-  for(const node of root.querySelectorAll?.('#htmlmemo-toc-toggle-style,#htmlmemo-sidebar-style,#htmlmemo-toc-resize-style,#htmlmemo-doc-sidebar-style,#htmlmemo-reading-controls-style,#htmlmemo-reading-font-style,#htmlmemo-source-font-style,#htmlmemo-reading-theme-style,[data-htmlmemo-tts-paint],[data-htmlmemo-ui="video-notes"]')||[])node.remove();
+  for(const node of root.querySelectorAll?.('#htmlmemo-ui-font-style,#htmlmemo-toc-toggle-style,#htmlmemo-sidebar-style,#htmlmemo-toc-resize-style,#htmlmemo-doc-sidebar-style,#htmlmemo-reading-controls-style,#htmlmemo-reading-font-style,#htmlmemo-source-font-style,#htmlmemo-reading-theme-style,[data-htmlmemo-tts-paint],[data-htmlmemo-ui="video-notes"]')||[])node.remove();
   for(const button of root.querySelectorAll?.('[data-htmlmemo-source-max],[data-htmlmemo-source-min],[data-htmlmemo-font-smaller],[data-htmlmemo-font-larger]')||[]){
     if(button.hasAttribute('data-htmlmemo-source-max'))button.toggleAttribute('disabled',button.getAttribute('data-htmlmemo-source-max')==='true');
     if(button.hasAttribute('data-htmlmemo-source-min'))button.toggleAttribute('disabled',button.getAttribute('data-htmlmemo-source-min')==='true');

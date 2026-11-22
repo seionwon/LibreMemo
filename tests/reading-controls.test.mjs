@@ -306,7 +306,7 @@ test('font family selector changes font family when possible, disables for fixed
   assert.equal(r.fontControl.disabled,false);
   assert.equal(r.fontControl.value,'default');
   assert.equal(r.fontControl.title,'글꼴 종류: 기본');
-  assert.match(r.readingControlsStyle(),/\[data-htmlmemo-reading-font\],\[data-htmlmemo-doc-topbar\] select#reader-font,\[data-htmlmemo-doc-topbar\] select\[data-reading-font\]\{[^}]*width:58px!important;max-width:58px!important/);
+  assert.match(r.readingControlsStyle(),/\[data-htmlmemo-reading-font\],\[data-htmlmemo-doc-topbar\] select#reader-font,\[data-htmlmemo-doc-topbar\] select\[data-reading-font\]\{[^}]*width:var\(--lm-reader-font-width,58px\)!important;max-width:var\(--lm-reader-font-width,58px\)!important/);
   assert.equal(r.setReadingFontFamily('serif'),true);
   assert.equal(r.metadata.view.fontFamily,'serif');
   assert.equal(r.fontControl.value,'serif');
@@ -475,4 +475,20 @@ test('A−, A reset, and A+ step monotonically smaller and larger around the def
   click(rLarger);
   assert.equal(rem.r.sourceFontExtraSteps,1);
   assert.match(rem.doc.querySelector('#htmlmemo-source-font-style').textContent,/17\.600px/);
+});
+
+test('interface fonts stay confined to the reader UI and out of document exports',async()=>{
+  const {applyUIFontStyle,uiFontStyle}=await import('../public/src/ui-fonts.js');
+  const {r,doc}=fixture('<header class="reader-head"><button>A+</button><button>A−</button></header>');
+  const css=uiFontStyle({sidebar:157,reader:130});
+  r.callbacks.uiFontStyle=()=>css;
+  const text=doc.querySelector('main').innerHTML;
+  r.setupReadingControls();r.setupReadingControls();
+  assert.equal(doc.querySelectorAll('#htmlmemo-ui-font-style').length,1);
+  assert.match(doc.getElementById('htmlmemo-ui-font-style').textContent,/--lm-font-outline:1.57px/);
+  assert.equal(doc.querySelector('main').innerHTML,text);assert.equal(r.readingFontScale(),1);
+  const exported=serializeHTML(doc,r.metadata);
+  assert.doesNotMatch(exported,/htmlmemo-ui-font-style|--lm-font-outline|uiFontSizes/);
+  assert.equal(doc.querySelectorAll('#htmlmemo-ui-font-style').length,1);
+  applyUIFontStyle(doc,'');assert.equal(doc.getElementById('htmlmemo-ui-font-style'),null);
 });

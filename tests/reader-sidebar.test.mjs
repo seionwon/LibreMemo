@@ -270,7 +270,7 @@ test('native search fields share loaded-part metrics and equal top/between spaci
   const css=await readFile(new URL('../public/design.tailwind.css',import.meta.url),'utf8');
   const shared=css.match(/\[data-htmlmemo-doc-sidebar-ui\] \.sidebar-book-search input,\[data-htmlmemo-doc-sidebar-ui\] \.search-field input\{([^}]+)\}/)?.[1];
   assert.ok(shared,'both search inputs must use one rule');
-  for(const declaration of ['display:block!important','width:100%!important','height:auto!important','margin:0!important','padding:8px 32px 8px 8px!important','font:400 12px/1.6 var(--app-font)!important'])assert.ok(shared.includes(declaration),declaration);
+  for(const declaration of ['display:block!important','width:100%!important','height:auto!important','margin:0!important','padding:8px 32px 8px 8px!important','font:400 calc(12 * var(--lm-font-unit,1px))/1.6 var(--app-font)!important'])assert.ok(shared.includes(declaration),declaration);
   assert.match(css,/\.sidebar-content\{--sidebar-search-gap:10px;padding:var\(--sidebar-search-gap\) 2px;/);
   assert.match(css,/\.sidebar-book-search\{display:flow-root;margin:0 0 var\(--sidebar-search-gap\);padding:0;border:0\}/);
   assert.match(css,/\.sidebar-book-search>\[data-htmlmemo-book-search-part\]:not\(input\)\{margin:0!important;padding:0!important;border:0!important\}/);

@@ -343,8 +343,8 @@ test('document top header bar is compacted to 24px without vertical padding and 
   r.setupDocumentTocResize();
   assert.equal(topbar.getAttribute('data-htmlmemo-doc-topbar'),'');
   assert.equal(doc.documentElement.getAttribute('data-htmlmemo-topbar-active'),'');
-  assert.match(style.textContent,/\[data-htmlmemo-doc-topbar\],\[data-htmlmemo-doc-topbar-item\]\{height:24px!important;min-height:24px!important;max-height:24px!important;padding-top:0!important;padding-bottom:0!important/);
-  assert.match(style.textContent,/--book-header-height:24px!important/);
+  assert.match(style.textContent,/\[data-htmlmemo-doc-topbar\],\[data-htmlmemo-doc-topbar-item\]\{height:var\(--lm-reader-row,24px\)!important;min-height:var\(--lm-reader-row,24px\)!important;max-height:var\(--lm-reader-row,24px\)!important;padding-top:0!important;padding-bottom:0!important/);
+  assert.match(style.textContent,/--book-header-height:var\(--lm-reader-row,24px\)!important/);
   const saved=serializeHTML(doc,r.metadata);
   assert.doesNotMatch(saved,/data-htmlmemo-topbar-|data-htmlmemo-doc-topbar|--htmlmemo-topbar-/);
 });
