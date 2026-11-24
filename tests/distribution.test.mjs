@@ -341,7 +341,9 @@ test('the settings icon preserves library, web opening, HTML import, app deliver
   click('#settings-button');
   for(const id of ['#settings-help','#settings-execution','#settings-about'])assert.ok(doc.querySelector(id).closest('#dialog'));
   assert.equal(doc.querySelector('#settings-execution').previousElementSibling.id,'settings-help');
-  click('#settings-help');assert.equal(doc.querySelector('.help-browser h2').textContent,'LibreMemo 도움말');
+  // Help loads its code on first use, so it opens a moment after the click.
+  click('#settings-help');for(let i=0;i<400&&!doc.querySelector('.help-browser h2');i++)await new Promise(resolve=>setTimeout(resolve,5));
+  assert.equal(doc.querySelector('.help-browser h2').textContent,'LibreMemo 도움말');
   const helpSearch=doc.querySelector('#help-search');helpSearch.value='데이터 복원';helpSearch.oninput({isComposing:false});assert.ok(doc.querySelector('.help-results'));
   click('#help-back-settings');assert.equal(doc.activeElement.id,'settings-help');
   click('#settings-execution');

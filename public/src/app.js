@@ -1,8 +1,7 @@
-import { $, $$, icon, escapeHTML as esc, uid, filename, normalizeURL, displayHost, formatDate, formatBytes, download, sidebarWidthAction, readerSidebarCSS, isSecurityWarning, formatOutlineTitle } from './utils.js';
+import { $, $$, icon, escapeHTML as esc, safeWebURL, uid, filename, normalizeURL, displayHost, formatDate, formatBytes, download, sidebarWidthAction, readerSidebarCSS, isSecurityWarning, formatOutlineTitle } from './utils.js';
 import { parseHTML, SCRIPT_CSP, serializeBookSource, textIndex } from './document.js';
 import { bookmarkTextLocation } from './bookmark-location.js';
 import { SaveQueue, AnnotationCheckpoints, ANNOTATION_LABELS } from './model.js';
-import { openEditionProbe, migrateAnnotations } from './migrate.js';
 import { Reader } from './reader.js';
 import { preparePDF, isPDFDocument } from './pdf-document.js';
 import {prepareOffice} from './office-import.js';
@@ -12,7 +11,7 @@ import {canSleep,cancelTabSleep,scheduleTabSleep} from './tab-sleep.js';
 import {AI_TEXT_LIMIT,aiSearchRequest,aiSearchURL} from './ai-search.js';
 import { listDocuments, getDocument, getDocumentPreview, trashDocument, restoreDocument, deleteDocument, deleteTrashedDocuments, getSetting, setSetting, saveDocumentHTML, listRevisionPeriods, listRevisionDay, adjacentRevisionDay, getRevision, putDocumentRevision, checkpointAnnotations, putDocumentView, putDocumentStar, replaceDocumentBody, putDocumentSourceIdentity, writeExternalHTML, updateLibraryFolders, onStorageChange, readLibrary } from './storage.js';
 import {CardPreviewQueue,cardPreviewKey,savedCardPicture} from './card-previews.js';
-import {readWebPage,pastedPage,PASTE_LIMIT,isWebSearch,BrowserTabs} from './web.js';
+import {readWebPage,PASTE_LIMIT,isWebSearch,BrowserTabs} from './web.js';
 import { readLocalHTML, droppedHTMLFiles, findLocalDuplicates, identifyLocalFile, htmlExportName } from './local-files.js';
 import { normalizePreferences, loadPreferences, storePreferences, serializeSettings, readSettingsFile, PRESET_COLORS, PRESET_PALETTES, normalizeHexColor, hexToRgb, rgbToHex, hexToHsv, hsvToHex } from './preferences.js';
 import {HIGHLIGHT_NAME_LENGTH, namedHighlightColors} from './highlight-color-names.js';
@@ -20,10 +19,8 @@ import {bundledExample,bundledFontBytes} from './distribution.js';
 import { InstallController, isIOS, installableLocation, installationURL, publicAppURL } from './install.js';
 import { APP_VERSION } from './version.js';
 import {UpdateController} from './updates.js';
-import { openDeviceSync } from './sync-ui.js';
 import {uiFontStyle,applyUIFontStyle} from './ui-fonts.js';
 import {openUIFontPanel} from './ui-fonts-panel.js';
-import {openHelp} from './help.js';
 import { DataFolder, supportsDataFolder, supportsIOSAppStorage, openIOSAppStorage, isIOSAppStorageHandle, CHROME_REQUIRED_MESSAGE, createStorageSubfolder, storageFolderName } from './data-folder.js';
 import {validateFolders,folderPath,folderDescendants,editLibraryFolders,nextStarredAt,LibraryIndex} from './library-folders.js';
 import {TEXT_STYLE_PRESETS,TEXT_SIZE_MIN,TEXT_SIZE_MAX,validTextStyle,stylePreview} from './text-style.js';
@@ -55,6 +52,13 @@ let tabLayout='';
 let localImportQueue=Promise.resolve();
 let historyRequest=0;
 const browserTabs=new BrowserTabs(window);let lastWebTab=null;
+// Screens and tools that open only on request load their code on first use, so
+// starting the app does not fetch and parse help text, device sync, the QR
+// reader, edition migration or the Markdown renderer.
+const openHelp=options=>void import('./help.js').then(module=>module.openHelp(options)).catch(error=>showError(error));
+const openDeviceSync=options=>void import('./sync-ui.js').then(module=>module.openDeviceSync(options)).catch(error=>showError(error));
+const openEditionProbe=async(...args)=>(await import('./migrate.js')).openEditionProbe(...args);
+const migrateAnnotations=async(...args)=>(await import('./migrate.js')).migrateAnnotations(...args);
 const active = () => tabs.find(tab => tab.id === activeId);
 const reader = () => active()?.reader;
 const savePicker = () => typeof window.showSaveFilePicker === 'function';
@@ -236,6 +240,7 @@ function pasteTextDialog(tab=webContext()){
   modal(`<form id="paste-form"><div class="dialog-heading"><h2>텍스트 붙여넣기</h2><button type="button" class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p class="dialog-description">일반 글이나 마크다운을 붙여넣으세요. 제목·목록·표·강조·코드 서식을 자동으로 적용해 서재에 저장하고 주석을 남깁니다.</p><label class="paste-label" for="paste-title">제목</label><input id="paste-title" class="paste-title" maxlength="300" value="${esc(!search&&tab?.title||'붙여넣은 글')}"><label class="paste-label" for="paste-source">원문 주소 (선택)</label><input id="paste-source" class="paste-title" type="url" value="${esc(!search&&tab?.url||'')}" placeholder="Chrome에서 복사한 실제 글의 https:// 주소"><label class="paste-label" for="paste-text">내용</label><textarea id="paste-text" class="paste-text" maxlength="${PASTE_LIMIT}" rows="8" required placeholder="일반 글이나 마크다운을 붙여넣으세요."></textarea><p class="dialog-description small">최대 200,000자 · 이 기기에만 저장${search?' · 검색 주소 대신 실제 글의 주소를 넣으세요.':''}</p><div class="dialog-actions"><button type="button" class="secondary-button" data-dialog-close>취소</button><button id="paste-save" type="submit" class="primary-button">저장하고 주석 달기</button></div></form>`,()=>{
     $('#paste-form').onsubmit=safely(async event=>{
       event.preventDefault();if($('#paste-save').disabled)return;
+      const {pastedPage}=await import('./web-paste.js');
       const snapshot=pastedPage({text:$('#paste-text').value,title:$('#paste-title').value,url:$('#paste-source').value.trim()}),button=$('#paste-save');button.disabled=true;
       try{const saved=await createDocument(snapshot);$('#dialog').close();if(!saved?.queue?.error)toast('붙여넣은 글을 서재에 저장했습니다.');}finally{button.disabled=false;}
     });
@@ -2510,7 +2515,7 @@ async function annotationHistory(tab, selection = {}, valid = () => true) {
 }
 function documentInfo(tab) {
   const m=tab.reader.metadata;
-  modal(`<div class="dialog-heading"><h2>문서 정보</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><dl class="document-info"><dt>제목</dt><dd>${esc(m.title)}</dd><dt>파일</dt><dd>${esc(tab.record.name)}</dd><dt>원본</dt><dd>${m.source?`<a href="${esc(m.source)}" target="_blank" rel="noopener noreferrer">${esc(m.source)}</a>`:'로컬 문서 파일'}</dd><dt>저장 위치</dt><dd>앱 보관함 (원본 파일은 변경하지 않음)</dd><dt>주석</dt><dd>${m.annotations.length}개</dd></dl>${m.warnings.length?`<details class="capture-warnings"><summary>보관하지 못한 리소스 ${m.warnings.length}개</summary><ul>${m.warnings.map(w=>`<li${isSecurityWarning(w)?' class="security-warning" role="alert"':''}>${esc(w)}</li>`).join('')}</ul></details>`:''}<p class="dialog-description small">작업은 이 기기의 서재에 자동 저장됩니다. 다른 사람에게 주석을 보내려면 내보내기에서 보관 파일·HTML·PDF 중 알맞은 형식을 선택하세요.</p>${annotationExportGuide()}`);
+  modal(`<div class="dialog-heading"><h2>문서 정보</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><dl class="document-info"><dt>제목</dt><dd>${esc(m.title)}</dd><dt>파일</dt><dd>${esc(tab.record.name)}</dd><dt>원본</dt><dd>${safeWebURL(m.source)?`<a href="${esc(safeWebURL(m.source))}" target="_blank" rel="noopener noreferrer">${esc(m.source)}</a>`:m.source?esc(String(m.source)):'로컬 문서 파일'}</dd><dt>저장 위치</dt><dd>앱 보관함 (원본 파일은 변경하지 않음)</dd><dt>주석</dt><dd>${m.annotations.length}개</dd></dl>${m.warnings.length?`<details class="capture-warnings"><summary>보관하지 못한 리소스 ${m.warnings.length}개</summary><ul>${m.warnings.map(w=>`<li${isSecurityWarning(w)?' class="security-warning" role="alert"':''}>${esc(w)}</li>`).join('')}</ul></details>`:''}<p class="dialog-description small">작업은 이 기기의 서재에 자동 저장됩니다. 다른 사람에게 주석을 보내려면 내보내기에서 보관 파일·HTML·PDF 중 알맞은 형식을 선택하세요.</p>${annotationExportGuide()}`);
 }
 function pickHTMLFile() {
   if(openPicker())return window.showOpenFilePicker({types:importTypes}).then(([handle])=>handle,error=>{if(['SecurityError','NotSupportedError'].includes(error.name))return inputFile();throw error;});

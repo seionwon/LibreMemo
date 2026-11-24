@@ -2,7 +2,9 @@ import {publicAppURL,isIOS} from './install.js';
 import { listDocuments, getDocument, listRevisions, restoreFolderDocuments, getSetting, setSetting, onStorageChange, permission, readLibrary } from './storage.js';
 import { localFileIdentity } from './local-files.js';
 import { PREFERENCES_KEY, normalizePreferences } from './preferences.js';
-import { validateAnnotations,validateOutlineEdits,validPDFPosition } from './model.js';
+import { validateAnnotations,validateOutlineEdits,validPDFPosition,validThumbnail } from './model.js';
+import {validateYouTube} from './youtube.js';
+import {safeWebURL} from './utils.js';
 import {LIBRARY_FOLDERS_KEY,validateFolders,mergeLibraryFolders,documentCopyName} from './library-folders.js';
 import {syncFolderTree,cleanupFolderTree} from './folder-tree.js';
 
@@ -183,7 +185,25 @@ export function validateState(value, id) {
   if(record.trashedAt!==undefined&&(!Number.isFinite(record.trashedAt)||record.trashedAt<=0||record.trashedAt>8640000000000000))throw Error('문서의 휴지통 삭제일이 손상되었습니다.');
   if(record.starredAt!==undefined&&(!Number.isFinite(record.starredAt)||record.starredAt<=0||record.starredAt>8640000000000000))throw Error('문서의 별표 시각이 손상되었습니다.');
   for(const revision of value.revisions){if(!object(revision)||!Number.isFinite(revision.created))throw Error('폴더의 주석 이력이 손상되었습니다.');validateMarks(revision);}
-  return {record:portableRecord(record),revisions:value.revisions.map(({id:oldId,documentId,...revision})=>revision)};
+  return {record:safeLinkedFields(portableRecord(record)),revisions:value.revisions.map(({id:oldId,documentId,...revision})=>revision)};
+}
+/**
+ * A data folder or a paired device can hold a record this app did not write.
+ * File imports already restrict these fields; apply the same rules here so a
+ * crafted source address, video reference or thumbnail never reaches a link,
+ * the video player or an image. Valid values are returned untouched.
+ */
+export function safeLinkedFields(record){
+  const metadata={...record.metadata},result={...record,metadata};
+  if(result.source!==undefined&&safeWebURL(result.source)!==result.source)result.source=safeWebURL(result.source);
+  if(metadata.source!==undefined&&safeWebURL(metadata.source)!==metadata.source)metadata.source=safeWebURL(metadata.source);
+  if(metadata.youtube!==undefined){
+    const youtube=validateYouTube(metadata.youtube);
+    if(!youtube)delete metadata.youtube;else if(JSON.stringify(youtube)!==JSON.stringify(metadata.youtube))metadata.youtube=youtube;
+  }
+  if(metadata.thumbnail!==undefined&&!validThumbnail(metadata.thumbnail))delete metadata.thumbnail;
+  if(Array.isArray(metadata.warnings)&&metadata.warnings.some(w=>typeof w!=='string'))metadata.warnings=metadata.warnings.filter(w=>typeof w==='string');
+  return result;
 }
 function validateManifest(value) {
   if(!object(value)||value.format!==FORMAT||![1,2].includes(value.version)||!validId(value.id)||!validId(value.revision)||!Array.isArray(value.documents)||value.documents.length>100000)throw Error('지원하지 않거나 손상된 LibreMemo 데이터 폴더입니다.');

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readWebPage,pastedPage,webURL,WEB_RESOURCE_LIMIT,PASTE_LIMIT,BrowserTabs,isWebSearch} from '../public/src/web.js';
+import {readWebPage,webURL,WEB_RESOURCE_LIMIT,PASTE_LIMIT,BrowserTabs,isWebSearch} from '../public/src/web.js';
+import {pastedPage} from '../public/src/web-paste.js';
 import {installDOM} from './dom.mjs';
 installDOM();
 function browser(){const tabs=[],events=[];return {tabs,events,open(){events.push('blank');const tab={opener:'app',closed:false,document:{createElement:()=>({click(){events.push('navigate');assert.equal(tab.opener,null);tab.location.href=this.href;}}),body:{append:link=>events.push(link.referrerPolicy)}},location:{href:'about:blank'},focus(){events.push('focus');},close(){this.closed=true;}};tabs.push(tab);return tab;}};}

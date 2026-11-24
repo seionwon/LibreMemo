@@ -115,6 +115,14 @@ export function splitOutlinePrefix(text){
   return null;
 }
 
+/**
+ * A stored web address is trusted as a link only when it is plain http(s) without
+ * credentials. Anything else (javascript:, data:, file:, malformed) becomes ''.
+ */
+export function safeWebURL(value){
+  if(typeof value!=='string'||!value)return '';
+  try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)&&!url.username&&!url.password?url.href:'';}catch{return '';}
+}
 export function formatOutlineTitle(title){
   const parts=splitOutlinePrefix(title);
   if(!parts)return escapeHTML(title);
