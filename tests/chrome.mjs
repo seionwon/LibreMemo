@@ -105,6 +105,9 @@ export async function clickSettingsAction(page,selector){
   if(selector!=='#settings-button'){
     if(['#settings-save','#settings-load','#settings-reload'].includes(selector))await page.evaluate(`document.querySelector(${JSON.stringify(selector)}).closest('details').open=true`);
     await page.click(selector);
+    // Help and device sync load their code on first use; wait until the screen is there.
+    if(selector==='#settings-sync')await page.waitFor('!!document.querySelector("#dialog[open] #sync-join-tab")');
+    if(selector==='#settings-help')await page.waitFor('!!document.querySelector("#dialog[open] .help-browser h2")');
   }
 }
 
