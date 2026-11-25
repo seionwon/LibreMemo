@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import {documentFor} from './dom.mjs';
 import {escapeHTML} from '../public/src/utils.js';
+import {t,locale} from '../public/src/i18n.js';
 
 const source=await readFile(new URL('../public/src/app.js',import.meta.url),'utf8');
 const code=source.slice(source.indexOf('async function annotationHistory('),source.indexOf('function documentInfo('));
@@ -17,7 +18,7 @@ function fixture(){
   const tabs=Object.fromEntries(['a','b','empty'].map(id=>[id,{record:{id,title:id==='a'?'A <img src=x> 문서':id==='b'?'B 문서':'빈 문서',name:'same.html'},reader:{ready:Promise.resolve(),metadata:{annotations:[{text:id+' current'}],bookmarks:[]},commit(rows){this.metadata.annotations=rows;commits.push(id);}},queue:{flush:async()=>{}},checkpoints:{flush:async()=>{}}}]));
   let selected=tabs.a;
   const modal=(html,bind)=>{content.innerHTML=html;dialog.open=true;for(const select of content.querySelectorAll('select')){let value=select.firstElementChild?.getAttribute('value')||'';Object.defineProperty(select,'value',{configurable:true,get:()=>value,set:next=>value=String(next)});}bind(dialog);};
-  const context=vm.createContext({Date,structuredClone,active:()=>selected,$:(selector,root=doc)=>root.querySelector(selector),$$:(selector,root=doc)=>[...root.querySelectorAll(selector)],esc:escapeHTML,icon:()=>'',safely:fn=>fn,modal,toast(){},renderSidebar(){},
+  const context=vm.createContext({t,locale,Date,structuredClone,active:()=>selected,$:(selector,root=doc)=>root.querySelector(selector),$$:(selector,root=doc)=>[...root.querySelectorAll(selector)],esc:escapeHTML,icon:()=>'',safely:fn=>fn,modal,toast(){},renderSidebar(){},
     listRevisionPeriods:async(id,year,month)=>{calls.push(id);const rows=versions.filter(v=>v.documentId===id);return rows.length?[{value:year===undefined?2026:1,count:rows.length}]:[];},
     listRevisionDay:async id=>{calls.push(id);return {rows:versions.filter(v=>v.documentId===id).reverse(),next:null};},adjacentRevisionDay:async id=>{calls.push(id);return null;},getRevision:async id=>versions.find(v=>v.id===id)});
   vm.runInContext('let historyRequest=0;let sidebarMode="";'+code,context);

@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
+import {t} from '../public/src/i18n.js';
 
-const source=(await readFile(new URL('../public/src/storage.js',import.meta.url),'utf8')).replace(/^export /gm,'');
+const source=(await readFile(new URL('../public/src/storage.js',import.meta.url),'utf8')).replace(/^export /gm,'').replace(/^import \{t\} from '\.\/i18n\.js';\n/m,'');
 function fixture(){
   const book={id:'book',title:'보관할 책',name:'원본.html',folderId:'part',created:100,modified:200,historyVersion:2,metadata:{annotations:[{id:'note',text:'보존할 주석'}],bookmarks:[{id:'mark'}],view:{scrollTop:620}}};
   let stores=new Map([
@@ -31,7 +32,7 @@ function fixture(){
     };return tx;
   }};
   class Clock extends Date{static now(){return control.now;}}
-  const context=vm.createContext({connection,structuredClone,Blob,crypto,Date:Clock,IDBKeyRange:{only:id=>id},navigator:{storage:{getDirectory:async()=>({removeEntry:async name=>removed.push(name)})}}});
+  const context=vm.createContext({t,connection,structuredClone,Blob,crypto,Date:Clock,IDBKeyRange:{only:id=>id},navigator:{storage:{getDirectory:async()=>({removeEntry:async name=>removed.push(name)})}}});
   vm.runInContext(source+'\ndatabase=Promise.resolve(connection);this.api={listDocuments,getDocument,getDocumentPreview,listRevisions,readLibrary,trashDocument,restoreDocument,deleteDocument,deleteTrashedDocuments};',context);
   return {api:context.api,control,transactions,reads,writes,removed,get stores(){return stores;},get record(){return stores.get('documents').get('book');}};
 }

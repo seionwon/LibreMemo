@@ -1,3 +1,4 @@
+import {t} from './i18n.js';
 import { LOCAL_CSP, SCRIPT_CSP, parseHTML } from './document.js';
 import { readMHTML } from './mhtml.js';
 import { isPDFFile, verifyPDF, PDF_ARCHIVE_MARKER, readPDFArchive } from './pdf-document.js';
@@ -8,7 +9,7 @@ const isMHTML = file => /\.(?:mhtml|mht)$/i.test(file.name||'') || /^(?:multipar
 const hasDocumentExtension = file => !!documentExtension(file?.name)||/\.librememo$/i.test(file?.name||'');
 export const isLocalHTMLFile = file => !!file && (isPDFFile(file)||hasDocumentExtension(file)||officeFormat(file)||imageType(file) || /^(?:text\/html|multipart\/related|application\/x-mimearchive)(?:;|$)/i.test(file.type||''));
 export function htmlExportName(name, annotations = false) {
-  const value=String(name||'문서.html'),ext=documentExtension(value);return (ext?value.slice(0,-ext.length-1):value)+(annotations?'-주석':'')+'.html';
+  const value=String(name||'문서.html'),ext=documentExtension(value);return (ext?value.slice(0,-ext.length-1):value)+(annotations?t('-주석'):'')+'.html';
 }
 
 const identities=new WeakMap(),localSources=new WeakMap(),nativeLegacyCopies=new WeakMap();
@@ -104,7 +105,7 @@ export async function findLocalDuplicates(local, records, loadRecord) {
 export async function readLocalHTML(input, {native = false, allowScripts = false, identify = true} = {}) {
   const originalHandle = input?.kind === 'file' && typeof input.getFile === 'function' ? input : null;
   const file = originalHandle ? await originalHandle.getFile() : input;
-  if (!isLocalHTMLFile(file) || typeof file.text !== 'function') throw new Error('HTML, PDF, HWP·HWPX·HML, Office, 전자책, 이미지·자막 등 지원하는 파일을 선택해주세요.');
+  if (!isLocalHTMLFile(file) || typeof file.text !== 'function') throw new Error(t('HTML, PDF, HWP·HWPX·HML, Office, 전자책, 이미지·자막 등 지원하는 파일을 선택해주세요.'));
   if(/\.librememo$/i.test(file.name||'')){
     const {readDocumentArchive}=await import('./document-archive.js');
     const archive=await readDocumentArchive(file),metadata=archive.metadata;
@@ -115,7 +116,7 @@ export async function readLocalHTML(input, {native = false, allowScripts = false
       // Use the ordinary HTML encoding/CSP/sandbox path. Raw originals can be UTF-16
       // or contain their own CSP; merely prefixing such bytes would corrupt the view.
       const local=await readLocalHTML(new File([archive.reading],'reading.html',{type:'text/html'}),{native,allowScripts:metadata.execution.allowScripts,identify:false});
-      if(local.snapshot.pdf||local.snapshot.office)throw Error('보관 파일의 읽기 형식이 맞지 않습니다.');
+      if(local.snapshot.pdf||local.snapshot.office)throw Error(t('보관 파일의 읽기 형식이 맞지 않습니다.'));
       snapshot={...local.snapshot,title:metadata.title,archiveMetadata:metadata};
     }
     return {snapshot,name:archive.original.name,handle:null,originalHandle,originalFile:archive.original,originalExact:archive.manifest.original.exact,originalReading:archive.manifest.reading.path===archive.manifest.original.path,sourceIdentity:originalIdentity,importArchiveIdentity};
@@ -177,7 +178,7 @@ export async function readLocalHTML(input, {native = false, allowScripts = false
     const bytes = new Uint8Array(await file.arrayBuffer());
     const header = new TextDecoder().decode(bytes.subarray(0,4096));
     const charset = bytes[0] === 0xff && bytes[1] === 0xfe ? 'utf-16le' : bytes[0] === 0xfe && bytes[1] === 0xff ? 'utf-16be' : header.match(/<meta\b[^>]*charset\s*=\s*["']?([\w-]+)/i)?.[1] || 'utf-8';
-    try { html = new TextDecoder(charset).decode(bytes); } catch { throw new Error('지원하지 않는 HTML 문자 인코딩입니다. UTF-8로 저장한 파일을 열어주세요.'); }
+    try { html = new TextDecoder(charset).decode(bytes); } catch { throw new Error(t('지원하지 않는 HTML 문자 인코딩입니다. UTF-8로 저장한 파일을 열어주세요.')); }
   } else html = await file.text();
   // Annotation availability is independent of file write permission. Read-only
   // files still become local document tabs with a recoverable internal copy.

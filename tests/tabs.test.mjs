@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import {DOMParser} from 'linkedom';
 import {$,$$,icon} from '../public/src/utils.js';
+import {t,locale} from '../public/src/i18n.js';
 
 const source=await readFile(new URL('../public/src/app.js',import.meta.url),'utf8');
 const render=source.slice(source.indexOf('function renderTabs('),source.indexOf('function focusAddress('));
@@ -13,7 +14,7 @@ function app({width=400,content=1000,left=0}={}){
   const strip=doc.querySelector('#tabs'),frames=[];let position=left;
   Object.defineProperties(strip,{clientWidth:{value:width},scrollWidth:{value:content},scrollLeft:{get:()=>position,set:value=>position=Math.max(0,Math.min(content-width,value))}});
   strip.getBoundingClientRect=()=>({left:10,right:width+10,width});
-  const context=vm.createContext({document:doc,$:(selector,root=doc)=>$(selector,root),$$:(selector,root=doc)=>$$(selector,root),icon,safely:fn=>fn,requestAnimationFrame:fn=>frames.push(fn),selectTab(){},closeTab:async()=>{},activate(){}});
+  const context=vm.createContext({t,locale,document:doc,$:(selector,root=doc)=>$(selector,root),$$:(selector,root=doc)=>$$(selector,root),icon,safely:fn=>fn,requestAnimationFrame:fn=>frames.push(fn),selectTab(){},closeTab:async()=>{},activate(){}});
   vm.runInContext('var tabs=[],activeId="library",tabLayout="";'+render+bind+'bindTabs();',context);
   const wheel=(properties={})=>{const event=new doc.defaultView.Event('wheel',{bubbles:true,cancelable:true});Object.assign(event,{deltaX:0,deltaY:80,deltaMode:0,ctrlKey:false,metaKey:false},properties);strip.dispatchEvent(event);return event;};
   const add=(id,title=id)=>{const host=doc.createElement('div');host.id='workspace-'+id;doc.querySelector('#workspaces').append(host);context.tabs.push({id,title,type:'document',host,record:{name:id+'.html'}});};
@@ -37,7 +38,7 @@ test('the app header omits all three navigation buttons and their initialization
 test('header updates work without navigation elements in the library, document, preview, external tab and execution screen',async()=>{
   const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8'),doc=new DOMParser().parseFromString(html,'text/html'),saved=[];
   doc.querySelector('.navigation')?.remove();
-  const context=vm.createContext({document:doc,$:selector=>$(selector,doc),icon,active:()=>context.tab,reader:()=>context.tab?.reader,
+  const context=vm.createContext({t,locale,document:doc,$:selector=>$(selector,doc),icon,active:()=>context.tab,reader:()=>context.tab?.reader,
     setIconButton(selector,name,label){doc.querySelector(selector).setAttribute('aria-label',label);doc.querySelector(selector).title=label;},saveStatus:tab=>saved.push(tab)});
   vm.runInContext('var activeId="library",sharingApp=false;'+source.slice(source.indexOf('function updateChrome('),source.indexOf('function createHost(')),context);
   const states=[{id:'library',page:'library',label:'페이지 저장',disabled:true},{id:'document',page:'document',label:'내보내기',disabled:false,tab:{type:'document',title:'읽는 책',record:{name:'book.html'},reader:{}}},

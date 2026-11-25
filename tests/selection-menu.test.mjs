@@ -5,6 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {$,$$} from '../public/src/utils.js';
 import {documentFor} from './dom.mjs';
 import {aiSearchRequest,aiSearchURL} from '../public/src/ai-search.js';
+import {t,locale} from '../public/src/i18n.js';
 
 const source=await readFile(new URL('../public/src/app.js',import.meta.url),'utf8');
 const menu=source.slice(source.indexOf('function showSelectionMenu('),source.indexOf('function toolAction('));
@@ -12,7 +13,7 @@ function fixture({quote='선택한 글 & 웹 검색?',speech=true,engines=[],cli
   const doc=documentFor('<html><body><div id="tool-popover" hidden></div></body></html>'),pop=doc.querySelector('#tool-popover'),spoken=[],urls=[];
   const r={selection:{quote,start:10,end:10+quote.length,section:'v0:one'},metadata:{annotations:[{id:'existing-note',text:'기존 메모'}],bookmarks:[{id:'existing-bookmark'}]},speakSelection(){spoken.push(this.selection.quote);return speech;}};
   const toasts=[],copied=[],preferences={aiSearch:engines};
-  const context=vm.createContext({$:(s,root=doc)=>$(s,root),$$:(s,root=doc)=>$$(s,root),safely:fn=>fn,openBrowser:async url=>urls.push(url),preferences,toast:(text,error=false)=>toasts.push([text,error]),positionPopover(){},esc:text=>String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),AI_TEXT_LIMIT:2000,aiSearchRequest,navigator:{clipboard:{writeText:async text=>{if(clipboardFails)throw Error('denied');copied.push(text);}}}});
+  const context=vm.createContext({t,locale,$:(s,root=doc)=>$(s,root),$$:(s,root=doc)=>$$(s,root),safely:fn=>fn,openBrowser:async url=>urls.push(url),preferences,toast:(text,error=false)=>toasts.push([text,error]),positionPopover(){},esc:text=>String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),AI_TEXT_LIMIT:2000,aiSearchRequest,navigator:{clipboard:{writeText:async text=>{if(clipboardFails)throw Error('denied');copied.push(text);}}}});
   context.closePopover=()=>{context.popoverName='';pop.hidden=true;};context.showPopover=(name,html,bind)=>{context.popoverName=name;pop.innerHTML=html;pop.hidden=false;bind();};
   vm.runInContext('var popoverName="";'+menu,context);
   return {r,pop,spoken,urls,toasts,copied,show:()=>context.showSelectionMenu(r)};
@@ -79,7 +80,7 @@ test('engine names from settings are escaped in the list',async()=>{
 });
 function settings(aiSearch){
   const doc=documentFor('<html><body><div id="dialog"></div></body></html>'),box=doc.querySelector('#dialog'),toasts=[];
-  const context=vm.createContext({$:(s,root=doc)=>$(s,root),$$:(s,root=doc)=>$$(s,root),preferences:{aiSearch},esc:text=>String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),icon:()=>'',uid:()=>'new-id',aiSearchURL,toast:(text,error=false)=>toasts.push([text,error]),settingsDialog(){},modal(html,bind){box.innerHTML=html;bind();}});
+  const context=vm.createContext({t,locale,$:(s,root=doc)=>$(s,root),$$:(s,root=doc)=>$$(s,root),preferences:{aiSearch},esc:text=>String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'),icon:()=>'',uid:()=>'new-id',aiSearchURL,toast:(text,error=false)=>toasts.push([text,error]),settingsDialog(){},modal(html,bind){box.innerHTML=html;bind();}});
   context.changePreferences=patch=>{context.preferences={...context.preferences,...patch};};
   vm.runInContext(menu,context);context.aiSearchDialog();
   const fire=(node,type)=>{const event=new doc.defaultView.Event(type,{bubbles:true});node.dispatchEvent(event);};

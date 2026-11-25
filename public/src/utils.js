@@ -1,21 +1,21 @@
-import {locale} from './i18n.js';
+import {locale,t} from './i18n.js';
 export const $ = (selector, root = document) => root.querySelector(selector);
 export const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 export const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const uid = () => crypto.randomUUID();
 export const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
 export function isSecurityWarning(message){return /악성\s*코드.*(?:포함|감지)|malicious\s+(?:code|file)|(?:contains|detected|blocked).*malware/i.test(String(message).replace(/\s+/g,' '));}
-export function filename(title) { return (title || '웹 페이지').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/\.+$/g, '').slice(0, 100).trim() + '.html'; }
+export function filename(title) { return (title || t('웹 페이지')).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/\.+$/g, '').slice(0, 100).trim() + '.html'; }
 export function normalizeURL(input) {
   const value = input.trim();
-  if (!value) throw new Error('웹 주소를 입력해주세요.');
-  if (/^(https?:\/\/)/i.test(value)) { const url = new URL(value); if (url.username || url.password) throw new Error('사용자 정보가 포함된 주소는 사용할 수 없습니다.'); return url.href; }
-  if (/^[a-z][a-z\d+.-]*:/i.test(value) && !/^localhost:\d+/i.test(value)) throw new Error('http 또는 https 주소를 입력해주세요.');
+  if (!value) throw new Error(t('웹 주소를 입력해주세요.'));
+  if (/^(https?:\/\/)/i.test(value)) { const url = new URL(value); if (url.username || url.password) throw new Error(t('사용자 정보가 포함된 주소는 사용할 수 없습니다.')); return url.href; }
+  if (/^[a-z][a-z\d+.-]*:/i.test(value) && !/^localhost:\d+/i.test(value)) throw new Error(t('http 또는 https 주소를 입력해주세요.'));
   if (/^(localhost|127\.0\.0\.1)(:\d+)?([/?#]|$)/i.test(value)) return new URL('http://' + value).href;
   if (/^[^\s/]+\.[^\s/]+/.test(value) && !/\s/.test(value)) return new URL('https://' + value).href;
   return 'https://www.google.com/search?q=' + encodeURIComponent(value);
 }
-export function displayHost(url) { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return '로컬 파일'; } }
+export function displayHost(url) { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return t('로컬 파일'); } }
 const shortDate=new Intl.DateTimeFormat(locale(),{month:'short',day:'numeric'});
 const fullDate=new Intl.DateTimeFormat(locale(),{year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'numeric',second:'numeric'});
 export function formatDate(time,full=false) { return (full?fullDate:shortDate).format(time); }

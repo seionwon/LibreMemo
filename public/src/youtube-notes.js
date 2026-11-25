@@ -1,3 +1,4 @@
+import {t} from './i18n.js';
 // Time anchors are ordinary notes, so history, folder backup and device sync use
 // the same annotation records. They never depend on caption text or page geometry.
 import {clock,parseYouTubeInput,watchURL} from './youtube.js';
@@ -37,8 +38,8 @@ export function parseVideoTime(value,videoId=''){
 }
 export function makeVideoNote(videoId,seconds,text,previous=null){
   const videoAnchor={videoId,seconds},body=String(text??'').trim();
-  if(!validVideoAnchor(videoAnchor))throw Error('영상 시점이 올바르지 않습니다. 1:23 또는 1:02:03처럼 입력해주세요.');
-  if(!body||body.length>10000)throw Error('메모를 1~10,000자로 입력해주세요.');
+  if(!validVideoAnchor(videoAnchor))throw Error(t('영상 시점이 올바르지 않습니다. 1:23 또는 1:02:03처럼 입력해주세요.'));
+  if(!body||body.length>10000)throw Error(t('메모를 1~10,000자로 입력해주세요.'));
   return {...(previous||{id:uid(),type:'note',color:'#334155',width:1,opacity:1,points:[{x:0,y:0}],created:Date.now()}),videoAnchor,text:body,modified:Date.now()};
 }
 export const videoNoteURL=note=>watchURL(note.videoAnchor.videoId)+'&t='+note.videoAnchor.seconds+'s';
@@ -47,24 +48,24 @@ export const SCENE_REPEAT_SECONDS=10;
 function sceneMenu(note,videoId){
   const id=esc(note.id),at=clock(note.videoAnchor.seconds);
   const repeat=note.videoAnchor.videoId===videoId
-    ? `<button type="button" data-scene-loop="${id}" aria-pressed="false">${icon('reload',15)} <span>이 장면 ${SCENE_REPEAT_SECONDS}초 반복</span></button>`
+    ? `<button type="button" data-scene-loop="${id}" aria-pressed="false">${icon('reload',15)} <span>${t('이 장면 {n}초 반복',{n:SCENE_REPEAT_SECONDS})}</span></button>`
     : '';
   return `<details class="youtube-scene-menu" name="librememo-scene-actions">
-    <summary data-scene-menu="${id}" title="${at} 시점 메모 메뉴" aria-label="${at} 시점 메모 메뉴">${icon('more',16)}</summary>
+    <summary data-scene-menu="${id}" title="${t('{time} 시점 메모 메뉴',{time:at})}" aria-label="${t('{time} 시점 메모 메뉴',{time:at})}">${icon('more',16)}</summary>
     <div>${repeat}
-      <button type="button" data-scene-edit="${id}" aria-label="${at} 메모 편집">${icon('pen',15)} 메모 편집</button>
-      <button type="button" data-scene-delete="${id}" aria-label="${at} 메모 삭제">${icon('trash',15)} 메모 삭제</button>
+      <button type="button" data-scene-edit="${id}" aria-label="${t('{time} 메모 편집',{time:at})}">${icon('pen',15)} ${t('메모 편집')}</button>
+      <button type="button" data-scene-delete="${id}" aria-label="${t('{time} 메모 삭제',{time:at})}">${icon('trash',15)} ${t('메모 삭제')}</button>
     </div></details>`;
 }
 
 export function videoNotesHTML(metadata,{interactive=false}={}){
   const notes=videoNotes(metadata);
-  return `<section class="youtube-notes" ${interactive?'data-htmlmemo-ui':'data-htmlmemo-video-notes'} aria-label="시점 메모">
-    <div class="youtube-notes-heading"><strong>시점 메모 <small>${notes.length}</small></strong>${interactive?`<button type="button" data-scene-add>${icon('plus',16)} 현재 시점 메모</button>`:''}</div>
+  return `<section class="youtube-notes" ${interactive?'data-htmlmemo-ui':'data-htmlmemo-video-notes'} aria-label="${t('시점 메모')}">
+    <div class="youtube-notes-heading"><strong>${t('시점 메모')} <small>${notes.length}</small></strong>${interactive?`<button type="button" data-scene-add>${icon('plus',16)} ${t('현재 시점 메모')}</button>`:''}</div>
     ${interactive?'<p data-scene-status role="status" hidden></p>':''}
     ${notes.length?`<ol>${notes.map(note=>`<li data-scene-row="${esc(note.id)}"><div class="youtube-notes-row">
-      ${interactive?`<button type="button" data-scene-play="${esc(note.id)}"`:`<a href="${esc(videoNoteURL(note))}" target="_blank" rel="noopener noreferrer"`} aria-label="${clock(note.videoAnchor.seconds)}부터 재생">${icon('play',13)} ${clock(note.videoAnchor.seconds)}${interactive?'</button>':'</a>'}
-      ${interactive?sceneMenu(note,metadata.youtube?.videoId):''}</div><p>${esc(note.text)}</p></li>`).join('')}</ol>`:'<p class="youtube-notes-empty">기억하고 싶은 장면에서 「현재 시점 메모」를 누르세요. 자막 파일 없이 시간과 생각을 함께 보관합니다.</p>'}
+      ${interactive?`<button type="button" data-scene-play="${esc(note.id)}"`:`<a href="${esc(videoNoteURL(note))}" target="_blank" rel="noopener noreferrer"`} aria-label="${t('{time}부터 재생',{time:clock(note.videoAnchor.seconds)})}">${icon('play',13)} ${clock(note.videoAnchor.seconds)}${interactive?'</button>':'</a>'}
+      ${interactive?sceneMenu(note,metadata.youtube?.videoId):''}</div><p>${esc(note.text)}</p></li>`).join('')}</ol>`:'<p class="youtube-notes-empty">'+t('기억하고 싶은 장면에서 「현재 시점 메모」를 누르세요. 자막 파일 없이 시간과 생각을 함께 보관합니다.')+'</p>'}
   </section>`;
 }
 // Used by the isolated reading document and its self-contained HTML export.

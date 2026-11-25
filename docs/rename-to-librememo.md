@@ -1,3 +1,5 @@
+[English](rename-to-librememo.en.md)
+
 # LibreMemo 이름 변경과 GitHub 저장소 전환
 
 HTMLMemo의 새 제품 이름은 **LibreMemo**입니다. 앱 제목·PWA 설치 이름·설정·도움말·내보내기 제안 이름·디자인 시안과 Chrome 연결의 표기를 바꿉니다. 기능과 문서 데이터는 같은 앱으로 이어집니다.

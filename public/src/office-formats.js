@@ -1,4 +1,5 @@
 import {IMAGE_EXTENSIONS} from './image-formats.js';
+import {t} from './i18n.js';
 // Opening formats from GenOffice 36a509e8 (app-routing.ts), plus LibreMemo HTML/MHTML/PDF/images.
 export const OFFICE_FORMATS={
   djvu:'djvu',djv:'djvu',
@@ -41,22 +42,22 @@ export function officeFormat(file){
 }
 export const OFFICE_MAX_BYTES=2*1024*1024*1024;
 export async function verifyOffice(file,format){
-  if(!file.size)throw Error('문서 파일이 비어 있습니다.');
-  if(file.size>OFFICE_MAX_BYTES)throw Error('이 형식은 2GB 이하의 파일을 열 수 있습니다. 문서를 나누어 저장한 뒤 가져와 주세요.');
+  if(!file.size)throw Error(t('문서 파일이 비어 있습니다.'));
+  if(file.size>OFFICE_MAX_BYTES)throw Error(t('이 형식은 2GB 이하의 파일을 열 수 있습니다. 문서를 나누어 저장한 뒤 가져와 주세요.'));
   if(['markdown','text','subtitle'].includes(OFFICE_FORMATS[format])||['csv','tsv'].includes(format))return;
   if(OFFICE_FORMATS[format]==='ebook')return; // Bounded worker validates structure, encryption and resource sizes.
   const b=new Uint8Array(await file.slice(0,8).arrayBuffer());
   if(OFFICE_FORMATS[format]==='djvu'){
     if(new TextDecoder('ascii').decode(b)==='AT&TFORM')return;
-    throw Error('올바른 DjVu 파일이 아니거나 파일이 손상되었습니다.');
+    throw Error(t('올바른 DjVu 파일이 아니거나 파일이 손상되었습니다.'));
   }
   const zip=b[0]===0x50&&b[1]===0x4b&&b[2]===3&&b[3]===4;
   const ole=[0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1].every((n,i)=>b[i]===n);
   if(format==='hml')return; // XML encoding/root/DTD validation runs in the bounded worker.
   if(format==='hwp'&&(ole||new TextDecoder().decode(b)==='HWP Docu'))return;
   if(format==='hwpx'&&zip)return;
-  if(OFFICE_FORMATS[format]==='hangul')throw Error('파일 확장자와 실제 한글 문서 형식이 다르거나 파일이 손상되었습니다. 원본을 확인해주세요.');
-  if(ole&&format!=='xls')throw Error('암호로 보호된 Office 문서는 열 수 없습니다. 원래 앱에서 암호 없이 저장한 사본을 가져와 주세요.');
+  if(OFFICE_FORMATS[format]==='hangul')throw Error(t('파일 확장자와 실제 한글 문서 형식이 다르거나 파일이 손상되었습니다. 원본을 확인해주세요.'));
+  if(ole&&format!=='xls')throw Error(t('암호로 보호된 Office 문서는 열 수 없습니다. 원래 앱에서 암호 없이 저장한 사본을 가져와 주세요.'));
   if(format==='xls'?(ole||zip||b[0]===9):zip)return;
-  throw Error('파일 확장자와 실제 문서 형식이 다르거나 파일이 손상되었습니다. 원본 파일을 확인해주세요.');
+  throw Error(t('파일 확장자와 실제 문서 형식이 다르거나 파일이 손상되었습니다. 원본 파일을 확인해주세요.'));
 }

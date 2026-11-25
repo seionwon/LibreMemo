@@ -71,3 +71,13 @@ export function localizeStatic(root){
   }
   for(const template of root.querySelectorAll?.('template')||[])localizeStatic(template.content);
 }
+
+/**
+ * Translate a short word whose English depends on where it appears (e.g. 이동 as
+ * a "Go to" tab or a "Move" button). The dictionary key is "text#context"; Korean
+ * shows the text itself, and a missing contextual entry falls back to t(text).
+ */
+export function pt(context,text,vars){
+  if(current!=='ko'){const entry=DICTIONARIES[current]?.[text+'#'+context];if(typeof entry==='string')return t(text+'#'+context,vars);}
+  return t(text,vars);
+}

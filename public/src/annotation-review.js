@@ -1,3 +1,4 @@
+import {pt,t} from './i18n.js';
 import {escapeHTML as esc, formatOutlineTitle, icon} from './utils.js';
 import {ANNOTATION_LABELS} from './model.js';
 import {isVideoNote} from './youtube-notes.js';
@@ -7,7 +8,7 @@ export function annotationOverview(reader) {
   const contexts = reader.annotationContexts?.() || new Map();
   const annotations = reader.metadata.annotations;
   const tree = reader.annotationTree?.(contexts) || [{
-    id: 'document', title: '문서 전체', count: annotations.length, annotations, children: []
+    id: 'document', title: t('문서 전체'), count: annotations.length, annotations, children: []
   }];
   return {contexts, tree};
 }
@@ -23,7 +24,7 @@ export function annotationExpansion(reader) {
 
 function fields(note, context, names) {
   const quote = note.textAnchor?.quote || context?.quote || note.anchorTarget?.quote || '';
-  const kind = isVideoNote(note) ? '시점 메모' : ANNOTATION_LABELS[note.type] || '주석';
+  const kind = isVideoNote(note) ? t('시점 메모') : ANNOTATION_LABELS[note.type] || pt('one','주석');
   const seconds = isVideoNote(note) ? note.videoAnchor.seconds : context?.videoSeconds;
   const time = Number.isFinite(seconds) ? clock(seconds) : '';
   const heading = [context?.heading, context?.heading !== time && time].filter(Boolean).join(' · ');
@@ -45,12 +46,12 @@ function annotationRow(note, info) {
     <span class="annotation-text">${main ? `<span class="annotation-main">${esc(main)}</span>` : ''}
     ${note.text && quote ? `<span class="annotation-context">“${esc(quote)}”</span>` : ''}
     <span class="annotation-meta">${meta}</span></span></button>
-    <button type="button" class="icon-button" data-delete-annotation="${esc(note.id)}" aria-label="주석 삭제">${icon('trash',14)}</button></div>`;
+    <button type="button" class="icon-button" data-delete-annotation="${esc(note.id)}" aria-label="${t('주석 삭제')}">${icon('trash',14)}</button></div>`;
 }
 
 export function renderAnnotationReview(content, reader, getNamedColors) {
   if (!reader.metadata.annotations.length) {
-    content.innerHTML = '<p class="panel-empty">아직 주석이 없어요.<br>툴바에서 도구를 골라 생각을 남겨보세요.</p>';
+    content.innerHTML = '<p class="panel-empty">' + t('아직 주석이 없어요.<br>툴바에서 도구를 골라 생각을 남겨보세요.') + '</p>';
     return;
   }
   const {tree, contexts} = annotationOverview(reader);
@@ -59,9 +60,9 @@ export function renderAnnotationReview(content, reader, getNamedColors) {
   let controls = content.querySelector('[data-annotation-filters]');
   if (!controls || controls.boundReader !== reader) {
     content.innerHTML = `<div class="annotation-filters" data-annotation-filters>
-      <div class="search-field loaded-search-field"><input type="text" data-annotation-query aria-label="내 주석에서 찾기" placeholder="내 주석에서 찾기" autocomplete="off">
-      <button type="button" class="icon-button loaded-search-clear" data-annotation-clear aria-label="주석 검색어 지우기" title="검색어 지우기" hidden>${icon('close',14)}</button></div>
-      <select data-annotation-color aria-label="형광펜 색 이름으로 거르기" hidden></select></div>
+      <div class="search-field loaded-search-field"><input type="text" data-annotation-query aria-label="${t('내 주석에서 찾기')}" placeholder="${t('내 주석에서 찾기')}" autocomplete="off">
+      <button type="button" class="icon-button loaded-search-clear" data-annotation-clear aria-label="${t('주석 검색어 지우기')}" title="${t('검색어 지우기')}" hidden>${icon('close',14)}</button></div>
+      <select data-annotation-color aria-label="${t('형광펜 색 이름으로 거르기')}" hidden></select></div>
       <div data-annotation-count role="status" class="annotation-filter-count" hidden></div><div data-annotation-results></div>`;
     controls = content.querySelector('[data-annotation-filters]');
     controls.boundReader = reader;
@@ -92,8 +93,8 @@ export function renderAnnotationReview(content, reader, getNamedColors) {
       <div class="annotation-group-body">${children.join('')}${rows.join('')}</div></details>`;
   }
   function bindTree() {
-    results.innerHTML = `<div class="annotation-tree" aria-label="목차별 주석">${tree.map(group => buildBranch(group, [])).join('')}</div>
-      <p class="panel-empty" data-annotation-missing hidden>일치하는 주석이 없습니다.</p>`;
+    results.innerHTML = `<div class="annotation-tree" aria-label="${t('목차별 주석')}">${tree.map(group => buildBranch(group, [])).join('')}</div>
+      <p class="panel-empty" data-annotation-missing hidden>${t('일치하는 주석이 없습니다.')}</p>`;
     for (const element of results.querySelectorAll('[data-annotation-group]')) {
       const id = element.dataset.annotationGroup;
       groups.set(id, {element, count:element.querySelector('.annotation-group-count')});
@@ -135,14 +136,14 @@ export function renderAnnotationReview(content, reader, getNamedColors) {
       if (item.element.hidden !== !count) item.element.hidden = !count;
       if (item.count.textContent !== String(count)) {
         item.count.textContent = String(count);
-        item.count.setAttribute('aria-label', `${count}개 주석`);
+        item.count.setAttribute('aria-label', t('{n}개 주석', {n: count}));
       }
       return count;
     }
     let count = 0;
     for (const group of tree) count += apply(group);
     status.hidden = !filtered;
-    status.textContent = filtered ? `${count}개 결과` : '';
+    status.textContent = filtered ? t('{n}개 결과', {n: count}) : '';
     clear.hidden = !state.query;
     results.querySelector('[data-annotation-missing]').hidden = count > 0;
   }
@@ -160,7 +161,7 @@ export function renderAnnotationReview(content, reader, getNamedColors) {
     }
     filterName = names.get(state.color) || '';
     state.color = byName.get(filterName) || '';
-    select.innerHTML = '<option value="">모든 주석</option>' + [...byName].map(([name,color]) =>
+    select.innerHTML = '<option value="">' + t('모든 주석') + '</option>' + [...byName].map(([name,color]) =>
       `<option value="${esc(color)}"${state.color === color ? ' selected' : ''}>${esc(name)}</option>`).join('');
     select.hidden = !byName.size;
     bindTree();

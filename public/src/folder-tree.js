@@ -1,3 +1,4 @@
+import {t} from './i18n.js';
 import {validateFolders,indexFolders} from './library-folders.js';
 import {localFileIdentity} from './local-files.js';
 
@@ -27,7 +28,7 @@ export async function syncFolderTree(root,manifest,previous,{readOriginal,write}
     if(!owns(found,manifest.id,folder.id)){
       const previousId=previousAt.get(pathKey(paths.get(folder.id))),previousFolder=previousId&&owns(found,manifest.id,previousId);
       let empty=true;for await(const entry of directory.entries()){empty=false;break;}
-      if(!created&&!empty&&!previousFolder)throw Error(`“${paths.get(folder.id).join('/')}” 위치에 앱이 관리하지 않는 폴더 또는 파일이 있습니다. 기존 항목을 덮어쓰지 않습니다. 서재에서 다른 폴더 이름을 사용하세요.`);
+      if(!created&&!empty&&!previousFolder)throw Error(t('“{path}” 위치에 앱이 관리하지 않는 폴더 또는 파일이 있습니다. 기존 항목을 덮어쓰지 않습니다. 서재에서 다른 폴더 이름을 사용하세요.',{path:paths.get(folder.id).join('/')}));
       await write(directory,FOLDER_MARKER,JSON.stringify(marker(manifest.id,folder.id))+'\n');
     }
     directories.set(folder.id,directory);
@@ -42,7 +43,7 @@ export async function syncFolderTree(root,manifest,previous,{readOriginal,write}
       if(file.size===ref.size&&(oldCopies.has(key)||(await localFileIdentity(file)).digest===ref.name.slice(0,64)))continue;
       // The app's own previous copy at this path, for a document whose body was replaced, is updated.
       const prior=previousRefs.get(pathKey([...paths.get(entry.copy.folderId),name]));
-      if(!(prior&&file.size===prior.size&&(await localFileIdentity(file)).digest===prior.name.slice(0,64)))throw Error(`“${name}” 원본 복사본이 앱 밖에서 변경되었습니다. 덮어쓰지 않습니다. 해당 파일을 다른 이름으로 보관한 뒤 저장 위치를 다시 연결하세요.`);
+      if(!(prior&&file.size===prior.size&&(await localFileIdentity(file)).digest===prior.name.slice(0,64)))throw Error(t('“{name}” 원본 복사본이 앱 밖에서 변경되었습니다. 덮어쓰지 않습니다. 해당 파일을 다른 이름으로 보관한 뒤 저장 위치를 다시 연결하세요.',{name}));
     }
     await write(directory,name,await readOriginal(ref));
   }

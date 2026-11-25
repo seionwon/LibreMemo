@@ -1,3 +1,5 @@
+[English](README.en.md)
+
 # LibreMemo
 
 [LibreMemo 열기](https://seionwon.github.io/LibreMemo/) · [기능 변경·검증·게시 이력](docs/기능%20추가%20history.md)

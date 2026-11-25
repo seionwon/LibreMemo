@@ -1,10 +1,12 @@
+import {t} from './i18n.js';
 import { validTextStyle } from './text-style.js';
 export const FORMAT_VERSION = 1;
 export const TEXT_TOOLS = ['highlight', 'underline', 'strike'];
 export const DRAW_TOOLS = ['pen', 'rect', 'circle', 'ellipse', 'arrow', 'area', 'area-underline'];
 export const FILL_TOOLS = ['rect', 'circle', 'ellipse'];
-export const ANNOTATION_LABELS = {pen:'펜 그림',highlight:'형광펜',underline:'밑줄',strike:'취소선',note:'메모',text:'텍스트',rect:'사각형',circle:'원',ellipse:'타원',arrow:'화살표',area:'영역 강조','area-underline':'영역 밑줄'};
-export const READING_FONTS = [
+export const ANNOTATION_LABELS = {pen:t('펜 그림'),highlight:t('형광펜'),underline:t('밑줄'),strike:t('취소선'),note:t('메모'),text:t('텍스트'),rect:t('사각형'),circle:t('원'),ellipse:t('타원'),arrow:t('화살표'),area:t('영역 강조'),'area-underline':t('영역 밑줄')};
+// Korean labels stay the lookup aliases below; the shown label follows the interface language.
+const READING_FONT_SOURCE = [
   ['default', '기본'],
   ['sans', '고딕'],
   ['serif', '명조'],
@@ -39,6 +41,7 @@ export const READING_FONTS = [
   ['Georgia', 'Georgia'],
   ['Times New Roman', 'Times New Roman'],
 ];
+export const READING_FONTS = READING_FONT_SOURCE.map(([key, label]) => [key, t(label)]);
 export const READING_FONT_FAMILIES = {
   sans: "'Pretendard','Apple SD Gothic Neo','Malgun Gothic','Noto Sans CJK KR','Noto Sans KR',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
   serif: "'AppleMyungjo','NanumMyeongjo','KoPubWorldBatang','Batang','Noto Serif CJK KR','Noto Serif KR',Georgia,'Times New Roman',serif",
@@ -97,7 +100,7 @@ const READING_FONT_LOOKUP = (() => {
     Gungsuh: ['궁서', '궁서체'],
     NanumGothicCoding: ['나눔고딕코딩', '나눔 고딕 코딩', 'Nanum Gothic Coding'],
   };
-  for (const [key, label] of READING_FONTS) {
+  for (const [key, label] of READING_FONT_SOURCE) {
     map.set(key, key);
     if (!map.has(key.toLowerCase())) map.set(key.toLowerCase(), key);
     if (!map.has(label)) map.set(label, key);
@@ -121,38 +124,38 @@ export function normalizeReadingFontFamily(value) {
 export function validThumbnail(value){return value===''||typeof value==='string'&&value.length<=400000&&/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(value);}
 export function validPDFPosition(value){return value&&Number.isInteger(value.page)&&value.page>=1&&value.page<=100000&&Number.isFinite(value.y)&&value.y>=0&&value.y<=1;}
 export function validateAnnotations(value) {
-  if (!Array.isArray(value)) throw new Error('주석 데이터 형식이 올바르지 않습니다.');
-  if (value.length > 20000) throw new Error('한 문서의 주석 수가 너무 많습니다.');
+  if (!Array.isArray(value)) throw new Error(t('주석 데이터 형식이 올바르지 않습니다.'));
+  if (value.length > 20000) throw new Error(t('한 문서의 주석 수가 너무 많습니다.'));
   const valid = [...TEXT_TOOLS, ...DRAW_TOOLS, 'note', 'text'];
   const ids = new Set();
   return value.map(item => {
-    if (!item || typeof item.id !== 'string' || !/^[\w-]{1,80}$/.test(item.id) || ids.has(item.id) || !valid.includes(item.type)) throw new Error('지원하지 않거나 손상된 주석입니다.');
+    if (!item || typeof item.id !== 'string' || !/^[\w-]{1,80}$/.test(item.id) || ids.has(item.id) || !valid.includes(item.type)) throw new Error(t('지원하지 않거나 손상된 주석입니다.'));
     ids.add(item.id);
-    if(item.pdfPage!=null&&(!Number.isInteger(item.pdfPage)||item.pdfPage<1||item.pdfPage>100000))throw Error('주석의 PDF 페이지가 올바르지 않습니다.');
-    if(item.pdfRects!=null&&(!TEXT_TOOLS.includes(item.type)||!Array.isArray(item.pdfRects)||!item.pdfRects.length||item.pdfRects.length>10000||item.pdfRects.some(r=>!validPDFPosition(r)||['x','w','h'].some(k=>!Number.isFinite(r[k])||r[k]<0||r[k]>1)||r.w<=0||r.h<=0||r.x+r.w>1.00001||r.y+r.h>1.00001)))throw Error('PDF 글자 주석 위치가 손상되었습니다.');
-    if (!/^#[\da-f]{6}$/i.test(item.color)) throw new Error('주석 색상 형식이 올바르지 않습니다.');
-    if (!Number.isFinite(item.width) || item.width < .1 || item.width > 100) throw new Error('주석 굵기가 올바르지 않습니다.');
-    if (!Number.isFinite(item.opacity) || item.opacity < 0 || item.opacity > 1) throw new Error('주석 투명도가 올바르지 않습니다.');
-    if (item.fill != null && (!FILL_TOOLS.includes(item.type) || typeof item.fill !== 'boolean')) throw new Error('도형 채움 설정이 올바르지 않습니다.');
-    if ((item.fill === true || item.fillOpacity != null) && (!FILL_TOOLS.includes(item.type) || item.fill !== true || !Number.isFinite(item.fillOpacity) || item.fillOpacity < 0 || item.fillOpacity > 1)) throw new Error('도형 채움 투명도가 올바르지 않습니다.');
+    if(item.pdfPage!=null&&(!Number.isInteger(item.pdfPage)||item.pdfPage<1||item.pdfPage>100000))throw Error(t('주석의 PDF 페이지가 올바르지 않습니다.'));
+    if(item.pdfRects!=null&&(!TEXT_TOOLS.includes(item.type)||!Array.isArray(item.pdfRects)||!item.pdfRects.length||item.pdfRects.length>10000||item.pdfRects.some(r=>!validPDFPosition(r)||['x','w','h'].some(k=>!Number.isFinite(r[k])||r[k]<0||r[k]>1)||r.w<=0||r.h<=0||r.x+r.w>1.00001||r.y+r.h>1.00001)))throw Error(t('PDF 글자 주석 위치가 손상되었습니다.'));
+    if (!/^#[\da-f]{6}$/i.test(item.color)) throw new Error(t('주석 색상 형식이 올바르지 않습니다.'));
+    if (!Number.isFinite(item.width) || item.width < .1 || item.width > 100) throw new Error(t('주석 굵기가 올바르지 않습니다.'));
+    if (!Number.isFinite(item.opacity) || item.opacity < 0 || item.opacity > 1) throw new Error(t('주석 투명도가 올바르지 않습니다.'));
+    if (item.fill != null && (!FILL_TOOLS.includes(item.type) || typeof item.fill !== 'boolean')) throw new Error(t('도형 채움 설정이 올바르지 않습니다.'));
+    if ((item.fill === true || item.fillOpacity != null) && (!FILL_TOOLS.includes(item.type) || item.fill !== true || !Number.isFinite(item.fillOpacity) || item.fillOpacity < 0 || item.fillOpacity > 1)) throw new Error(t('도형 채움 투명도가 올바르지 않습니다.'));
     if (TEXT_TOOLS.includes(item.type)) {
       const a = item.textAnchor;
-      if (!a || typeof a.quote !== 'string' || !a.quote.length || !Number.isSafeInteger(a.start) || !Number.isSafeInteger(a.end) || a.start < 0 || a.end <= a.start || a.quote.length > 200000) throw new Error('주석의 텍스트 위치가 손상되었습니다.');
+      if (!a || typeof a.quote !== 'string' || !a.quote.length || !Number.isSafeInteger(a.start) || !Number.isSafeInteger(a.end) || a.start < 0 || a.end <= a.start || a.quote.length > 200000) throw new Error(t('주석의 텍스트 위치가 손상되었습니다.'));
     } else {
-      if (!Array.isArray(item.points) || !item.points.length || item.points.length > 100000 || item.points.some(p => !p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || Math.abs(p.x) > 1e8 || Math.abs(p.y) > 1e8)) throw new Error('주석 좌표가 올바르지 않습니다.');
-      if (item.anchor && !/^(body|n\d+|js\d+)$/.test(item.anchor)) throw new Error('주석의 문서 위치가 손상되었습니다.');
+      if (!Array.isArray(item.points) || !item.points.length || item.points.length > 100000 || item.points.some(p => !p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || Math.abs(p.x) > 1e8 || Math.abs(p.y) > 1e8)) throw new Error(t('주석 좌표가 올바르지 않습니다.'));
+      if (item.anchor && !/^(body|n\d+|js\d+)$/.test(item.anchor)) throw new Error(t('주석의 문서 위치가 손상되었습니다.'));
       if (item.penBasis != null) {
         const basis = item.penBasis;
         if (item.type !== 'pen' || !item.anchor || typeof basis !== 'object' ||
           ['width','height'].some(key=>!Number.isFinite(basis[key]) || basis[key] < 1 || basis[key] > 1e8) ||
-          !Number.isFinite(basis.fontSize) || basis.fontSize < .1 || basis.fontSize > 1000) throw new Error('펜 그림의 글자 크기 기준이 손상되었습니다.');
+          !Number.isFinite(basis.fontSize) || basis.fontSize < .1 || basis.fontSize > 1000) throw new Error(t('펜 그림의 글자 크기 기준이 손상되었습니다.'));
         if(basis.textAnchor != null){
           const a=basis.textAnchor;
           if(!a || typeof a!=='object' || !Number.isSafeInteger(a.start) || !Number.isSafeInteger(a.end) || a.start<0 || a.end<=a.start || a.end>1e8 ||
             typeof a.quote!=='string' || !a.quote.length || a.quote.length>16 || a.end-a.start!==a.quote.length ||
             ['prefix','suffix'].some(key=>typeof a[key]!=='string' || a[key].length>40) ||
             ['x','y'].some(key=>!Number.isFinite(a[key]) || Math.abs(a[key])>1e8) ||
-            !Number.isFinite(a.fontSize) || a.fontSize<.1 || a.fontSize>1000) throw new Error('펜 그림의 글자 기준 위치가 손상되었습니다.');
+            !Number.isFinite(a.fontSize) || a.fontSize<.1 || a.fontSize>1000) throw new Error(t('펜 그림의 글자 기준 위치가 손상되었습니다.'));
         }
       }
       if (item.anchorTarget != null) {
@@ -160,46 +163,46 @@ export function validateAnnotations(value) {
         if (!target || typeof target !== 'object' || !/^[a-z][a-z0-9-]{0,63}$/.test(target.tag) ||
           ['id','rootId','section'].some(key=>typeof target[key] !== 'string' || target[key].length > 1000) ||
           typeof target.quote !== 'string' || target.quote.length > 160 ||
-          !Array.isArray(target.path) || target.path.length > 64 || target.path.some(index=>!Number.isSafeInteger(index) || index < 0 || index > 1000000)) throw new Error('주석의 본문 기준 위치가 손상되었습니다.');
+          !Array.isArray(target.path) || target.path.length > 64 || target.path.some(index=>!Number.isSafeInteger(index) || index < 0 || index > 1000000)) throw new Error(t('주석의 본문 기준 위치가 손상되었습니다.'));
       }
     }
-    if (!TEXT_TOOLS.includes(item.type) && item.textAnchor != null && (typeof item.textAnchor?.quote !== 'string' || item.textAnchor.quote.length > 200000)) throw new Error('메모의 대상 문장이 손상되었습니다.');
-    if (item.text != null && (typeof item.text !== 'string' || item.text.length > 10000)) throw new Error('메모가 너무 길거나 올바르지 않습니다.');
-    if(item.videoAnchor!=null&&(item.type!=='note'||!item.videoAnchor||typeof item.videoAnchor!=='object'||typeof item.videoAnchor.videoId!=='string'||!/^[A-Za-z0-9_-]{11}$/.test(item.videoAnchor.videoId)||!Number.isInteger(item.videoAnchor.seconds)||item.videoAnchor.seconds<0||item.videoAnchor.seconds>359999))throw Error('주석의 영상 시점이 올바르지 않습니다.');
-    if (item.style != null && (!['note','text'].includes(item.type) || !validTextStyle(item.style))) throw new Error('메모 상자 스타일이 올바르지 않습니다.');
-    if (item.textScale != null && (!['note','text'].includes(item.type) || !Number.isFinite(item.textScale) || item.textScale < .3 || item.textScale > 4)) throw new Error('메모의 글자 배율이 올바르지 않습니다.');
+    if (!TEXT_TOOLS.includes(item.type) && item.textAnchor != null && (typeof item.textAnchor?.quote !== 'string' || item.textAnchor.quote.length > 200000)) throw new Error(t('메모의 대상 문장이 손상되었습니다.'));
+    if (item.text != null && (typeof item.text !== 'string' || item.text.length > 10000)) throw new Error(t('메모가 너무 길거나 올바르지 않습니다.'));
+    if(item.videoAnchor!=null&&(item.type!=='note'||!item.videoAnchor||typeof item.videoAnchor!=='object'||typeof item.videoAnchor.videoId!=='string'||!/^[A-Za-z0-9_-]{11}$/.test(item.videoAnchor.videoId)||!Number.isInteger(item.videoAnchor.seconds)||item.videoAnchor.seconds<0||item.videoAnchor.seconds>359999))throw Error(t('주석의 영상 시점이 올바르지 않습니다.'));
+    if (item.style != null && (!['note','text'].includes(item.type) || !validTextStyle(item.style))) throw new Error(t('메모 상자 스타일이 올바르지 않습니다.'));
+    if (item.textScale != null && (!['note','text'].includes(item.type) || !Number.isFinite(item.textScale) || item.textScale < .3 || item.textScale > 4)) throw new Error(t('메모의 글자 배율이 올바르지 않습니다.'));
     return structuredClone(item);
   });
 }
 export function validateOutlineEdits(value = []) {
   if (value == null) return [];
-  if (!Array.isArray(value) || value.length > 5000) throw new Error('목차 수정 데이터 형식이 올바르지 않습니다.');
+  if (!Array.isArray(value) || value.length > 5000) throw new Error(t('목차 수정 데이터 형식이 올바르지 않습니다.'));
   const ids = new Set();
   return value.map(item => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('목차 수정 항목이 손상되었습니다.');
-    if (typeof item.id !== 'string' || !/^[\w-]{1,80}$/.test(item.id) || ids.has(item.id)) throw new Error('목차 수정 항목 ID가 올바르지 않습니다.');
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error(t('목차 수정 항목이 손상되었습니다.'));
+    if (typeof item.id !== 'string' || !/^[\w-]{1,80}$/.test(item.id) || ids.has(item.id)) throw new Error(t('목차 수정 항목 ID가 올바르지 않습니다.'));
     ids.add(item.id);
-    if (typeof item.title !== 'string' || !item.title.trim() || item.title.length > 1000) throw new Error('목차 제목이 올바르지 않습니다.');
-    if (item.originalTitle != null && (typeof item.originalTitle !== 'string' || item.originalTitle.length > 1000)) throw new Error('원본 목차 제목이 올바르지 않습니다.');
-    if (item.anchor != null && (typeof item.anchor !== 'string' || !/^(body|n\d+|js\d+)$/.test(item.anchor))) throw new Error('목차 항목의 문서 위치가 손상되었습니다.');
-    if (item.href != null && (typeof item.href !== 'string' || item.href.length > 1000)) throw new Error('목차 항목의 연결 대상이 손상되었습니다.');
-    if (item.index != null && (!Number.isSafeInteger(item.index) || item.index < 0 || item.index > 100000)) throw new Error('목차 항목 순서가 올바르지 않습니다.');
-    if (item.level != null && (!Number.isSafeInteger(item.level) || item.level < 1 || item.level > 16)) throw new Error('목차 항목 단계가 올바르지 않습니다.');
-    if (item.top != null && (!Number.isFinite(item.top) || item.top < -1e8 || item.top > 1e8)) throw new Error('목차 항목 위치가 올바르지 않습니다.');
-    if (item.pdfPosition != null && !validPDFPosition(item.pdfPosition)) throw new Error('PDF 목차 위치가 손상되었습니다.');
-    if (item.pdfQuote != null && (typeof item.pdfQuote !== 'string' || item.pdfQuote.length > 2000)) throw new Error('PDF 목차 본문 문맥이 손상되었습니다.');
-    if (item.pdfQuoteOffset != null && (!Number.isFinite(item.pdfQuoteOffset) || Math.abs(item.pdfQuoteOffset) > 1)) throw new Error('PDF 목차 본문 위치가 손상되었습니다.');
+    if (typeof item.title !== 'string' || !item.title.trim() || item.title.length > 1000) throw new Error(t('목차 제목이 올바르지 않습니다.'));
+    if (item.originalTitle != null && (typeof item.originalTitle !== 'string' || item.originalTitle.length > 1000)) throw new Error(t('원본 목차 제목이 올바르지 않습니다.'));
+    if (item.anchor != null && (typeof item.anchor !== 'string' || !/^(body|n\d+|js\d+)$/.test(item.anchor))) throw new Error(t('목차 항목의 문서 위치가 손상되었습니다.'));
+    if (item.href != null && (typeof item.href !== 'string' || item.href.length > 1000)) throw new Error(t('목차 항목의 연결 대상이 손상되었습니다.'));
+    if (item.index != null && (!Number.isSafeInteger(item.index) || item.index < 0 || item.index > 100000)) throw new Error(t('목차 항목 순서가 올바르지 않습니다.'));
+    if (item.level != null && (!Number.isSafeInteger(item.level) || item.level < 1 || item.level > 16)) throw new Error(t('목차 항목 단계가 올바르지 않습니다.'));
+    if (item.top != null && (!Number.isFinite(item.top) || item.top < -1e8 || item.top > 1e8)) throw new Error(t('목차 항목 위치가 올바르지 않습니다.'));
+    if (item.pdfPosition != null && !validPDFPosition(item.pdfPosition)) throw new Error(t('PDF 목차 위치가 손상되었습니다.'));
+    if (item.pdfQuote != null && (typeof item.pdfQuote !== 'string' || item.pdfQuote.length > 2000)) throw new Error(t('PDF 목차 본문 문맥이 손상되었습니다.'));
+    if (item.pdfQuoteOffset != null && (!Number.isFinite(item.pdfQuoteOffset) || Math.abs(item.pdfQuoteOffset) > 1)) throw new Error(t('PDF 목차 본문 위치가 손상되었습니다.'));
     if (item.textAnchor != null) {
       const a = item.textAnchor;
       if (!a || typeof a !== 'object' || typeof a.quote !== 'string' || !a.quote.length || a.quote.length > 2000 ||
         (a.start != null && (!Number.isSafeInteger(a.start) || a.start < 0 || a.start > 1e8)) ||
         (a.end != null && (!Number.isSafeInteger(a.end) || a.end < 0 || a.end > 1e8)) ||
         (a.prefix != null && (typeof a.prefix !== 'string' || a.prefix.length > 200)) ||
-        (a.suffix != null && (typeof a.suffix !== 'string' || a.suffix.length > 200))) throw new Error('목차 본문 문맥이 손상되었습니다.');
+        (a.suffix != null && (typeof a.suffix !== 'string' || a.suffix.length > 200))) throw new Error(t('목차 본문 문맥이 손상되었습니다.'));
     }
-    if (item.bookSection != null && (typeof item.bookSection !== 'string' || item.bookSection.length > 1000)) throw new Error('책 목차 절 정보가 손상되었습니다.');
-    if (item.bookPath != null && (!Array.isArray(item.bookPath) || item.bookPath.length > 32 || item.bookPath.some(part => typeof part !== 'string' || part.length > 1000))) throw new Error('책 목차 경로가 손상되었습니다.');
-    if (item.sourceKind != null && !['heading', 'toc', 'pdf'].includes(item.sourceKind)) throw new Error('목차 종류가 올바르지 않습니다.');
+    if (item.bookSection != null && (typeof item.bookSection !== 'string' || item.bookSection.length > 1000)) throw new Error(t('책 목차 절 정보가 손상되었습니다.'));
+    if (item.bookPath != null && (!Array.isArray(item.bookPath) || item.bookPath.length > 32 || item.bookPath.some(part => typeof part !== 'string' || part.length > 1000))) throw new Error(t('책 목차 경로가 손상되었습니다.'));
+    if (item.sourceKind != null && !['heading', 'toc', 'pdf'].includes(item.sourceKind)) throw new Error(t('목차 종류가 올바르지 않습니다.'));
     return structuredClone(item);
   });
 }

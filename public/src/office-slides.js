@@ -1,5 +1,6 @@
 import {buildRenderSlide,HeuristicMetrics} from '../vendor/office/genoffice.js';
 import {esc,number,color,font,imageSource,safeLink} from './office-common.js';
+import {t} from './i18n.js';
 const n=number;
 class BrowserMetrics extends HeuristicMetrics {
   constructor(){super();try{this.context=new OffscreenCanvas(1,1).getContext('2d');}catch{/* Node checks use deterministic upstream metrics. */}}
@@ -118,7 +119,7 @@ function chartHTML(chart,paint){
   return (chart.bgFill?rect({x:0,y:0,w:chart.box.w,h:chart.box.h,fill:chart.bgFill}):'')+(chart.plotRect?rect(chart.plotRect):'')+lines+(chart.bars||[]).map(rect).join('')+polylines+paths+wedges+(chart.markers||[]).map(m=>'<circle cx="'+n(m.x)+'" cy="'+n(m.y)+'" r="'+n(m.r)+'" fill="'+esc(color(m.color))+'"/>').join('')+(chart.swatches||[]).map(rect).join('')+labels;
 }
 function renderNode(node,paint,warnings,depth=0,parentState={rot:0,flipH:false,flipV:false}){
-  if(depth>64)throw Error('슬라이드 개체가 너무 깊게 중첩되어 있습니다.');
+  if(depth>64)throw Error(t('슬라이드 개체가 너무 깊게 중첩되어 있습니다.'));
   const b=node.box,w=Math.max(0,n(b.w)),h=Math.max(0,n(b.h));let body='';
   const transform='translate('+n(b.x)+' '+n(b.y)+')'+(b.rotationDeg?' rotate('+n(b.rotationDeg)+' '+w/2+' '+h/2+')':'')+(b.flipH||b.flipV?' translate('+(b.flipH?w:0)+' '+(b.flipV?h:0)+') scale('+(b.flipH?-1:1)+' '+(b.flipV?-1:1)+')':'');
   if(node.type==='group'){
@@ -130,10 +131,10 @@ function renderNode(node,paint,warnings,depth=0,parentState={rot:0,flipH:false,f
     const src=imageSource(node.dataUrl);if(src){
       const crop=node.srcRect||{},left=n(crop.l),top=n(crop.t),cw=Math.max(.001,1-left-n(crop.r)),ch=Math.max(.001,1-top-n(crop.b));
       body='<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" overflow="hidden"><image href="'+esc(src)+'" x="'+(-left*w/cw)+'" y="'+(-top*h/ch)+'" width="'+(w/cw)+'" height="'+(h/ch)+'" preserveAspectRatio="none" opacity="'+Math.max(0,Math.min(1,n(node.opacity,1)))+'"/></svg>';
-    }else{warnings.add('일부 그림·미디어는 미리보기가 없어 표시하지 못했습니다.');body='<rect width="'+w+'" height="'+h+'" fill="#eef1f5"/><text x="8" y="20" font-size="14">'+esc(node.name||'그림')+'</text>';}
+    }else{warnings.add(t('일부 그림·미디어는 미리보기가 없어 표시하지 못했습니다.'));body='<rect width="'+w+'" height="'+h+'" fill="#eef1f5"/><text x="8" y="20" font-size="14">'+esc(node.name||'그림')+'</text>';}
   }else if(node.type==='table')body=node.cells.map(c=>'<g transform="translate('+n(c.x)+' '+n(c.y)+')"><rect width="'+n(c.w)+'" height="'+n(c.h)+'" fill="'+esc(paint.fill(c.fill))+'"/>'+Object.entries(c.borders||{}).map(([side,s])=>{const p=side==='l'?[0,0,0,c.h]:side==='r'?[c.w,0,c.w,c.h]:side==='t'?[0,0,c.w,0]:[0,c.h,c.w,c.h];return '<line x1="'+n(p[0])+'" y1="'+n(p[1])+'" x2="'+n(p[2])+'" y2="'+n(p[3])+'" '+stroke(s)+'/>';}).join('')+textLayout(c.text)+'</g>').join('');
   else if(node.type==='chart')body=chartHTML(node,paint);
-  else if(node.type==='placeholder-chip'){warnings.add('일부 슬라이드 개체는 원래 모양을 표시하지 못했습니다.');body='<text x="8" y="20" font-size="14">'+esc(node.label)+'</text>';}
+  else if(node.type==='placeholder-chip'){warnings.add(t('일부 슬라이드 개체는 원래 모양을 표시하지 못했습니다.'));body='<text x="8" y="20" font-size="14">'+esc(node.label)+'</text>';}
   else{
     const style='fill="'+esc(paint.fill(node.fill))+'" '+stroke(node.stroke);
     let geom='';
@@ -237,7 +238,7 @@ function extractSlideTitle(slide,tree,slideNo){
 }
 export function renderSlides(opened,warnings){
   const media=mediaResolver(opened.archive),issues=new Set(),metrics=new BrowserMetrics(),total=opened.deck.slides.length;
-  if(total>10000)throw Error('슬라이드가 10,000장을 넘는 문서는 나누어 가져와 주세요.');
+  if(total>10000)throw Error(t('슬라이드가 10,000장을 넘는 문서는 나누어 가져와 주세요.'));
   const outline=[];
   const body=opened.deck.slides.map((slide,index)=>{
     const tree=buildRenderSlide(slide,opened.deck.size,{fitWidthPx:960,media,metrics,slideNo:index+1}),paint=paintFactory('office-slide-'+index);

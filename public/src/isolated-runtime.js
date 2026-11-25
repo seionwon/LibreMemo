@@ -1,3 +1,4 @@
+import {t} from './i18n.js';
 import {SCRIPT_CSP,restoreSourceReadingControls,sanitizeRuntimeHTML,serializeBookSource} from './document.js';
 import {cleanSourceStorage} from './model.js';
 
@@ -195,7 +196,7 @@ export class IsolatedRuntime {
   }
   async start() {
     const owner=this.host.ownerDocument,win=owner.defaultView;
-    const frame=owner.createElement('iframe');this.frame=frame;frame.setAttribute('sandbox','allow-scripts');frame.setAttribute('data-htmlmemo-runtime-runner','');frame.name='htmlmemo-runtime-'+this.channel;frame.title='문서 스크립트 격리 실행';frame.setAttribute('aria-hidden','true');frame.tabIndex=-1;frame.referrerPolicy='no-referrer';
+    const frame=owner.createElement('iframe');this.frame=frame;frame.setAttribute('sandbox','allow-scripts');frame.setAttribute('data-htmlmemo-runtime-runner','');frame.name='htmlmemo-runtime-'+this.channel;frame.title=t('문서 스크립트 격리 실행');frame.setAttribute('aria-hidden','true');frame.tabIndex=-1;frame.referrerPolicy='no-referrer';
     // Keep it in the viewport so Chrome does not throttle book timers. Inert,
     // transparent and outside pointer/tab interaction, it never becomes UI.
     frame.inert=true;frame.style.cssText='position:fixed;left:0;top:0;width:1100px;height:900px;border:0;opacity:0;pointer-events:none;z-index:-1';
@@ -224,7 +225,7 @@ export class IsolatedRuntime {
     };
     const loaderCode=loader.toString().replaceAll('CHANNEL',JSON.stringify(this.channel)).replaceAll('PREFIX',JSON.stringify(prefix).replaceAll('<','\\u003c'));
     const loaderHTML='<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="'+policy+'"><script>(()=>{const loader='+loaderCode+';addEventListener("message",loader);parent.postMessage({type:"source-ready",channel:'+JSON.stringify(this.channel)+'},"*");})();</script>';
-    const initial=new Promise((resolve,reject)=>{this.resolve=resolve;this.reject=reject;this.timer=setTimeout(()=>this.fail(Error('문서 스크립트의 격리 실행 결과를 준비하지 못했습니다.')),30000);});
+    const initial=new Promise((resolve,reject)=>{this.resolve=resolve;this.reject=reject;this.timer=setTimeout(()=>this.fail(Error(t('문서 스크립트의 격리 실행 결과를 준비하지 못했습니다.'))),30000);});
     this.receive=event=>{
       const value=event.data;if(this.disposed||event.source!==frame.contentWindow||value?.channel!==this.channel)return;
       if(value.type==='source-ready'){if(!this.sourceDelivered){this.sourceDelivered=true;frame.contentWindow.postMessage({type:'source',channel:this.channel,source},'*');}return;}
@@ -261,9 +262,9 @@ export class IsolatedRuntime {
     if(value.type==='released-assets'){
       if(Array.isArray(value.ids)&&value.ids.length<=10000)for(const id of value.ids)if(typeof id==='string'&&/^book-asset-\d{1,10}$/.test(id)){const node=this.doc.getElementById(id);if(node?.localName==='script'&&node.type==='application/octet-stream')node.remove();}return;
     }
-    if(value.type==='error'){this.fail(Error(String(value.message).slice(0,300)));return;}
+    if(value.type==='error'){this.fail(Error(t(String(value.message).slice(0,300))));return;}
     if(value.type==='initial'){
-      if(!this.resolve||typeof value.html!=='string'||value.html.length>MAX_HTML)throw Error('유효하지 않은 문서 실행 결과입니다.');
+      if(!this.resolve||typeof value.html!=='string'||value.html.length>MAX_HTML)throw Error(t('유효하지 않은 문서 실행 결과입니다.'));
       const next=sanitizeRuntimeHTML(value.html),payloads=[...this.doc.querySelectorAll('script[type="application/octet-stream"]')],metadata=this.doc.getElementById('htmlmemo-data');
       this.doc.head.replaceChildren(...[...next.head.childNodes].map(node=>this.doc.importNode(node,true)));this.doc.body.replaceChildren(...[...next.body.childNodes].map(node=>this.doc.importNode(node,true)));
       if(metadata)this.doc.head.append(metadata);
@@ -377,5 +378,5 @@ export class IsolatedRuntime {
     add(this.doc,'toggle',event=>{const node=sourceTarget(event);if(node?.localName==='details')this.setDetailsOpen(node,node.open);});
     add(this.doc.defaultView,'hashchange',()=>this.send({type:'hash',hash:this.doc.defaultView.location.hash}));
   }
-  dispose() {this.disposed=true;clearTimeout(this.timer);this.reject?.(new DOMException('문서 열기가 취소되었습니다.','AbortError'));this.resolve=this.reject=null;for(const remove of this.listeners)remove();this.port?.close();this.window?.removeEventListener('message',this.receive);this.frame?.remove();if(this.url)URL.revokeObjectURL(this.url);this.nodes.clear();this.attributes.clear();}
+  dispose() {this.disposed=true;clearTimeout(this.timer);this.reject?.(new DOMException(t('문서 열기가 취소되었습니다.'),'AbortError'));this.resolve=this.reject=null;for(const remove of this.listeners)remove();this.port?.close();this.window?.removeEventListener('message',this.receive);this.frame?.remove();if(this.url)URL.revokeObjectURL(this.url);this.nodes.clear();this.attributes.clear();}
 }

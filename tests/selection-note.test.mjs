@@ -7,6 +7,7 @@ import {Reader} from '../public/src/reader.js';
 import {History} from '../public/src/model.js';
 import {textIndex,rangeFromOffsets,selectionAnchor} from '../public/src/document.js';
 import {documentFor,installDOM} from './dom.mjs';
+import {t,locale} from '../public/src/i18n.js';
 
 const source=await readFile(new URL('../public/src/app.js',import.meta.url),'utf8');
 function fixture({section=''}={}){
@@ -16,7 +17,7 @@ function fixture({section=''}={}){
   doc.getSelection=()=>selection;doc.createRange=()=>({setStart(node,offset){this.startContainer=node;this.startOffset=offset;},setEnd(node,offset){this.endContainer=node;this.endOffset=offset;},getBoundingClientRect:()=>({left:24,top:80,width:80,height:20}),intersectsNode(node){const index=textIndex(doc),entry=index.nodes.find(n=>n.node===node),start=index.nodes.find(n=>n.node===this.startContainer),end=index.nodes.find(n=>n.node===this.endContainer);return !!entry&&entry.end>start.start+this.startOffset&&entry.start<end.start+this.endOffset;}});
   const r=Object.assign(Object.create(Reader.prototype),{doc,host:{hidden:false},tool:'select',metadata:{annotations:[],bookmarks:[],view:{}},history:new History(),color:'#334155',width:3,opacity:1,render(){},layerOrigin:()=>({left:0,top:0}),elementAnchor:()=>({key:'target',target:{tag:'p',id:'target',rootId:'reader-content',path:[],quote:'선택한 대상 글',section},x:0,y:0,width:400}),callbacks:{onChange:()=>changes++,onNotice:message=>notices.push(message),requestText:type=>{assert.equal(type,'note');requests++;return new Promise(resolve=>answer=resolve);}}});
   const setTool=r.setTool.bind(r);r.setTool=tool=>{tools.push(tool);setTool(tool);};
-  let current=r;const context=vm.createContext({document:ui,$:(s,root=ui)=>$(s,root),$$:(s,root=ui)=>$$(s,root),icon,reader:()=>current,bindToolbarDrag(){},applyToolbarPosition(){},updateToolbarState(){},closePopover(){ui.querySelector('#tool-popover').hidden=true;},showPopover(){ui.querySelector('#tool-popover').hidden=false;},safely:fn=>fn});
+  let current=r;const context=vm.createContext({t,locale,document:ui,$:(s,root=ui)=>$(s,root),$$:(s,root=ui)=>$$(s,root),icon,reader:()=>current,bindToolbarDrag(){},applyToolbarPosition(){},updateToolbarState(){},closePopover(){ui.querySelector('#tool-popover').hidden=true;},showPopover(){ui.querySelector('#tool-popover').hidden=false;},safely:fn=>fn});
   const controls=source.slice(source.indexOf('function toolbarButton('),source.indexOf('function updateToolbarState()')),actions=source.slice(source.indexOf('function toolAction('),source.indexOf('function bindToolbarDrag('));vm.runInContext('var sidebarMode="";'+controls+actions+'renderToolbar();',context);
   const choose=(quote='대상 글')=>{const index=textIndex(doc),start=index.text.indexOf(quote),range=rangeFromOffsets(doc,start,start+quote.length,index);selection.removeAllRanges();selection.addRange(range);r.selection=r.sectionAnchor(selectionAnchor(doc,range));};choose();
   return {r,doc,ui,selection,notices,tools,context,choose,button:ui.querySelector('[data-action=note]'),answer:value=>answer(value),get requests(){return requests;},get changes(){return changes;},setReader:value=>current=value};

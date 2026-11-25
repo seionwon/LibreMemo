@@ -10,6 +10,7 @@ import {isPDFDocument} from '../public/src/pdf-document.js';
 import {IMAGE_EXTENSIONS} from '../public/src/image-formats.js';
 import {OFFICE_FORMATS} from '../public/src/office-formats.js';
 import {savedCardPicture,cardPreviewKey} from '../public/src/card-previews.js';
+import {t,locale} from '../public/src/i18n.js';
 installDOM();
 const tree=[{id:'books',parentId:'',name:'책'},{id:'part',parentId:'books',name:'1부'}];
 const rows=()=>Array.from({length:5000},(_,i)=>({id:'d'+i,title:'문서 '+i,name:i+'.html',source:'',created:i,modified:5000-i,folderId:i%2?'part':'',metadata:{annotations:[],view:{}}}));
@@ -49,7 +50,7 @@ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8'
 function libraryApp(){
   const doc=documentFor(html),records=rows().slice(0,4),folders=validateFolders(tree),calls={read:0,render:0};
   doc.querySelector('#library-filter').value='';
-  const context=vm.createContext({document:doc,$:(s,root=doc)=>$(s,root),$$:(s,root=doc)=>$$(s,root),icon,esc:escapeHTML,isPDFDocument,IMAGE_EXTENSIONS,OFFICE_FORMATS,savedCardPicture,cardPreviewKey,formatDate,formatBytes,displayHost,LibraryIndex,validateFolders,
+  const context=vm.createContext({t,locale,document:doc,$:(s,root=doc)=>$(s,root),$$:(s,root=doc)=>$$(s,root),icon,esc:escapeHTML,isPDFDocument,IMAGE_EXTENSIONS,OFFICE_FORMATS,savedCardPicture,cardPreviewKey,formatDate,formatBytes,displayHost,LibraryIndex,validateFolders,
     folderPath:(folders,id,map)=>{const path=[];for(let f=map.get(id);f;f=map.get(f.parentId))path.unshift(f);return path;},clearTimeout,
     readLibrary:async()=>{calls.read++;return {documents:records,folders};},renderFolderState:()=>{},
     initialRecords:records,initialFolders:folders});
@@ -77,7 +78,7 @@ test('concurrent library refreshes share one pending read and publish only the n
   a.context.readLibrary=async()=>({documents:[],folders:[]});await a.context.refreshLibrary();assert.equal(renders,2);
 });
 test('date formatters are constructed once per locale/style, not once per card',async()=>{
-  const code=(await readFile(new URL('../public/src/utils.js',import.meta.url),'utf8')).replace(/^export /gm,'');let created=0;
+  const code=(await readFile(new URL('../public/src/utils.js',import.meta.url),'utf8')).replace(/^export /gm,'').replace(/^import \{[^}]*\} from '\.\/i18n\.js';$/m,"const locale=()=>'ko-KR',t=text=>text;");let created=0;
   const context=vm.createContext({Intl:{DateTimeFormat:function(...args){created++;return new Intl.DateTimeFormat(...args);}}});vm.runInContext(code,context);
   const time=new Date(2026,9,25,12,34,56).getTime();for(let i=0;i<1000;i++){assert.equal(context.formatDate(time),formatDate(time));assert.equal(context.formatDate(time,true),new Date(time).toLocaleString('ko-KR'));}assert.equal(created,2);
 });

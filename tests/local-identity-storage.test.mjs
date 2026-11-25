@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
-const source=(await readFile(new URL('../public/src/storage.js',import.meta.url),'utf8')).replace(/^export /gm,'');
+import {t} from '../public/src/i18n.js';
+const source=(await readFile(new URL('../public/src/storage.js',import.meta.url),'utf8')).replace(/^export /gm,'').replace(/^import \{t\} from '\.\/i18n\.js';\n/m,'');
 const identity={version:1,size:123,digest:'a'.repeat(64)};
 const original={id:'book',modified:1234,byteSize:456,metadata:{annotations:[{id:'note',text:'Keep me'}],bookmarks:[{id:'mark'}],view:{zoom:1}}};
 function storage(record=original){
@@ -19,7 +20,7 @@ function storage(record=original){
     });
     return tx;
   }};
-  const context=vm.createContext({connection,structuredClone,Blob,crypto,Date,IDBKeyRange:{only:id=>id}});
+  const context=vm.createContext({t,connection,structuredClone,Blob,crypto,Date,IDBKeyRange:{only:id=>id}});
   vm.runInContext(source+'\ndatabase=Promise.resolve(connection);',context);
   return {context,transactions,writes,get current(){return current;}};
 }

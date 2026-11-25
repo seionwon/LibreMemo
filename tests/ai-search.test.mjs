@@ -24,7 +24,7 @@ test('the selection is encoded into the address, or carried by the clipboard',()
 });
 test('AI search sits between read-aloud and web search, runs one engine directly and is shipped',async()=>{
   const app=await readFile('public/src/app.js','utf8');
-  assert.match(app,/\['speak','읽어주기'\],\['aiSearch','AI 검색'\],\['webSearch','웹 검색'\]/);
+  assert.match(app,/\['speak',t\('읽어주기'\)\],\['aiSearch',t\('AI 검색'\)\],\['webSearch',t\('웹 검색'\)\]/);
   assert.match(app,/filter\(engine=>engine\.enabled\)/);assert.match(app,/engines\.length===1\)\{await runAiSearch\(engines\[0\],text\)/);
   assert.ok(APP_FILES.includes('src/ai-search.js'));
 });

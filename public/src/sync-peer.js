@@ -1,7 +1,8 @@
 // The relay carries AES-encrypted SDP/ICE only. Original bytes use WebRTC's
 // authenticated DTLS channel, with small frames and bounded browser buffering.
-const initialConnectionError=()=>Error('자료 전송을 시작하기 전에 기기 간 직접 연결을 만들지 못했습니다. 연결 경로를 한 차례 다시 확인했지만 연결되지 않았습니다. 같은 공유기의 기기 간 통신 차단과 두 기기의 방화벽·네트워크 권한을 확인해주세요.');
-const attemptOf=message=>{const value=message.attempt??0;if(!Number.isInteger(value)||value<0||value>1)throw Error('잘못된 기기 연결 재시도 정보입니다.');return value;};
+import {t} from './i18n.js';
+const initialConnectionError=()=>Error(t('자료 전송을 시작하기 전에 기기 간 직접 연결을 만들지 못했습니다. 연결 경로를 한 차례 다시 확인했지만 연결되지 않았습니다. 같은 공유기의 기기 간 통신 차단과 두 기기의 방화벽·네트워크 권한을 확인해주세요.'));
+const attemptOf=message=>{const value=message.attempt??0;if(!Number.isInteger(value)||value<0||value>1)throw Error(t('잘못된 기기 연결 재시도 정보입니다.'));return value;};
 export class DirectSyncConnection{
   constructor({signal,onOpen,onMessage,onError,onRetry=()=>{}}){
     Object.assign(this,{signal,onOpen,onMessage,onError,onRetry});this.closed=false;this.opened=false;this.attempt=0;this.initiator=false;this.remoteCandidates=[];this.queue=Promise.resolve();this.createPeer();
@@ -21,11 +22,11 @@ export class DirectSyncConnection{
       clearTimeout(this.disconnectTimer);if(!this.active(pc))return;
       if(pc.connectionState==='failed'||pc.connectionState==='closed'){
         if(!this.opened)void this.recoverInitial();
-        else this.fail(Error('기기 간 연결이 끊겼습니다. 두 창을 열어 두고 다시 연결해주세요.'),()=>this.active(pc)&&['failed','closed'].includes(pc.connectionState));
+        else this.fail(Error(t('기기 간 연결이 끊겼습니다. 두 창을 열어 두고 다시 연결해주세요.')),()=>this.active(pc)&&['failed','closed'].includes(pc.connectionState));
       }
       if(pc.connectionState==='disconnected')this.disconnectTimer=setTimeout(()=>{
         if(!this.active(pc)||pc.connectionState!=='disconnected')return;
-        if(!this.opened)void this.recoverInitial();else this.fail(Error('상대 기기의 연결이 끊겼습니다. 두 기기의 인터넷 연결을 확인해주세요.'),()=>this.active(pc)&&pc.connectionState==='disconnected');
+        if(!this.opened)void this.recoverInitial();else this.fail(Error(t('상대 기기의 연결이 끊겼습니다. 두 기기의 인터넷 연결을 확인해주세요.')),()=>this.active(pc)&&pc.connectionState==='disconnected');
       },15000);
     };
     this.armConnectTimer();
@@ -54,8 +55,8 @@ export class DirectSyncConnection{
     if(this.channel){channel.close();return;}this.channel=channel;channel.binaryType='arraybuffer';channel.bufferedAmountLowThreshold=65536;
     channel.onopen=()=>{if(!this.active(pc)||this.opened)return;this.opened=true;clearTimeout(this.connectTimer);clearTimeout(this.disconnectTimer);this.onOpen();};
     channel.onmessage=event=>{if(!this.active(pc))return;this.queue=this.queue.then(()=>{if(this.active(pc))return this.onMessage(event.data);}).catch(error=>{if(this.active(pc))this.fail(error);});};
-    channel.onerror=()=>{if(this.active(pc)){if(!this.opened)void this.recoverInitial();else this.fail(Error('파일 전송 연결에 오류가 발생했습니다. 다시 연결해주세요.'));}};
-    channel.onclose=()=>{if(this.active(pc)){if(!this.opened)void this.recoverInitial();else this.fail(Error('상대 기기에서 전송 연결을 닫았습니다. 두 창을 열어 두고 다시 연결해주세요.'));}};
+    channel.onerror=()=>{if(this.active(pc)){if(!this.opened)void this.recoverInitial();else this.fail(Error(t('파일 전송 연결에 오류가 발생했습니다. 다시 연결해주세요.')));}};
+    channel.onclose=()=>{if(this.active(pc)){if(!this.opened)void this.recoverInitial();else this.fail(Error(t('상대 기기에서 전송 연결을 닫았습니다. 두 창을 열어 두고 다시 연결해주세요.')));}};
   }
   async offer(){
     if(this.closed||this.opened)return;this.initiator=true;const pc=this.pc,attempt=this.attempt;if(!pc)return;
@@ -65,7 +66,7 @@ export class DirectSyncConnection{
   async receive(message){
     if(this.closed)return;const attempt=attemptOf(message);
     if(message.kind==='retry'){
-      if(attempt!==1)throw Error('잘못된 기기 연결 재시도 정보입니다.');
+      if(attempt!==1)throw Error(t('잘못된 기기 연결 재시도 정보입니다.'));
       if(this.initiator&&!this.opened&&this.attempt===0)await this.recoverInitial();return;
     }
     if(attempt<this.attempt)return;
@@ -80,8 +81,8 @@ export class DirectSyncConnection{
       if(attempt!==this.attempt||!this.initiator||!this.pc||this.pc.remoteDescription)return;const pc=this.pc;
       await pc.setRemoteDescription(message.description);if(this.active(pc))await this.applyCandidates();
     }else if(message.kind==='candidates'){
-      if(!Array.isArray(message.candidates)||message.candidates.length>32)throw Error('잘못된 기기 연결 정보입니다.');
-      this.remoteCandidates.push(...message.candidates.map(candidate=>({attempt,candidate})));if(this.remoteCandidates.length>128)throw Error('기기 연결 정보가 너무 많습니다.');await this.applyCandidates();
+      if(!Array.isArray(message.candidates)||message.candidates.length>32)throw Error(t('잘못된 기기 연결 정보입니다.'));
+      this.remoteCandidates.push(...message.candidates.map(candidate=>({attempt,candidate})));if(this.remoteCandidates.length>128)throw Error(t('기기 연결 정보가 너무 많습니다.'));await this.applyCandidates();
     }
   }
   async applyCandidates(){
@@ -89,13 +90,13 @@ export class DirectSyncConnection{
     for(const item of pending){if(item.attempt>this.attempt)this.remoteCandidates.push(item);else if(item.attempt===this.attempt&&this.active(pc))await pc.addIceCandidate(item.candidate);}
   }
   async send(data){
-    const channel=this.channel;if(this.closed||channel?.readyState!=='open')throw Error('파일 전송 연결이 닫혔습니다.');
+    const channel=this.channel;if(this.closed||channel?.readyState!=='open')throw Error(t('파일 전송 연결이 닫혔습니다.'));
     if(channel.bufferedAmount>262144)await new Promise((resolve,reject)=>{
       const done=error=>{clearTimeout(timer);channel.removeEventListener('bufferedamountlow',low);channel.removeEventListener('close',close);error?reject(error):resolve();};
-      const low=()=>done(),close=()=>done(Error('파일 전송 연결이 닫혔습니다.')),timer=setTimeout(()=>done(Error('파일 전송이 지연되고 있습니다. 두 기기의 연결을 확인한 뒤 다시 시도해주세요.')),30000);
+      const low=()=>done(),close=()=>done(Error(t('파일 전송 연결이 닫혔습니다.'))),timer=setTimeout(()=>done(Error(t('파일 전송이 지연되고 있습니다. 두 기기의 연결을 확인한 뒤 다시 시도해주세요.'))),30000);
       channel.addEventListener('bufferedamountlow',low,{once:true});channel.addEventListener('close',close,{once:true});if(channel.bufferedAmount<=65536)low();
     });
-    if(this.closed||this.channel!==channel||channel.readyState!=='open')throw Error('파일 전송 연결이 닫혔습니다.');channel.send(data);
+    if(this.closed||this.channel!==channel||channel.readyState!=='open')throw Error(t('파일 전송 연결이 닫혔습니다.'));channel.send(data);
   }
   closePeer({graceful=false}={}){
     for(const timer of [this.connectTimer,this.disconnectTimer,this.candidateTimer,this.errorTimer])clearTimeout(timer);this.candidateTimer=null;this.errorTimer=null;

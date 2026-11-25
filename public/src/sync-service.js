@@ -1,4 +1,5 @@
 // Ported from MemoSuite sync/SyncService.ts; protocol/encryption intentionally preserved.
+import {t} from './i18n.js';
 import { encryptData, decryptData, deriveTopic } from "./sync-crypto.js";
 export const cleanRoomId = (roomId) => {
   return roomId.trim().replace(/[^a-zA-Z0-9_-]/g, "-").toUpperCase();
@@ -113,7 +114,7 @@ export class SyncService {
         if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
         if (!this.isDestroyed && this.roomId) {
           console.log("Attempting to reconnect in 3s...");
-          this.reconnectTimer = setTimeout(() => this.connectRelay().catch(error => this.setStatus('error', error?.message || '중계 서버에 다시 연결하지 못했습니다.')), 3e3);
+          this.reconnectTimer = setTimeout(() => this.connectRelay().catch(error => this.setStatus('error', error?.message || t('중계 서버에 다시 연결하지 못했습니다.'))), 3e3);
         }
       };
     });

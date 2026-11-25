@@ -1,3 +1,4 @@
+import {t} from './i18n.js';
 const DB_NAME = 'HTMLMemo-v1';
 let database;
 const contentCache=new Map(),contentToken=Symbol('stored-content');
@@ -34,7 +35,7 @@ async function db() {
   if (!database) database = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, 4);
     let blocked=false;
-    request.onblocked=()=>{blocked=true;database=null;reject(new Error('다른 LibreMemo 창이 이전 보관함을 사용하고 있습니다. 해당 창을 닫고 다시 열어주세요. 보관한 문서는 유지됩니다.'));};
+    request.onblocked=()=>{blocked=true;database=null;reject(new Error(t('다른 LibreMemo 창이 이전 보관함을 사용하고 있습니다. 해당 창을 닫고 다시 열어주세요. 보관한 문서는 유지됩니다.')));};
     request.onupgradeneeded = event => {
       const database = request.result;
       if (!database.objectStoreNames.contains('documents')) database.createObjectStore('documents', {keyPath:'id'});
@@ -74,7 +75,7 @@ async function transaction(store, mode, action) {
   const database = await db();
   return new Promise((resolve, reject) => {
     const tx = database.transaction(store, mode); const request = action(tx.objectStore(store));
-    tx.oncomplete = () => resolve(request?.result); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error || new Error('저장이 중단되었습니다.'));
+    tx.oncomplete = () => resolve(request?.result); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error || new Error(t('저장이 중단되었습니다.')));
   });
 }
 async function withContent(record) {
@@ -86,8 +87,8 @@ async function withContent(record) {
     // Existing books acquire one without reading or rewriting their bytes.
     const tx=connection.transaction(['documents','contents'],record.contentKey?'readonly':'readwrite'),documents=tx.objectStore('documents'),header=documents.get(record.id),body=tx.objectStore('contents').get(record.id);let failure;
     header.onsuccess=()=>{if(!record.contentKey&&header.result&&!header.result.contentKey){try{header.result.contentKey=crypto.randomUUID();documents.put(header.result);}catch(error){failure=error;tx.abort();}}};
-    tx.oncomplete=()=>{if(!header.result){resolve(undefined);return;}if(!body.result){reject(Error('보관한 HTML 본문을 찾지 못했습니다.'));return;}if(!header.result.contentKey){withContent(header.result).then(resolve,reject);return;}resolve(attachContent(header.result,retainContent(record.id,header.result.contentKey,body.result)));};
-    tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(failure||tx.error||Error('보관한 HTML 본문을 읽지 못했습니다.'));
+    tx.oncomplete=()=>{if(!header.result){resolve(undefined);return;}if(!body.result){reject(Error(t('보관한 HTML 본문을 찾지 못했습니다.')));return;}if(!header.result.contentKey){withContent(header.result).then(resolve,reject);return;}resolve(attachContent(header.result,retainContent(record.id,header.result.contentKey,body.result)));};
+    tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(failure||tx.error||Error(t('보관한 HTML 본문을 읽지 못했습니다.')));
   });
 }
 // Library cards never load book bodies; getDocument is the explicit lazy read.
@@ -101,7 +102,7 @@ export async function getDocumentPreview(id) {
   const connection=await db();return new Promise((resolve,reject)=>{
     const tx=connection.transaction(['documents','contents'],'readonly'),header=tx.objectStore('documents').get(id),body=tx.objectStore('contents').get(id);
     tx.oncomplete=()=>{const record=header.result,content=body.result;if(!record){resolve(null);return;}const html=content?.html??record.html;resolve({...record,html:typeof html==='string'?html.slice(0,4*1024*1024):undefined,file:content?.file,originalFile:content?.originalFile});};
-    tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('미리보기 자료를 읽지 못했습니다.'));
+    tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error(t('미리보기 자료를 읽지 못했습니다.')));
   });
 }
 export const putDocument = record => putDocumentRevision(record);
@@ -111,7 +112,7 @@ export const setSetting = (key, value) => transaction('settings', 'readwrite', s
 export async function readLibrary() {
   const connection=await db();return new Promise((resolve,reject)=>{
     const tx=connection.transaction(['settings','documents'],'readonly'),folders=tx.objectStore('settings').get('library-folders-v1'),documents=tx.objectStore('documents').getAll();
-    tx.oncomplete=()=>resolve({folders:folders.result||[],documents:documents.result});tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('서재 폴더와 문서 목록을 읽지 못했습니다.'));
+    tx.oncomplete=()=>resolve({folders:folders.result||[],documents:documents.result});tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error(t('서재 폴더와 문서 목록을 읽지 못했습니다.')));
   });
 }
 /** Serialize folder edits with all document headers, across tabs. Never read HTML or history. */
@@ -124,20 +125,20 @@ export async function updateLibraryFolders(edit) {
     tree.onsuccess=apply;rows.onsuccess=apply;
     if(Object.prototype.hasOwnProperty.call(tree,'result'))apply();
     if(Object.prototype.hasOwnProperty.call(rows,'result'))apply();
-    tx.oncomplete=()=>{if(failure)reject(failure);else{changed(null);resolve(result);}};tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(failure||tx.error||new Error('서재 폴더 변경을 저장하지 못했습니다. 기존 폴더와 문서는 유지됩니다.'));
+    tx.oncomplete=()=>{if(failure)reject(failure);else{changed(null);resolve(result);}};tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(failure||tx.error||new Error(t('서재 폴더 변경을 저장하지 못했습니다. 기존 폴더와 문서는 유지됩니다.')));
   });
 }
 const validStarredAt = value => Number.isFinite(value) && value > 0 && value <= 8640000000000000;
 /** Star toggles update only the document header, leaving modification dates and history untouched. */
 export async function putDocumentStar(id, starredAt) {
-  if(starredAt!==null&&starredAt!==undefined&&!validStarredAt(starredAt))throw Error('별표 시각이 올바르지 않습니다.');
+  if(starredAt!==null&&starredAt!==undefined&&!validStarredAt(starredAt))throw Error(t('별표 시각이 올바르지 않습니다.'));
   const connection=await db();
   return new Promise((resolve,reject)=>{
     const tx=connection.transaction('documents','readwrite'),store=tx.objectStore('documents');
     const request=store.get(id);let saved,failure,applied=false;
     const apply=()=>{if(applied)return;applied=true;try{
       saved=request.result;
-      if(!saved)throw new Error('별표를 변경할 문서를 찾지 못했습니다.');
+      if(!saved)throw new Error(t('별표를 변경할 문서를 찾지 못했습니다.'));
       if(starredAt)saved.starredAt=starredAt;else delete saved.starredAt;
       store.put(saved);
     }catch(error){failure=error;tx.abort?.();}};
@@ -145,7 +146,7 @@ export async function putDocumentStar(id, starredAt) {
     if(Object.prototype.hasOwnProperty.call(request,'result'))apply();
     tx.oncomplete=()=>{if(failure)reject(failure);else{changed(id);resolve(saved);}};
     tx.onerror=()=>reject(tx.error);
-    tx.onabort=()=>reject(failure||tx.error||new Error('별표 상태를 저장하지 못했습니다.'));
+    tx.onabort=()=>reject(failure||tx.error||new Error(t('별표 상태를 저장하지 못했습니다.')));
   });
 }
 /** Cache a proven legacy source identity without reading/writing its body or history. */
@@ -160,7 +161,7 @@ export async function putDocumentSourceIdentity(id, sourceIdentity) {
     };
     tx.oncomplete=()=>{if(saved)changed(id);resolve(saved);};
     tx.onerror=()=>reject(tx.error);
-    tx.onabort=()=>reject(failure||tx.error||new Error('파일 확인 결과를 보관하지 못했습니다.'));
+    tx.onabort=()=>reject(failure||tx.error||new Error(t('파일 확인 결과를 보관하지 못했습니다.')));
   });
 }
 /** View-only saves leave annotations, history, source HTML and the modification date alone. */
@@ -172,15 +173,15 @@ export async function putDocumentView(id, view, expectedSyncEpoch) {
     request.onsuccess = () => {
       try {
         saved = request.result;
-        if (!saved) throw new Error('읽기 위치를 저장할 문서를 찾지 못했습니다.');
-        if(saved.syncEpoch&&saved.syncEpoch!==expectedSyncEpoch)throw Error('다른 기기에서 받은 최신 문서입니다. 이 탭을 다시 열어주세요.');
+        if (!saved) throw new Error(t('읽기 위치를 저장할 문서를 찾지 못했습니다.'));
+        if(saved.syncEpoch&&saved.syncEpoch!==expectedSyncEpoch)throw Error(t('다른 기기에서 받은 최신 문서입니다. 이 탭을 다시 열어주세요.'));
         saved.metadata = {...saved.metadata, view:position};
         store.put(saved);
       } catch (error) { failure = error; tx.abort(); }
     };
     tx.oncomplete = () => { changed(id); resolve(saved); };
     tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(failure || tx.error || new Error('읽기 위치를 저장하지 못했습니다.'));
+    tx.onabort = () => reject(failure || tx.error || new Error(t('읽기 위치를 저장하지 못했습니다.')));
   });
 }
 /** A document's card picture (a small JPEG data URL, or '' when it has none). Like the view, it is not an annotation edit. */
@@ -191,15 +192,15 @@ export async function putDocumentThumbnail(id, thumbnail, expectedSyncEpoch) {
     request.onsuccess = () => {
       try {
         saved = request.result;
-        if (!saved) throw new Error('썸네일을 저장할 문서를 찾지 못했습니다.');
-        if (saved.syncEpoch && saved.syncEpoch !== expectedSyncEpoch) throw Error('다른 기기에서 받은 최신 문서입니다.');
+        if (!saved) throw new Error(t('썸네일을 저장할 문서를 찾지 못했습니다.'));
+        if (saved.syncEpoch && saved.syncEpoch !== expectedSyncEpoch) throw Error(t('다른 기기에서 받은 최신 문서입니다.'));
         saved.metadata = {...saved.metadata, thumbnail};
         store.put(saved);
       } catch (error) { failure = error; tx.abort(); }
     };
     tx.oncomplete = () => { changed(id); resolve(saved); };
     tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(failure || tx.error || new Error('썸네일을 저장하지 못했습니다.'));
+    tx.onabort = () => reject(failure || tx.error || new Error(t('썸네일을 저장하지 못했습니다.')));
   });
 }
 /**
@@ -215,8 +216,8 @@ export async function replaceDocumentBody(id, {html, originalFile = null, metada
     request.onsuccess = () => {
       try {
         const old = request.result;
-        if (!old || old.trashedAt) throw new Error('바꿀 문서를 찾지 못했습니다. 휴지통에 있다면 먼저 복원해주세요.');
-        if (old.syncEpoch && old.syncEpoch !== expectedSyncEpoch) throw Error('다른 기기에서 받은 최신 문서입니다. 문서를 다시 연 뒤 시도해주세요.');
+        if (!old || old.trashedAt) throw new Error(t('바꿀 문서를 찾지 못했습니다. 휴지통에 있다면 먼저 복원해주세요.'));
+        if (old.syncEpoch && old.syncEpoch !== expectedSyncEpoch) throw Error(t('다른 기기에서 받은 최신 문서입니다. 문서를 다시 연 뒤 시도해주세요.'));
         tx.objectStore('contents').put({documentId:id, html, ...(originalFile instanceof Blob ? {originalFile} : {})});
         let historyVersion = Number.isSafeInteger(old.historyVersion) ? old.historyVersion : 0;
         for (const state of [old.metadata, metadata]) { addRevision(tx, {documentId:id, created:Date.now(), kind:'edit', restoredFrom:null, ...annotationState(state)}); historyVersion++; }
@@ -226,7 +227,7 @@ export async function replaceDocumentBody(id, {html, originalFile = null, metada
     };
     tx.oncomplete = () => { forgetContent(id); changed(id); resolve(saved); };
     tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(failure || tx.error || new Error('본문을 바꾸지 못했습니다. 기존 문서는 그대로입니다.'));
+    tx.onabort = () => reject(failure || tx.error || new Error(t('본문을 바꾸지 못했습니다. 기존 문서는 그대로입니다.')));
   });
 }
 /** Trash/restore change headers only; immutable bodies and every history entry stay intact. */
@@ -236,7 +237,7 @@ async function changeTrashState(id, restore) {
     const tx=connection.transaction(['documents','settings'],'readwrite'),store=tx.objectStore('documents');
     const request=store.get(id),folders=tx.objectStore('settings').get('library-folders-v1');let saved,failure,ready=0;
     const apply=()=>{if(++ready!==2)return;try{
-      saved=request.result;if(!saved)throw Error('문서가 삭제되었거나 다른 창에서 변경되었습니다. 서재를 다시 확인해주세요.');
+      saved=request.result;if(!saved)throw Error(t('문서가 삭제되었거나 다른 창에서 변경되었습니다. 서재를 다시 확인해주세요.'));
       if(restore){
         delete saved.trashedAt;
         if(saved.folderId&&!(folders.result||[]).some(folder=>folder.id===saved.folderId))saved.folderId='';
@@ -244,7 +245,7 @@ async function changeTrashState(id, restore) {
       store.put(saved);
     }catch(error){failure=error;tx.abort();}};
     request.onsuccess=apply;folders.onsuccess=apply;
-    tx.oncomplete=()=>{changed(id);resolve(saved);};tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(failure||tx.error||new Error('휴지통 변경을 저장하지 못했습니다. 문서와 주석은 유지됩니다.'));
+    tx.oncomplete=()=>{changed(id);resolve(saved);};tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(failure||tx.error||new Error(t('휴지통 변경을 저장하지 못했습니다. 문서와 주석은 유지됩니다.')));
   });
 }
 export const trashDocument = id => changeTrashState(id,false);
@@ -257,12 +258,12 @@ export async function deleteTrashedDocuments(ids) {
     const tx=connection.transaction(['documents','contents','revisions','revisionHeaders','settings'],'readwrite'),store=tx.objectStore('documents');let failure;
     for(const id of selected){const request=store.get(id);request.onsuccess=()=>{try{
       if(!request.result)return;
-      if(!request.result.trashedAt)throw Error('복원된 문서는 영구 삭제하지 않습니다. 휴지통을 다시 확인해주세요.');
+      if(!request.result.trashedAt)throw Error(t('복원된 문서는 영구 삭제하지 않습니다. 휴지통을 다시 확인해주세요.'));
       store.delete(id);tx.objectStore('contents').delete(id);tx.objectStore('settings').delete('card-preview-v1:'+id);
       const revisions=tx.objectStore('revisions').index('documentId').openCursor(IDBKeyRange.only(id));
       revisions.onsuccess=()=>{const cursor=revisions.result;if(cursor){tx.objectStore('revisionHeaders').delete(cursor.primaryKey);cursor.delete();cursor.continue();}};
     }catch(error){failure=error;tx.abort();}};}
-    tx.oncomplete=resolve;tx.onabort=()=>reject(failure||tx.error||new Error('휴지통을 비우지 못했습니다. 기존 문서와 주석은 유지됩니다.'));tx.onerror=()=>reject(tx.error);
+    tx.oncomplete=resolve;tx.onabort=()=>reject(failure||tx.error||new Error(t('휴지통을 비우지 못했습니다. 기존 문서와 주석은 유지됩니다.')));tx.onerror=()=>reject(tx.error);
   });
   for(const id of selected){
     forgetContent(id);
@@ -280,9 +281,9 @@ export async function permission(handle, request = false) {
 }
 export async function writeExternalHTML(record, html, force = false) {
   if (!record.fileHandle) return;
-  if (!await permission(record.fileHandle)) throw new DOMException('원본 HTML 파일의 쓰기 권한이 필요합니다.', 'NotAllowedError');
+  if (!await permission(record.fileHandle)) throw new DOMException(t('원본 HTML 파일의 쓰기 권한이 필요합니다.'), 'NotAllowedError');
   const before = await record.fileHandle.getFile();
-  if (!force && record.diskStamp && (before.lastModified !== record.diskStamp.modified || before.size !== record.diskStamp.size)) throw new Error('다른 프로그램에서 파일을 수정했습니다. 파일을 다시 열거나 다른 이름으로 저장해주세요.');
+  if (!force && record.diskStamp && (before.lastModified !== record.diskStamp.modified || before.size !== record.diskStamp.size)) throw new Error(t('다른 프로그램에서 파일을 수정했습니다. 파일을 다시 열거나 다른 이름으로 저장해주세요.'));
   const writer = await record.fileHandle.createWritable();
   try { await writer.write(html); await writer.close(); } catch (error) { await writer.abort().catch(() => {}); throw error; }
   const after = await record.fileHandle.getFile(); record.diskStamp = {modified: after.lastModified, size: after.size};
@@ -384,8 +385,8 @@ export async function putDocumentRevision(record, {baseline = false, restoredFro
       try {
         const last=latest.result;
         const old=previous.result;
-        if(mustExist&&!old)throw Error('문서가 영구 삭제되었습니다. 이전 탭의 내용으로 다시 만들지 않습니다.');
-        if(old?.syncEpoch&&old.syncEpoch!==value.syncEpoch)throw Error('동기화로 최신 문서가 저장되었습니다. 이전 탭을 다시 열어주세요. 작성 중인 내용은 유지됩니다.');
+        if(mustExist&&!old)throw Error(t('문서가 영구 삭제되었습니다. 이전 탭의 내용으로 다시 만들지 않습니다.'));
+        if(old?.syncEpoch&&old.syncEpoch!==value.syncEpoch)throw Error(t('동기화로 최신 문서가 저장되었습니다. 이전 탭을 다시 열어주세요. 작성 중인 내용은 유지됩니다.'));
         // A still-open legacy tab must not erase a later duplicate-check cache.
         if(!value.sourceIdentity&&old?.sourceIdentity)value.sourceIdentity=old.sourceIdentity;
         // Moving a document is independent of an open reader's annotation saves.
@@ -403,12 +404,12 @@ export async function putDocumentRevision(record, {baseline = false, restoredFro
         // the same transaction. A failure cannot strand only half of a restore.
         if(restoredFrom&&old&&!sameAnnotationState(previousState,old.metadata))add(old.metadata,'edit');
         if(checkpoint&&!sameAnnotationState(previousState,state))add(state,restoredFrom?'restore':'edit');
-        if(!content.result){const original=originalFile instanceof Blob?{originalFile}:{};if(file instanceof Blob)contents.add({documentId:record.id,file,...original});else{const source=old?.html ?? html;if(typeof source!=='string')throw Error('HTML 본문을 보관하지 못했습니다. 문서를 다시 열어주세요.');contents.add({documentId:record.id,html:source,...original});}}
+        if(!content.result){const original=originalFile instanceof Blob?{originalFile}:{};if(file instanceof Blob)contents.add({documentId:record.id,file,...original});else{const source=old?.html ?? html;if(typeof source!=='string')throw Error(t('HTML 본문을 보관하지 못했습니다. 문서를 다시 열어주세요.'));contents.add({documentId:record.id,html:source,...original});}}
         value.contentKey=content.result&&old?.contentKey||crypto.randomUUID();
         documents.put(value);
       } catch(error){failure=error;tx.abort();}
     };
-    tx.oncomplete=()=>{changed(record.id);resolve(value);};tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(failure || tx.error || new Error('주석과 이력을 저장하지 못했습니다.'));
+    tx.oncomplete=()=>{changed(record.id);resolve(value);};tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(failure || tx.error || new Error(t('주석과 이력을 저장하지 못했습니다.')));
   });
 }
 
@@ -425,7 +426,7 @@ export async function checkpointAnnotations(id) {
         record.historyVersion=(Number.isSafeInteger(record.historyVersion)?record.historyVersion:0)+1;documents.put(record);added=true;
       }
     }catch(error){failure=error;tx.abort();}};
-    tx.oncomplete=()=>{if(added)changed(id);resolve(added);};tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(failure||tx.error||new Error('주석 이력을 저장하지 못했습니다. 현재 주석은 자동 저장된 상태로 유지됩니다.'));
+    tx.oncomplete=()=>{if(added)changed(id);resolve(added);};tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(failure||tx.error||new Error(t('주석 이력을 저장하지 못했습니다. 현재 주석은 자동 저장된 상태로 유지됩니다.')));
   });
 }
 
@@ -445,9 +446,9 @@ export async function restoreFolderDocuments(entries, folders = null, expectedFo
     }catch(error){failure=error;tx.abort();}};
     if(folders===null)apply();else{
       const current=tx.objectStore('settings').get('library-folders-v1');
-      current.onsuccess=()=>{if(expectedFolders!==null&&JSON.stringify(current.result||[])!==JSON.stringify(expectedFolders)){failure=new Error('복원 중 다른 창에서 폴더가 바뀌었습니다. 다시 연결해주세요.');tx.abort();}else apply();};
+      current.onsuccess=()=>{if(expectedFolders!==null&&JSON.stringify(current.result||[])!==JSON.stringify(expectedFolders)){failure=new Error(t('복원 중 다른 창에서 폴더가 바뀌었습니다. 다시 연결해주세요.'));tx.abort();}else apply();};
     }
-    tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(failure||tx.error||new Error('폴더의 데이터를 복원하지 못했습니다. 기존 보관함은 유지됩니다.'));
+    tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(failure||tx.error||new Error(t('폴더의 데이터를 복원하지 못했습니다. 기존 보관함은 유지됩니다.')));
   });
   for(const entry of entries)changed(entry.record.id);
   if(folders!==null)changed(null);
@@ -460,7 +461,7 @@ export const syncRecordSnapshot = record => record ? JSON.stringify({id:record.i
 export async function commitDeviceSync(entries, folders, expectedFolders) {
   const foldersChanged=JSON.stringify(folders)!==JSON.stringify(expectedFolders);
   if(!entries.length&&!foldersChanged)return;
-  if(entries.some(entry=>entry.content===null&&entry.expected===null))throw Error('새 문서에는 원본 파일이 필요합니다.');
+  if(entries.some(entry=>entry.content===null&&entry.expected===null))throw Error(t('새 문서에는 원본 파일이 필요합니다.'));
   const connection=await db();
   await new Promise((resolve,reject)=>{
     const tx=connection.transaction(['documents','contents','revisions','revisionHeaders','settings'],'readwrite');let failure,pending=entries.length+1;const previousRecords=new Map(),retained=[];
@@ -477,15 +478,15 @@ export async function commitDeviceSync(entries, folders, expectedFolders) {
       if(foldersChanged)tx.objectStore('settings').put(folders,'library-folders-v1');
     }catch(error){fail(error);}};
     for(const entry of entries){const request=tx.objectStore('documents').get(entry.record.id);request.onsuccess=()=>{
-      if(syncRecordSnapshot(request.result)!==entry.expected)return fail(Error('동기화 중 다른 창에서 문서가 바뀌었습니다. 기존 내용은 유지했습니다. 다시 시도해주세요.'));
+      if(syncRecordSnapshot(request.result)!==entry.expected)return fail(Error(t('동기화 중 다른 창에서 문서가 바뀌었습니다. 기존 내용은 유지했습니다. 다시 시도해주세요.')));
       previousRecords.set(entry.record.id,request.result);
       apply();
     };}
     const current=tx.objectStore('settings').get('library-folders-v1');current.onsuccess=()=>{
-      if(JSON.stringify(current.result||[])!==JSON.stringify(expectedFolders))return fail(Error('동기화 중 폴더가 바뀌었습니다. 다시 시도해주세요.'));
+      if(JSON.stringify(current.result||[])!==JSON.stringify(expectedFolders))return fail(Error(t('동기화 중 폴더가 바뀌었습니다. 다시 시도해주세요.')));
       apply();
     };
-    tx.oncomplete=()=>{for(const value of retained)retainContent(value.id,value.key,value.content);resolve();};tx.onerror=()=>reject(failure||tx.error||Error('동기화 데이터를 저장하지 못했습니다.'));tx.onabort=()=>reject(failure||tx.error||Error('받은 데이터를 저장하지 못했습니다. 기존 데이터는 유지됩니다.'));
+    tx.oncomplete=()=>{for(const value of retained)retainContent(value.id,value.key,value.content);resolve();};tx.onerror=()=>reject(failure||tx.error||Error(t('동기화 데이터를 저장하지 못했습니다.')));tx.onabort=()=>reject(failure||tx.error||Error(t('받은 데이터를 저장하지 못했습니다. 기존 데이터는 유지됩니다.')));
   });
   for(const entry of entries)changed(entry.record.id);if(foldersChanged)changed(null);
 }

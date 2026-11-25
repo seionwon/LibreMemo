@@ -2,6 +2,7 @@ import init,{HwpDocument} from '../vendor/office/rhwp/rhwp.js';
 import {XMLParser} from '../vendor/office/genoffice.js';
 import {esc,font} from './office-common.js';
 import {withHangulFont} from './hangul-fonts.js';
+import {t} from './i18n.js';
 
 // Only the import worker loads WASM. The saved reading view needs no engine.
 // A real Canvas measurement callback is installed before constructing a document.
@@ -24,12 +25,12 @@ function measureText(fontName,text){
   return Array.from(text).reduce((sum,c)=>sum+(/[^\x00-\x7f]/.test(c)?1:.55),0)*size;
 }
 export function validateHML(bytes){
-  if(bytes.length>2*1024*1024*1024)throw Error('HML 파일은 2GB 이하로 나누어 가져와 주세요.');
+  if(bytes.length>2*1024*1024*1024)throw Error(t('HML 파일은 2GB 이하로 나누어 가져와 주세요.'));
   const head=new TextDecoder().decode(bytes.subarray(0,200));
   const encoding=bytes[0]===0xff&&bytes[1]===0xfe||bytes[0]===0x3c&&bytes[1]===0?'utf-16le':bytes[0]===0xfe&&bytes[1]===0xff||bytes[0]===0&&bytes[1]===0x3c?'utf-16be':head.match(/encoding\s*=\s*["']([^"']+)/i)?.[1]||'utf-8';
-  let text;try{text=new TextDecoder(encoding,{fatal:true}).decode(bytes);}catch{throw Error('HML 문서의 문자 인코딩을 읽지 못했습니다. UTF-8로 다시 저장한 사본을 가져와 주세요.');}
-  if(/<!\s*(?:DOCTYPE|ENTITY)\b/i.test(text))throw Error('외부 엔터티 선언이 있는 HML 문서는 열 수 없습니다.');
-  if(!/^\s*(?:<\?xml[^?]*\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<HWPML\b/i.test(text))throw Error('HML 파일의 HWPML 문서 형식을 확인하지 못했습니다. 원본을 확인해주세요.');
+  let text;try{text=new TextDecoder(encoding,{fatal:true}).decode(bytes);}catch{throw Error(t('HML 문서의 문자 인코딩을 읽지 못했습니다. UTF-8로 다시 저장한 사본을 가져와 주세요.'));}
+  if(/<!\s*(?:DOCTYPE|ENTITY)\b/i.test(text))throw Error(t('외부 엔터티 선언이 있는 HML 문서는 열 수 없습니다.'));
+  if(!/^\s*(?:<\?xml[^?]*\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<HWPML\b/i.test(text))throw Error(t('HML 파일의 HWPML 문서 형식을 확인하지 못했습니다. 원본을 확인해주세요.'));
 }
 
 const tags=new Set('svg g defs clipPath mask pattern linearGradient radialGradient stop filter feGaussianBlur feOffset feBlend feColorMatrix feComposite feFlood feMerge feMergeNode path rect line circle ellipse polyline polygon image text tspan a title desc use'.split(' '));
@@ -72,11 +73,11 @@ function sourceGlyphs(layout){
 // supply selection/search/TTS and the shared Reader's annotation wrappers.
 // Keeping the vector text avoids changing rhwp's glyph spacing and equations.
 export function hangulPage(svg,page,warnings=[],measure=hangulMeasure,layout=null){
-  if(svg.length>256*1024*1024||/<!\s*(?:DOCTYPE|ENTITY)\b/i.test(svg))throw Error('한글 문서의 한 쪽이 너무 크거나 안전하게 표시할 수 없습니다.');
+  if(svg.length>256*1024*1024||/<!\s*(?:DOCTYPE|ENTITY)\b/i.test(svg))throw Error(t('한글 문서의 한 쪽이 너무 크거나 안전하게 표시할 수 없습니다.'));
   parser??=new XMLParser({ignoreAttributes:false,preserveOrder:true,trimValues:false,parseTagValue:false,parseAttributeValue:false});
   const parsed=parser.parse(svg);
   const root=parsed.find(node=>node.svg),size=attrsOf(root||{}),width=Number(size.width),height=Number(size.height),prefix='rhwp-'+page+'-';
-  if(!root||![width,height].every(n=>Number.isFinite(n)&&n>0&&n<=20000))throw Error('한글 문서의 용지 크기가 올바르지 않습니다.');
+  if(!root||![width,height].every(n=>Number.isFinite(n)&&n>0&&n<=20000))throw Error(t('한글 문서의 용지 크기가 올바르지 않습니다.'));
   let count=0;const sourceFor=sourceGlyphs(layout),glyphs=new Map();
   const attrString=(tag,attrs)=>Object.entries(attrs).flatMap(([key,value])=>{
     if(key==='id')return fragment(value)?[[key,prefix+value]]:[];
@@ -84,7 +85,7 @@ export function hangulPage(svg,page,warnings=[],measure=hangulMeasure,layout=nul
       if(value.startsWith('#')&&fragment(value.slice(1)))return [['href','#'+prefix+value.slice(1)]];
       if(tag==='image'&&/^data:image\/(?:png|jpeg|gif|webp|svg\+xml|bmp);base64,[a-z\d+/=\s]+$/i.test(value))return [['href',value]];
       if(tag==='a'){try{const url=new URL(value);if(['https:','http:','mailto:','tel:'].includes(url.protocol)&&!url.username&&!url.password)return [['href',url.href]];}catch{}}
-      warnings.push('외부 파일로 연결된 그림·개체는 가져오지 않습니다.');return [];
+      warnings.push(t('외부 파일로 연결된 그림·개체는 가져오지 않습니다.'));return [];
     }
     if(!attributes.has(key))return [];
     if(key==='font-family')return [[key,withHangulFont(value)]];
@@ -92,7 +93,7 @@ export function hangulPage(svg,page,warnings=[],measure=hangulMeasure,layout=nul
     return [[key,value]];
   }).map(([key,value])=>' '+key+'="'+esc(value)+'"').join('');
   const plain=(node,depth)=>{
-    if(++count>1000000||depth>128)throw Error('한글 문서의 개체가 너무 많거나 중첩이 깊습니다.');
+    if(++count>1000000||depth>128)throw Error(t('한글 문서의 개체가 너무 많거나 중첩이 깊습니다.'));
     const tag=tagOf(node);if(tag==='#text')return esc(node[tag]);
     if(!tags.has(tag))return '';
     return '<'+tag+attrString(tag,attrsOf(node))+'>'+children(node[tag]||[],depth+1)+'</'+tag+'>';
@@ -129,7 +130,7 @@ export function hangulPage(svg,page,warnings=[],measure=hangulMeasure,layout=nul
       if(items[index].halved)html+='<text class="rhwp-halt"'+attrString('text',items[index].a)+'>'+esc(items[index].text)+'</text>';
       else if(end-index<2)html+=plain(items[index].node,depth);
       else{
-        count+=end-index;if(count>1000000)throw Error('한글 문서의 개체가 너무 많거나 중첩이 깊습니다.');
+        count+=end-index;if(count>1000000)throw Error(t('한글 문서의 개체가 너무 많거나 중첩이 깊습니다.'));
         const run=items.slice(index,end);
         html+='<text'+attrString('text',{...run[0].a,x:run.map(g=>fixed(g.x)).join(' ')})+'>'+esc(run.map(g=>g.text).join(''))+'</text>';
       }
@@ -203,7 +204,7 @@ export function hangulPage(svg,page,warnings=[],measure=hangulMeasure,layout=nul
     }
     return result;
   }
-  return '<section class="office-page" id="rhwp-page-'+(page+1)+'" data-page-title="'+(page+1)+'쪽" style="width:'+width/16+'em;aspect-ratio:'+width+'/'+height+'"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+width+' '+height+'" width="'+width+'" height="'+height+'">'+children(root.svg,0)+'</svg></section>';
+  return '<section class="office-page" id="rhwp-page-'+(page+1)+'" data-page-title="'+t('{n}쪽',{n:page+1})+'" style="width:'+width/16+'em;aspect-ratio:'+width+'/'+height+'"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+width+' '+height+'" width="'+width+'" height="'+height+'">'+children(root.svg,0)+'</svg></section>';
 }
 
 export async function renderHangul(bytes,format,warnings,onProgress){
@@ -213,19 +214,19 @@ export async function renderHangul(bytes,format,warnings,onProgress){
   let doc;
   try{
     doc=new HwpDocument(bytes);
-    if(doc.getSourceFormat()!==format)throw Error('파일 확장자와 실제 한글 문서 형식이 다릅니다. 원본을 확인해주세요.');
-    const pages=doc.pageCount();if(!pages||pages>10000)throw Error('한글 문서는 1~10,000쪽 범위로 나누어 가져와 주세요.');
+    if(doc.getSourceFormat()!==format)throw Error(t('파일 확장자와 실제 한글 문서 형식이 다릅니다. 원본을 확인해주세요.'));
+    const pages=doc.pageCount();if(!pages||pages>10000)throw Error(t('한글 문서는 1~10,000쪽 범위로 나누어 가져와 주세요.'));
     if(format==='hml'){
       const metadata=JSON.parse(doc.getHmlOpenMetadata());
-      if(metadata.warnings?.length||metadata.resourceCount)warnings.push('이 HML 문서에는 rhwp가 완전히 표시하지 못하는 요소가 있습니다. 그림·연결 리소스·일부 개체가 생략될 수 있으며 원본 파일은 그대로 보관합니다.');
+      if(metadata.warnings?.length||metadata.resourceCount)warnings.push(t('이 HML 문서에는 rhwp가 완전히 표시하지 못하는 요소가 있습니다. 그림·연결 리소스·일부 개체가 생략될 수 있으며 원본 파일은 그대로 보관합니다.'));
     }
     const body=[];let size=0;
     for(let page=0;page<pages;page++){
       const html=hangulPage(doc.renderPageSvg(page),page,warnings,hangulMeasure,JSON.parse(doc.getPageTextLayout(page)));size+=html.length;
-      if(size>2*1024*1024*1024)throw Error('한글 문서의 읽기 화면이 2GB를 넘습니다. 문서를 나누어 가져와 주세요.');
+      if(size>2*1024*1024*1024)throw Error(t('한글 문서의 읽기 화면이 2GB를 넘습니다. 문서를 나누어 가져와 주세요.'));
       body.push(html);onProgress?.(page+1,pages);
     }
-    const outline='<template data-ebook-outline>'+body.map((_,i)=>'<a href="#rhwp-page-'+(i+1)+'" data-level="1">'+(i+1)+'쪽</a>').join('')+'</template>';
+    const outline='<template data-ebook-outline>'+body.map((_,i)=>'<a href="#rhwp-page-'+(i+1)+'" data-level="1">'+t('{n}쪽',{n:i+1})+'</a>').join('')+'</template>';
     return size>=64*1024*1024?new Blob(['<article data-office-pages data-rhwp>',outline,...body,'</article>']):'<article data-office-pages data-rhwp>'+outline+body.join('')+'</article>';
   }finally{doc?.free();}
 }

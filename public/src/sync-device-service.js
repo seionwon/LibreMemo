@@ -1,3 +1,4 @@
+import {t} from './i18n.js';
 import {SyncService,cleanRoomId} from './sync-service.js';
 import {deriveTopic,encryptData,decryptData} from './sync-crypto.js';
 import {DirectSyncConnection} from './sync-peer.js';
@@ -11,18 +12,18 @@ export class DeviceSyncService extends SyncService{
   clearWaiting(){clearInterval(this.joinTimer);clearTimeout(this.waitTimer);clearTimeout(this.handshakeTimer);this.joinTimer=null;this.waitTimer=null;this.handshakeTimer=null;}
   setStatus(status,message){
     if(this.isDestroyed||this.finished)return;
-    if(status==='error'){void this.fail(Error(message||'동기화하지 못했습니다.'));return;}
+    if(status==='error'){void this.fail(Error(message||t('동기화하지 못했습니다.')));return;}
     if(status==='completed'){this.finished=true;this.clearWaiting();}
     super.setStatus(status,message);
   }
   async initialize(roomId){
-    this.isHost=true;this.roomId=cleanRoomId(roomId);this.topic=await deriveTopic(this.roomId);await this.analyzeSyncData();this.setStatus('connecting','중계 서버에 연결하는 중…');await this.connectRelay();
-    if(!this.remoteId)this.setStatus('ready','연결 대기 중입니다. 상대 기기에서 이 QR을 스캔하세요.');return this.roomId;
+    this.isHost=true;this.roomId=cleanRoomId(roomId);this.topic=await deriveTopic(this.roomId);await this.analyzeSyncData();this.setStatus('connecting',t('중계 서버에 연결하는 중…'));await this.connectRelay();
+    if(!this.remoteId)this.setStatus('ready',t('연결 대기 중입니다. 상대 기기에서 이 QR을 스캔하세요.'));return this.roomId;
   }
   async connect(roomId){
-    this.isHost=false;this.roomId=cleanRoomId(roomId);this.topic=await deriveTopic(this.roomId);this.setStatus('connecting','중계 서버에 연결하는 중…');await this.connectRelay();
-    if(this.isDestroyed)return;this.setStatus('waiting','중계 서버에 접속했습니다. 상대 기기의 응답을 기다리는 중…');
-    this.waitTimer=setTimeout(()=>void this.fail(Error('상대 기기의 응답이 없습니다. QR을 표시한 기기에서 ‘연결 시작’을 누르고, 두 기기 모두 최신 화면으로 새로고침한 뒤 다시 스캔해주세요.')),30000);
+    this.isHost=false;this.roomId=cleanRoomId(roomId);this.topic=await deriveTopic(this.roomId);this.setStatus('connecting',t('중계 서버에 연결하는 중…'));await this.connectRelay();
+    if(this.isDestroyed)return;this.setStatus('waiting',t('중계 서버에 접속했습니다. 상대 기기의 응답을 기다리는 중…'));
+    this.waitTimer=setTimeout(()=>void this.fail(Error(t('상대 기기의 응답이 없습니다. QR을 표시한 기기에서 ‘연결 시작’을 누르고, 두 기기 모두 최신 화면으로 새로고침한 뒤 다시 스캔해주세요.'))),30000);
     const join=async()=>{if(this.joinSending||this.remoteId||this.isDestroyed)return;this.joinSending=true;try{await this.sendRelayMessage({type:'join',protocol:2,direct:typeof RTCPeerConnection==='function'});}catch(error){void this.fail(error);}finally{this.joinSending=false;}};
     this.joinTimer=setInterval(()=>void join(),3000);await join();
   }
@@ -36,12 +37,12 @@ export class DeviceSyncService extends SyncService{
   }
   makePeer(){
     if(this.peer)return;
-    if(typeof RTCPeerConnection!=='function')throw Error('이 브라우저는 기기 간 파일 전송을 지원하지 않습니다. 최신 Chrome으로 두 기기를 다시 열어주세요.');
+    if(typeof RTCPeerConnection!=='function')throw Error(t('이 브라우저는 기기 간 파일 전송을 지원하지 않습니다. 최신 Chrome으로 두 기기를 다시 열어주세요.'));
     this.peer=new DirectSyncConnection({signal:message=>this.sendSignal(message),onOpen:()=>{
-      this.clearWaiting();this.setStatus('connected','상대 기기의 응답을 확인했습니다. 파일 전송 연결이 준비됐습니다.');if(this.isHost)void this.syncDirectData();
-    },onMessage:data=>this.stream.receive(data),onRetry:()=>this.setStatus('negotiating','기기 간 연결 경로를 다시 확인하는 중… (1/1)'),onError:error=>void this.fail(error)});
+      this.clearWaiting();this.setStatus('connected',t('상대 기기의 응답을 확인했습니다. 파일 전송 연결이 준비됐습니다.'));if(this.isHost)void this.syncDirectData();
+    },onMessage:data=>this.stream.receive(data),onRetry:()=>this.setStatus('negotiating',t('기기 간 연결 경로를 다시 확인하는 중… (1/1)')),onError:error=>void this.fail(error)});
     this.stream=new SyncStream({send:data=>this.peer.send(data),onManifest:manifest=>this.options.adapter.prepareSettings?.(manifest),findFiles:typeof this.options.adapter.findReusableStreamFiles==='function'?manifest=>this.options.adapter.findReusableStreamFiles(manifest):null,onProgress:progress=>this.options.onProgress?.(progress),onBundle:async(bundle,{partial})=>{
-      this.setStatus('merging','받은 파일을 검증하고 문서·주석을 저장하는 중…');this.updateSyncInfoMeta(bundle.manifest,!this.isHost&&!!this.remotePartial);
+      this.setStatus('merging',t('받은 파일을 검증하고 문서·주석을 저장하는 중…'));this.updateSyncInfoMeta(bundle.manifest,!this.isHost&&!!this.remotePartial);
       const exclude=await this.options.adapter.mergeStreamBundle(bundle,this.options.onConflict);this.mergedExcludeIds=Array.isArray(exclude)?exclude:[];this.hasReceivedData=true;this.receivedPartial=partial;return {replyRequired:!!this.options.adapter.annotationReplyIds?.().length};
     },onCommitted:({partial,confirmed,replyRequired})=>{
       if(this.isDestroyed)return;
@@ -52,14 +53,14 @@ export class DeviceSyncService extends SyncService{
     if(this.isDestroyed||this.isSyncing||this.hasSentInitialSync)return;
     this.isSyncing=true;this.hasSentInitialSync=true;
     try{
-      this.setStatus('syncing','원본 파일과 주석·이력을 검사하고 전송 목록을 준비하는 중…');
+      this.setStatus('syncing',t('원본 파일과 주석·이력을 검사하고 전송 목록을 준비하는 중…'));
       const ids=!this.isHost&&this.receivedPartial?this.options.adapter.annotationReplyIds():await this.options.adapter.getSyncTargetIds(this.options.initialDataLogId);
-      if(Array.isArray(ids)&&!ids.length)throw Error('선택한 주석을 돌려보낼 문서가 없습니다. 다시 연결해주세요.');
+      if(Array.isArray(ids)&&!ids.length)throw Error(t('선택한 주석을 돌려보낼 문서가 없습니다. 다시 연결해주세요.'));
       const bundle=await this.options.adapter.getStreamBundle(ids,this.mergedExcludeIds);
-      if(this.isDestroyed)return;this.setStatus('syncing','기기 간 암호화 연결로 파일을 나누어 전송하는 중…');
+      if(this.isDestroyed)return;this.setStatus('syncing',t('기기 간 암호화 연결로 파일을 나누어 전송하는 중…'));
       const result=await this.stream.sendBundle(bundle,{partial:!!ids});
       if(result?.committed&&!result.replyRequired&&(ids||!this.isHost&&this.hasReceivedData)){await this.confirmCompletion({direct:true});return;}
-      if(!this.isDestroyed&&!this.finished)this.setStatus('syncing',this.isHost?'원본 전송을 마쳤습니다. 상대 기기의 저장·응답을 기다리는 중…':'이 기기의 변경을 보냈습니다. 상대 기기의 저장 확인을 기다리는 중…');
+      if(!this.isDestroyed&&!this.finished)this.setStatus('syncing',this.isHost?t('원본 전송을 마쳤습니다. 상대 기기의 저장·응답을 기다리는 중…'):t('이 기기의 변경을 보냈습니다. 상대 기기의 저장 확인을 기다리는 중…'));
     }catch(error){if(!this.isDestroyed)await this.fail(error);}finally{this.isSyncing=false;}
   }
   async confirmCompletion({direct=false}={}){
@@ -67,9 +68,9 @@ export class DeviceSyncService extends SyncService{
       // New peers acknowledge the committed database over the direct channel.
       // Completion must not wait for a relay that is no longer needed.
       if(!direct){
-        let timer;try{await Promise.race([this.sendSignal({kind:'complete'}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('저장은 끝났지만 상대 기기에 완료를 알리지 못했습니다. 양쪽 앱을 새로고침하고 다시 연결해주세요.')),15000);})]);}finally{clearTimeout(timer);}
+        let timer;try{await Promise.race([this.sendSignal({kind:'complete'}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(t('저장은 끝났지만 상대 기기에 완료를 알리지 못했습니다. 양쪽 앱을 새로고침하고 다시 연결해주세요.'))),15000);})]);}finally{clearTimeout(timer);}
       }
-      if(!this.isDestroyed&&!this.finished){this.setStatus('completed','전송이 완료되었습니다. 이 화면은 닫아도 됩니다.');this.options.onDataReceived();}
+      if(!this.isDestroyed&&!this.finished){this.setStatus('completed',t('전송이 완료되었습니다. 이 화면은 닫아도 됩니다.'));this.options.onDataReceived();}
     }
     catch(error){if(!this.isDestroyed)await this.fail(error);}
   }
@@ -79,14 +80,15 @@ export class DeviceSyncService extends SyncService{
     if(this.isDestroyed||message?.to!==this.instanceId||typeof message.from!=='string'||message.from===this.instanceId||typeof message.session!=='string'||!/^[\w-]{1,80}$/.test(message.session))return;
     if(message.kind==='hello'){
       if(this.isHost||this.remoteId&&this.remoteId!==message.from)return;
-      this.remoteId=message.from;this.sessionId=message.session;this.remotePartial=!!message.partial;this.clearWaiting();this.setStatus('negotiating','상대 기기의 응답을 확인했습니다. 기기 간 파일 전송 연결을 만드는 중…');this.makePeer();await this.sendSignal({kind:'hello_ack'});return;
+      this.remoteId=message.from;this.sessionId=message.session;this.remotePartial=!!message.partial;this.clearWaiting();this.setStatus('negotiating',t('상대 기기의 응답을 확인했습니다. 기기 간 파일 전송 연결을 만드는 중…'));this.makePeer();await this.sendSignal({kind:'hello_ack'});return;
     }
     if(message.from!==this.remoteId||message.session!==this.sessionId)return;
     if(message.kind==='hello_ack'&&this.isHost){this.clearWaiting();if(!this.peer){this.makePeer();await this.peer.offer();}return;}
     if(message.kind==='complete'){
-      if(!this.hasSentInitialSync)return;this.setStatus('completed','전송이 완료되었습니다. 이 화면은 닫아도 됩니다.');this.options.onDataReceived();return;
+      if(!this.hasSentInitialSync)return;this.setStatus('completed',t('전송이 완료되었습니다. 이 화면은 닫아도 됩니다.'));this.options.onDataReceived();return;
     }
-    if(message.kind==='error'){const text='상대 기기에서 동기화를 '+(message.cancelled===true?'취소했습니다. ':'중단했습니다. ')+String(message.message||'연결을 확인해주세요.').slice(0,1500);await this.fail(message.cancelled===true?new DOMException(text,'AbortError'):Error(text),false);return;}
+    if(message.kind==='error'){// The other device sends its own message in its own language; only our part is translated here.
+      const text=(message.cancelled===true?t('상대 기기에서 동기화를 취소했습니다. '):t('상대 기기에서 동기화를 중단했습니다. '))+String(message.message||t('연결을 확인해주세요.')).slice(0,1500);await this.fail(message.cancelled===true?new DOMException(text,'AbortError'):Error(text),false);return;}
     if(['offer','answer','candidates','retry'].includes(message.kind)){this.makePeer();await this.peer.receive(message);}
   }
   async handleRelayMessage(message){
@@ -97,8 +99,8 @@ export class DeviceSyncService extends SyncService{
       if(payload?.instanceId===this.instanceId)return;
       if(payload?.type==='sync_control'&&typeof payload.data==='string'){await this.acceptSignal(payload.data);return;}
       if(payload?.type==='join'&&this.isHost&&payload.protocol===2&&payload.direct&&typeof payload.instanceId==='string'&&/^[\w-]{1,80}$/.test(payload.instanceId)&&typeof RTCPeerConnection==='function'){
-        if(this.remoteId)return;this.remoteId=payload.instanceId;this.sessionId=crypto.randomUUID();this.setStatus('negotiating','상대 기기의 연결 요청을 받았습니다. 파일 전송 연결을 만드는 중…');
-        this.handshakeTimer=setTimeout(()=>{if(!this.peer&&!this.isDestroyed){this.remoteId=null;this.sessionId=null;this.setStatus('ready','이전 요청의 응답이 없어 새 연결을 기다립니다. 상대 기기에서 다시 연결해주세요.');}},5000);
+        if(this.remoteId)return;this.remoteId=payload.instanceId;this.sessionId=crypto.randomUUID();this.setStatus('negotiating',t('상대 기기의 연결 요청을 받았습니다. 파일 전송 연결을 만드는 중…'));
+        this.handshakeTimer=setTimeout(()=>{if(!this.peer&&!this.isDestroyed){this.remoteId=null;this.sessionId=null;this.setStatus('ready',t('이전 요청의 응답이 없어 새 연결을 기다립니다. 상대 기기에서 다시 연결해주세요.'));}},5000);
         await this.sendSignal({kind:'hello',partial:!!this.options.initialDataLogId});return;
       }
       // Old clients retain the original, bounded MemoSuite transfer. Their
@@ -107,9 +109,9 @@ export class DeviceSyncService extends SyncService{
     }catch(error){if(!this.isDestroyed)await this.fail(error);}
   }
   async downloadAndProcessAttachment(url){
-    const safe=new URL(url);if(safe.origin!=='https://ntfy.sh'||!safe.pathname.startsWith('/file/'))throw Error('잘못된 중계 파일 주소입니다.');
-    const response=await fetch(url,{signal:this.abort.signal});if(!response.ok)throw Error('연결 정보를 받지 못했습니다. '+response.status);
-    if(Number(response.headers.get('content-length'))>2000000)throw Error('중계 연결 정보가 너무 큽니다.');const text=await response.text();if(text.length>2000000)throw Error('중계 연결 정보가 너무 큽니다.');
+    const safe=new URL(url);if(safe.origin!=='https://ntfy.sh'||!safe.pathname.startsWith('/file/'))throw Error(t('잘못된 중계 파일 주소입니다.'));
+    const response=await fetch(url,{signal:this.abort.signal});if(!response.ok)throw Error(t('연결 정보를 받지 못했습니다. ')+response.status);
+    if(Number(response.headers.get('content-length'))>2000000)throw Error(t('중계 연결 정보가 너무 큽니다.'));const text=await response.text();if(text.length>2000000)throw Error(t('중계 연결 정보가 너무 큽니다.'));
     if(text.startsWith('CONTROL:'))await this.acceptSignal(text.slice(8));else if(!this.peer){this.clearWaiting();await this.processReceivedEncodedData(text);}
   }
   async fail(error,notify=true){

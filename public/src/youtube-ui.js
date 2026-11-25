@@ -1,3 +1,4 @@
+import {pt,t} from './i18n.js';
 // Browser side of YouTube documents: the official IFrame player, oEmbed titles,
 // playlist IDs and the player pane shown above a subtitle document.
 // Nothing here needs a server or an account. oEmbed and i.ytimg.com allow
@@ -16,9 +17,9 @@ export function loadYouTubeAPI(){
     const previous=window.onYouTubeIframeAPIReady;
     window.onYouTubeIframeAPIReady=()=>{try{previous?.();}finally{resolve(window.YT);}};
     const script=document.createElement('script');script.src='https://www.youtube.com/iframe_api';script.async=true;
-    script.onerror=()=>fail('YouTube 플레이어를 불러오지 못했습니다. 인터넷 연결을 확인해주세요.');
+    script.onerror=()=>fail(t('YouTube 플레이어를 불러오지 못했습니다. 인터넷 연결을 확인해주세요.'));
     document.head.append(script);
-    setTimeout(()=>{if(!window.YT?.Player)fail('YouTube 플레이어가 응답하지 않습니다. 인터넷 연결을 확인한 뒤 다시 시도해주세요.');},20000);
+    setTimeout(()=>{if(!window.YT?.Player)fail(t('YouTube 플레이어가 응답하지 않습니다. 인터넷 연결을 확인한 뒤 다시 시도해주세요.'));},20000);
   });
   return apiPromise;
 }
@@ -48,10 +49,10 @@ export async function playlistVideoIds(playlistId){
     const target=document.createElement('div');holder.append(target);document.body.append(holder);
     let done=false,poll=0,player;
     const finish=(ids,error)=>{if(done)return;done=true;clearInterval(poll);clearTimeout(limit);try{player?.destroy();}catch{}holder.remove();if(error)reject(error);else resolve(ids);};
-    const limit=setTimeout(()=>finish(null,Error('재생목록을 읽지 못했습니다. 공개(또는 일부 공개) 재생목록인지 확인해주세요.')),25000);
+    const limit=setTimeout(()=>finish(null,Error(t('재생목록을 읽지 못했습니다. 공개(또는 일부 공개) 재생목록인지 확인해주세요.'))),25000);
     player=new YT.Player(target,{width:200,height:120,host:PLAYER_HOST,playerVars:{listType:'playlist',list:playlistId,playsinline:1},events:{
       onReady:()=>{poll=setInterval(()=>{const ids=player.getPlaylist?.();if(Array.isArray(ids)&&ids.length)finish([...new Set(ids.filter(id=>/^[A-Za-z0-9_-]{11}$/.test(id)))]);},300);},
-      onError:event=>finish(null,Error('재생목록을 열 수 없습니다. 비공개 재생목록이거나 주소가 잘못되었습니다. (YouTube 오류 '+event.data+')')),
+      onError:event=>finish(null,Error(t('재생목록을 열 수 없습니다. 비공개 재생목록이거나 주소가 잘못되었습니다. (YouTube 오류 {code})',{code:event.data}))),
     }});
   });
 }
@@ -65,10 +66,10 @@ export async function mapLimit(items,limit,task){
 const RATES=[.5,.75,1,1.25,1.5,1.75,2];
 /** YouTube player keyboard shortcuts, as YouTube lists them (shown by "?"). */
 export const YOUTUBE_SHORTCUTS=[
-  ['Space · K','재생 / 일시정지'],['← / →','5초 뒤로 / 앞으로'],['J / L','10초 뒤로 / 앞으로'],
-  [', / .','일시정지 중 한 프레임 뒤로 / 앞으로'],['< / >','재생 속도 느리게 / 빠르게'],['0 – 9','영상의 0% – 90% 위치로'],
-  ['Home / End','처음 / 끝으로'],['↑ / ↓','볼륨 5% 높이기 / 낮추기'],['M','음소거 / 해제'],['C','YouTube 자막 켜기 / 끄기'],
-  ['F','영상 전체 화면 / 돌아오기'],['Shift + N / Shift + P','재생목록의 다음 / 이전 영상'],['?','이 단축키 목록'],
+  ['Space · K',t('재생 / 일시정지')],['← / →',t('5초 뒤로 / 앞으로')],['J / L',t('10초 뒤로 / 앞으로')],
+  [', / .',t('일시정지 중 한 프레임 뒤로 / 앞으로')],['< / >',t('재생 속도 느리게 / 빠르게')],['0 – 9',t('영상의 0% – 90% 위치로')],
+  ['Home / End',t('처음 / 끝으로')],['↑ / ↓',t('볼륨 5% 높이기 / 낮추기')],['M',t('음소거 / 해제')],['C',t('YouTube 자막 켜기 / 끄기')],
+  ['F',t('영상 전체 화면 / 돌아오기')],['Shift + N / Shift + P',t('재생목록의 다음 / 이전 영상')],['?',t('이 단축키 목록')],
 ];
 const pref=(key,fallback,valid)=>{try{const v=Number(localStorage.getItem('librememo-youtube-'+key));return valid(v)?v:fallback;}catch{return fallback;}};
 const savePref=(key,value)=>{try{localStorage.setItem('librememo-youtube-'+key,String(value));}catch{}};
@@ -109,36 +110,36 @@ export class YouTubePane {
   constructor(tab,callbacks){
     this.tab=tab;this.reader=tab.reader;this.callbacks=callbacks;this.youtube=this.reader.metadata.youtube;
     this.cues=[];this.current=-1;this.follow=true;this.quietUntil=0;this.savedAt=Number(this.reader.metadata.view?.mediaTime)||0;
-    const pane=this.pane=document.createElement('section');pane.className='youtube-pane';pane.dataset.youtubePane='';pane.setAttribute('aria-label','YouTube 영상');
+    const pane=this.pane=document.createElement('section');pane.className='youtube-pane';pane.dataset.youtubePane='';pane.setAttribute('aria-label',t('YouTube 영상'));
     const skip=skipSeconds(),rate=pref('rate',1,v=>RATES.includes(v));
     // The picture itself is the control: left quarter back, middle half play/pause, right quarter forward.
     // The bottom strip (progress bar and control row, 88-140px) stays YouTube's own. Its full-screen
     // button is hidden (fs:0): double-tapping the picture is the full-screen control.
     pane.innerHTML=`<div class="youtube-video"><div class="youtube-frame"></div>
-      <div class="youtube-zones"><button type="button" tabindex="-1" data-yt="back" aria-label="${skip}초 뒤로"></button><button type="button" tabindex="-1" data-yt="play" aria-label="재생"></button><button type="button" tabindex="-1" data-yt="forward" aria-label="${skip}초 앞으로"></button></div>
+      <div class="youtube-zones"><button type="button" tabindex="-1" data-yt="back" aria-label="${t('{n}초 뒤로',{n:skip})}"></button><button type="button" tabindex="-1" data-yt="play" aria-label="${t('재생')}"></button><button type="button" tabindex="-1" data-yt="forward" aria-label="${t('{n}초 앞으로',{n:skip})}"></button></div>
       <div class="youtube-flash" aria-hidden="true"></div><p class="youtube-message" hidden></p></div>
       <div class="youtube-bar">
-        <button type="button" class="youtube-button" data-yt="follow" aria-pressed="true" title="재생 중인 자막을 따라 화면을 움직입니다">${icon('list',15)}<span>따라가기</span></button>
+        <button type="button" class="youtube-button" data-yt="follow" aria-pressed="true" title="${t('재생 중인 자막을 따라 화면을 움직입니다')}">${icon('list',15)}<span>${t('따라가기')}</span></button>
         <span class="youtube-clock" data-yt="clock">0:00</span>
-        <select class="youtube-rate" data-yt="rate" title="재생 속도" aria-label="재생 속도">${RATES.map(r=>`<option value="${r}" ${r===rate?'selected':''}>${r}×</option>`).join('')}</select>
-        <button type="button" class="youtube-button" data-yt="note" title="현재 시점에 메모 남기기" aria-label="현재 시점 메모">${icon('video-note',15)}<span>시점 메모</span></button>
-        <button type="button" class="youtube-button" data-yt="loop-stop" hidden>${icon('reload',15)} 반복 종료</button>
-        <button type="button" class="youtube-button" data-yt="mark" title="지금 장면을 북마크">${icon('bookmark',15)}<span>북마크</span></button>
-        <button type="button" class="youtube-button" data-yt="chapters" title="영상 설명란의 챕터를 붙여넣어 목차로 쓰기">${icon('list',15)}<span>목차</span></button>
-        <button type="button" class="youtube-button" data-yt="attach" title="자막 파일(.srt, .vtt 등) 붙이기">${icon('subtitles',15)}<span>${this.hasCues()?'자막 바꾸기':'자막 붙이기'}</span></button>
-        <span class="youtube-nav"><button type="button" class="youtube-button" data-yt="prev" title="재생목록의 이전 영상" aria-label="이전 영상" hidden>${icon('back',15)}</button><button type="button" class="youtube-button" data-yt="next" title="재생목록의 다음 영상" aria-label="다음 영상" hidden>${icon('forward',15)}</button></span>
-        <button type="button" class="youtube-button" data-yt="size" aria-pressed="false" title="영상 접기">${icon('chevron-down',15)}</button>
-        <a class="youtube-button youtube-open" data-yt="open" href="${esc(watchURL(this.youtube.videoId,this.youtube.playlistId))}" target="_blank" rel="noopener noreferrer" title="YouTube에서 열기">${icon('external',15)}</a>
+        <select class="youtube-rate" data-yt="rate" title="${t('재생 속도')}" aria-label="${t('재생 속도')}">${RATES.map(r=>`<option value="${r}" ${r===rate?'selected':''}>${r}×</option>`).join('')}</select>
+        <button type="button" class="youtube-button" data-yt="note" title="${t('현재 시점에 메모 남기기')}" aria-label="${t('현재 시점 메모')}">${icon('video-note',15)}<span>${t('시점 메모')}</span></button>
+        <button type="button" class="youtube-button" data-yt="loop-stop" hidden>${icon('reload',15)} ${t('반복 종료')}</button>
+        <button type="button" class="youtube-button" data-yt="mark" title="${t('지금 장면을 북마크')}">${icon('bookmark',15)}<span>${pt('action','북마크')}</span></button>
+        <button type="button" class="youtube-button" data-yt="chapters" title="${t('영상 설명란의 챕터를 붙여넣어 목차로 쓰기')}">${icon('list',15)}<span>${t('목차')}</span></button>
+        <button type="button" class="youtube-button" data-yt="attach" title="${t('자막 파일(.srt, .vtt 등) 붙이기')}">${icon('subtitles',15)}<span>${this.hasCues()?t('자막 바꾸기'):t('자막 붙이기')}</span></button>
+        <span class="youtube-nav"><button type="button" class="youtube-button" data-yt="prev" title="${t('재생목록의 이전 영상')}" aria-label="${t('이전 영상')}" hidden>${icon('back',15)}</button><button type="button" class="youtube-button" data-yt="next" title="${t('재생목록의 다음 영상')}" aria-label="${t('다음 영상')}" hidden>${icon('forward',15)}</button></span>
+        <button type="button" class="youtube-button" data-yt="size" aria-pressed="false" title="${t('영상 접기')}">${icon('chevron-down',15)}</button>
+        <a class="youtube-button youtube-open" data-yt="open" href="${esc(watchURL(this.youtube.videoId,this.youtube.playlistId))}" target="_blank" rel="noopener noreferrer" title="${t('YouTube에서 열기')}">${icon('external',15)}</a>
         <p class="youtube-now" data-yt="now" aria-live="off"></p>
       </div>
-      <div class="youtube-resize" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="영상 크기 조절" title="위아래로 끌어 영상 크기 조절 · 두 번 누르면 기본 크기"></div>`;
+      <div class="youtube-resize" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="${t('영상 크기 조절')}" title="${t('위아래로 끌어 영상 크기 조절 · 두 번 누르면 기본 크기')}"></div>`;
     const viewport=this.reader.viewport;viewport.before(pane);tab.host.classList.add('has-youtube');
     const $=name=>pane.querySelector(`[data-yt="${name}"]`);this.$=$;this.video=pane.querySelector('.youtube-video');
     // One tap acts after a short wait; a second tap in that time toggles full screen instead.
     const tap=action=>event=>{event?.currentTarget?.blur?.();if(this.tapTimer){clearTimeout(this.tapTimer);this.tapTimer=0;this.toggleFullscreen();return;}this.tapTimer=setTimeout(()=>{this.tapTimer=0;action();},250);};
     $('play').onclick=tap(()=>{const playing=this.player?.getPlayerState?.()===1;this.toggle();this.flash(icon(playing?'pause':'play',34));});
-    $('back').onclick=tap(()=>{const n=skipSeconds();this.seekBy(-n);this.flash(icon('undo',26)+'<span>'+n+'초</span>');});
-    $('forward').onclick=tap(()=>{const n=skipSeconds();this.seekBy(n);this.flash('<span>'+n+'초</span>'+icon('redo',26));});
+    $('back').onclick=tap(()=>{const n=skipSeconds();this.seekBy(-n);this.flash(icon('undo',26)+'<span>'+t('{n}초',{n})+'</span>');});
+    $('forward').onclick=tap(()=>{const n=skipSeconds();this.seekBy(n);this.flash('<span>'+t('{n}초',{n})+'</span>'+icon('redo',26));});
     // Clicking YouTube's own controls focuses its iframe and blurs this window. The tap
     // zones then step aside so YouTube's panels (more videos and its ✕) take clicks,
     // until the video plays again or focus comes back to the app.
@@ -156,7 +157,7 @@ export class YouTubePane {
     $('chapters').onclick=()=>callbacks.onChapters();$('attach').onclick=()=>callbacks.onAttach();
     $('prev').onclick=()=>callbacks.onNavigate(-1);$('next').onclick=()=>callbacks.onNavigate(1);
     this.bindResize();
-    $('size').onclick=()=>{const small=pane.classList.toggle('youtube-collapsed');$('size').setAttribute('aria-pressed',String(small));$('size').title=small?'영상 펼치기':'영상 접기';};
+    $('size').onclick=()=>{const small=pane.classList.toggle('youtube-collapsed');$('size').setAttribute('aria-pressed',String(small));$('size').title=small?t('영상 펼치기'):t('영상 접기');};
     // Scrolling by hand pauses "follow" briefly instead of fighting the reader.
     this.onUserScroll=()=>{this.quietUntil=Date.now()+8000;};
     for(const type of ['wheel','touchmove','keydown'])viewport.addEventListener(type,this.onUserScroll,{passive:true});
@@ -243,7 +244,7 @@ export class YouTubePane {
     this.quietUntil=Date.now()+8000;
     this.pane.classList.remove('youtube-collapsed');
     this.$('size').setAttribute('aria-pressed','false');
-    this.$('size').title='영상 접기';
+    this.$('size').title=t('영상 접기');
   }
   toggleSceneLoop(note){
     if(this.disposed||this.tab.host.hidden||note.videoAnchor.videoId!==this.youtube.videoId)return;
@@ -263,12 +264,12 @@ export class YouTubePane {
   updateLoopControls(){
     const stop=this.$('loop-stop');
     stop.hidden=!this.sceneLoop;
-    if(this.sceneLoop)stop.title=clock(this.sceneLoop.start)+'부터 장면 반복 종료';
+    if(this.sceneLoop)stop.title=t('{time}부터 장면 반복 종료',{time:clock(this.sceneLoop.start)});
     for(const button of this.notes?.querySelectorAll('[data-scene-loop]')||[]){
       const active=button.dataset.sceneLoop===this.sceneLoop?.id;
       if(button.getAttribute('aria-pressed')===String(active))continue;
       button.setAttribute('aria-pressed',String(active));
-      button.querySelector('span').textContent=active?'반복 종료':`이 장면 ${SCENE_REPEAT_SECONDS}초 반복`;
+      button.querySelector('span').textContent=active?t('반복 종료'):t('이 장면 {n}초 반복',{n:SCENE_REPEAT_SECONDS});
     }
   }
   stopSceneLoop(){
@@ -285,7 +286,7 @@ export class YouTubePane {
     if(this.tab.host.hidden||this.pane.ownerDocument.hidden){this.stopSceneLoop();return;}
     if(this.sceneLoopEnd()<=this.sceneLoop.start){
       this.stopSceneLoop();
-      this.sceneStatus('이 메모의 시점이 영상 끝에 있어 반복할 구간이 없습니다.');
+      this.sceneStatus(t('이 메모의 시점이 영상 끝에 있어 반복할 구간이 없습니다.'));
       return;
     }
     this.seekPlayer(this.sceneLoop.start,true);
@@ -332,12 +333,12 @@ export class YouTubePane {
         if(event.data===1)this.preparedTime=null;
         const playing=event.data===1;this.playing=playing;if(playing)this.resumeZones();
         if(event.data===5)this.player?.setPlaybackRate?.(Number(this.$('rate').value));
-        this.$('play').setAttribute('aria-label',playing?'일시정지':'재생');
+        this.$('play').setAttribute('aria-label',playing?t('일시정지'):t('재생'));
         if(event.data===0&&this.sceneLoop&&this.maintainSceneLoop(this.player.getDuration?.()||this.time(),true))return;
         if(!playing&&this.ready&&(!this.sceneLoop||event.data===2))this.remember(true);
         if(event.data===0)this.callbacks.onEnded?.();
       },
-      onError:event=>this.message([101,150,153].includes(event.data)?'이 영상은 다른 사이트에서 재생할 수 없게 막혀 있습니다. 「YouTube에서 열기」로 보세요. 자막과 주석은 여기서 계속 쓸 수 있습니다.':'영상을 재생하지 못했습니다. (YouTube 오류 '+event.data+')'),
+      onError:event=>this.message([101,150,153].includes(event.data)?t('이 영상은 다른 사이트에서 재생할 수 없게 막혀 있습니다. 「YouTube에서 열기」로 보세요. 자막과 주석은 여기서 계속 쓸 수 있습니다.'):t('영상을 재생하지 못했습니다. (YouTube 오류 {code})',{code:event.data})),
     }});
   }
   /**
@@ -350,7 +351,7 @@ export class YouTubePane {
     if(target?.closest?.('input,textarea,select,[contenteditable=""],[contenteditable=true],[role=separator],[role=slider]'))return false;
     if((key===' '||key==='Enter')&&target?.closest?.('button,a,summary,[role=button]')&&!target.closest('.youtube-zones'))return false;
     const p=this.player,ok=!!p?.seekTo&&this.ready,lower=key.length===1?key.toLowerCase():key;
-    const skip=seconds=>{this.seekBy(seconds);this.flash(seconds<0?icon('undo',26)+'<span>'+(-seconds)+'초</span>':'<span>'+seconds+'초</span>'+icon('redo',26));};
+    const skip=seconds=>{this.seekBy(seconds);this.flash(seconds<0?icon('undo',26)+'<span>'+t('{n}초',{n:-seconds})+'</span>':'<span>'+t('{n}초',{n:seconds})+'</span>'+icon('redo',26));};
     if(key==='?'){this.callbacks.onShortcuts?.();return true;}
     if(key==='N'&&event.shiftKey||key==='P'&&event.shiftKey){const button=this.$(key==='N'?'next':'prev');if(!button||button.hidden)return false;this.callbacks.onNavigate?.(key==='N'?1:-1);return true;}
     if(lower==='f'&&!event.shiftKey){this.toggleFullscreen();return true;}
@@ -370,10 +371,10 @@ export class YouTubePane {
       const v=Math.max(0,Math.min(100,Math.round((p.getVolume?.()??100)+(key==='ArrowUp'?5:-5))));p.setVolume?.(v);if(v>0)p.unMute?.();
       this.flash(icon('speaker',22)+'<span>'+v+'%</span>');return true;
     }
-    if(lower==='m'){const muted=p.isMuted?.();if(muted)p.unMute?.();else p.mute?.();this.flash(icon('speaker',22)+'<span>'+(muted?'소리 켬':'음소거')+'</span>');return true;}
+    if(lower==='m'){const muted=p.isMuted?.();if(muted)p.unMute?.();else p.mute?.();this.flash(icon('speaker',22)+'<span>'+(muted?t('소리 켬'):t('음소거'))+'</span>');return true;}
     if(lower==='c'){
       try{if(this.captionsOn){p.unloadModule?.('captions');this.captionsOn=false;}else{p.loadModule?.('captions');p.setOption?.('captions','reload',true);this.captionsOn=true;}}catch{}
-      this.flash('<span>'+(this.captionsOn?'YouTube 자막 켬':'YouTube 자막 끔')+'</span>');return true;
+      this.flash('<span>'+(this.captionsOn?t('YouTube 자막 켬'):t('YouTube 자막 끔'))+'</span>');return true;
     }
     return false;
   }
@@ -434,7 +435,7 @@ export class YouTubePane {
     this.tick(true);
   }
   seekBy(delta){this.seek(this.time()+delta);}
-  setSiblings(prev,next){this.$('prev').hidden=!prev;this.$('next').hidden=!next;this.$('prev').title=prev?'이전 영상: '+prev:'';this.$('next').title=next?'다음 영상: '+next:'';}
+  setSiblings(prev,next){this.$('prev').hidden=!prev;this.$('next').hidden=!next;this.$('prev').title=prev?t('이전 영상: {title}',{title:prev}):'';this.$('next').title=next?t('다음 영상: {title}',{title:next}):'';}
   tick(force=false){
     if(this.disposed||!this.ready)return;
     const t=this.time();
@@ -585,7 +586,7 @@ export class YouTubePane {
     }
     if(this.follow&&this.cues?.length&&this.reader?.doc)globalThis.requestAnimationFrame?.(()=>{if(!this.disposed)this.reveal(true,'auto');});
     const now=Math.round(this.video.getBoundingClientRect?.().height||0);
-    handle?.setAttribute('aria-valuenow',String(now));handle?.setAttribute('aria-valuetext',this.videoShare?'영상 높이 '+now+'px':'기본 크기');
+    handle?.setAttribute('aria-valuenow',String(now));handle?.setAttribute('aria-valuetext',this.videoShare?t('영상 높이 {n}px',{n:now}):t('기본 크기'));
   }
   dispose(){
     document.removeEventListener('visibilitychange',this.onPageVisibility);

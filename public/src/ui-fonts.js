@@ -1,31 +1,32 @@
 // Percentages use each UI element's original type size as the baseline.
+import {t} from './i18n.js';
 export const UI_FONT_MIN = 60;
 export const UI_FONT_MAX = 200;
 export const UI_FONT_GROUPS = [
-  {title:'사이드바', fields:[
-    ['sidebar','사이드바 전체','all'], ['sidebar-nav','상단 버튼의 개수','sidebar'],
-    ['outline','목차','sidebar'], ['search','검색창과 결과','sidebar'],
-    ['annotations','주석 목록','sidebar'], ['bookmarks','북마크 목록','sidebar'],
+  {title:t('사이드바'), fields:[
+    ['sidebar',t('사이드바 전체'),'all'], ['sidebar-nav',t('상단 버튼의 개수'),'sidebar'],
+    ['outline',t('목차'),'sidebar'], ['search',t('검색창과 결과'),'sidebar'],
+    ['annotations',t('주석 목록'),'sidebar'], ['bookmarks',t('북마크 목록'),'sidebar'],
   ]},
-  {title:'내 서재', fields:[
-    ['library','서재 전체','all'], ['library-folders','폴더와 경로','library'],
-    ['library-title','문서 제목','library'], ['library-info','파일명·날짜·개수','library'],
+  {title:t('내 서재'), fields:[
+    ['library',t('서재 전체'),'all'], ['library-folders',t('폴더와 경로'),'library'],
+    ['library-title',t('문서 제목'),'library'], ['library-info',t('파일명·날짜·개수'),'library'],
   ]},
-  {title:'도구와 안내', fields:[
-    ['tabs','문서 탭','all'], ['reader','문서 상단 읽기 도구','all'],
-    ['tools','주석 도구와 메뉴','all'], ['speech','읽어주기 플레이어','all'],
-    ['dialogs','설정과 대화상자','all'], ['help','도움말','dialogs'],
-    ['status','상태 표시와 알림','all'],
+  {title:t('도구와 안내'), fields:[
+    ['tabs',t('문서 탭'),'all'], ['reader',t('문서 상단 읽기 도구'),'all'],
+    ['tools',t('주석 도구와 메뉴'),'all'], ['speech',t('읽어주기 플레이어'),'all'],
+    ['dialogs',t('설정과 대화상자'),'all'], ['help',t('도움말'),'dialogs'],
+    ['status',t('상태 표시와 알림'),'all'],
   ]},
 ];
-export const UI_FONT_FIELDS = [['all','화면 전체',null], ...UI_FONT_GROUPS.flatMap(group => group.fields)];
+export const UI_FONT_FIELDS = [['all',t('화면 전체'),null], ...UI_FONT_GROUPS.flatMap(group => group.fields)];
 export function normalizeUIFonts(input = {}) {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) throw Error('UI 글자 크기 설정이 올바르지 않습니다.');
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw Error(t('UI 글자 크기 설정이 올바르지 않습니다.'));
   const result = {};
   for (const [key] of UI_FONT_FIELDS) {
     if (!Object.hasOwn(input,key)) continue;
     const value = input[key];
-    if (!Number.isInteger(value) || value < UI_FONT_MIN || value > UI_FONT_MAX) throw Error('UI 글자 크기는 60~200% 사이의 정수로 입력하세요.');
+    if (!Number.isInteger(value) || value < UI_FONT_MIN || value > UI_FONT_MAX) throw Error(t('UI 글자 크기는 60~200% 사이의 정수로 입력하세요.'));
     if (key !== 'all' || value !== 100) result[key] = value;
   }
   return result;

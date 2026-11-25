@@ -1,5 +1,6 @@
 import {computeListMarkers,ommlToMathML} from '../vendor/office/genoffice.js';
 import {esc,number,color,font,imageSource,safeLink} from './office-common.js';
+import {t} from './i18n.js';
 const highlight={yellow:'#ffff00',green:'#00ff00',cyan:'#00ffff',magenta:'#ff00ff',blue:'#0000ff',red:'#ff0000',darkYellow:'#808000',lightGray:'#d3d3d3'};
 function runHTML(run){
   if(run.vanish||run.del)return '';
@@ -30,7 +31,7 @@ function paragraph(runs=[],format={},tag='p',attrs=''){
   return '<'+tag+attrs+' style="'+esc(css.join(';'))+'">'+(runs.map(runHTML).join('')||'<br>')+'</'+tag+'>';
 }
 function tableHTML(table,depth=0){
-  if(depth>16)throw Error('중첩된 표가 너무 많습니다.');
+  if(depth>16)throw Error(t('중첩된 표가 너무 많습니다.'));
   const rows=table.rows||[];
   const cols=table.colWidthsPct?.map(w=>'<col style="width:'+Math.max(0,Math.min(100,number(w)))+'%">').join('')||'';
   return '<div class="office-table-scroll"><table style="width:100%"><colgroup>'+cols+'</colgroup><tbody>'+rows.map((row,ri)=>{
@@ -67,13 +68,13 @@ export function renderWord(doc,warnings){
     if(block.formulaDisplay)return anchors+'<p>'+((block.formulaDisplay.omml&&ommlToMathML(block.formulaDisplay.omml))||esc(block.formulaDisplay.tokens?.join('')||''))+'</p>';
     if(block.decorative)return '<hr>';
     if(block.previewText)return anchors+'<p id="'+id+'">'+esc(block.previewText)+'</p>';
-    missing++;return '<p class="office-note">'+esc(block.label||'표시할 수 없는 문서 개체')+'</p>';
+    missing++;return '<p class="office-note">'+esc(block.label||t('표시할 수 없는 문서 개체'))+'</p>';
   });
   let bodyLen=0;for(const s of body)bodyLen+=s.length;
   const notes=(kind,items)=>(items||[]).map(n=>'<li id="office-'+kind+'-'+esc(n.id)+'">'+(n.richParas?.map(runs=>paragraph(runs)).join('')||esc(n.text||''))+'</li>').join('');
   const footnotes=notes('footnote',doc.footnotes),endnotes=notes('endnote',doc.endnotes);
-  if(missing)warnings.push('일부 문서 개체 '+missing+'개는 원래 모양을 표시하지 못했습니다. 원본 파일은 그대로 보관합니다.');
+  if(missing)warnings.push(t('일부 문서 개체 {n}개는 원래 모양을 표시하지 못했습니다. 원본 파일은 그대로 보관합니다.',{n:missing}));
   const head='<article class="office-word">'+(doc.headerText?'<header>'+esc(doc.headerText)+'</header>':'');
-  const tail=(footnotes?'<section><h2>각주</h2><ol>'+footnotes+'</ol></section>':'')+(endnotes?'<section><h2>미주</h2><ol>'+endnotes+'</ol></section>':'')+(doc.footerText?'<footer>'+esc(doc.footerText)+'</footer>':'')+'</article>';
+  const tail=(footnotes?'<section><h2>'+t('각주')+'</h2><ol>'+footnotes+'</ol></section>':'')+(endnotes?'<section><h2>'+t('미주')+'</h2><ol>'+endnotes+'</ol></section>':'')+(doc.footerText?'<footer>'+esc(doc.footerText)+'</footer>':'')+'</article>';
   return bodyLen>=64*1024*1024?new Blob([head,...body,tail]):head+body.join('')+tail;
 }

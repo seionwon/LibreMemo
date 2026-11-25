@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 export const HIGHLIGHT_NAME_LENGTH = 32;
 
 const isRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -5,18 +6,18 @@ const isRecord = value => value !== null && typeof value === 'object' && !Array.
 // Keep names with the preset. An annotation's existing hex colour is its lookup key.
 export function normalizeHighlightColorNames(value, palettes) {
   if (value === undefined) return {};
-  if (!isRecord(value)) throw new Error('형광펜 색 이름 설정이 올바르지 않습니다.');
+  if (!isRecord(value)) throw new Error(t('형광펜 색 이름 설정이 올바르지 않습니다.'));
 
   const presets = [];
   for (const palette of palettes) {
     if (!Object.hasOwn(value, palette.id)) continue;
     const raw = value[palette.id];
-    if (!isRecord(raw) || Object.keys(raw).length > 32) throw new Error('팔레트의 형광펜 색 이름 목록이 올바르지 않습니다.');
+    if (!isRecord(raw) || Object.keys(raw).length > 32) throw new Error(t('팔레트의 형광펜 색 이름 목록이 올바르지 않습니다.'));
 
     const names = new Map();
     for (const [color, name] of Object.entries(raw)) {
       if (!/^#[\da-f]{6}$/i.test(color) || typeof name !== 'string' || name.length > HIGHLIGHT_NAME_LENGTH || /[\u0000-\u001f\u007f]/.test(name)) {
-        throw new Error('형광펜 색 이름은 줄바꿈 없이 ' + HIGHLIGHT_NAME_LENGTH + '자 이내로 입력해주세요.');
+        throw new Error(t('형광펜 색 이름은 줄바꿈 없이 {n}자 이내로 입력해주세요.', {n: HIGHLIGHT_NAME_LENGTH}));
       }
       if (name.trim()) names.set(color.toLowerCase(), name.trim());
     }

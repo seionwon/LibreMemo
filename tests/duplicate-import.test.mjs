@@ -6,6 +6,7 @@ import {documentFor,installDOM} from './dom.mjs';
 import {escapeHTML} from '../public/src/utils.js';
 import {findLocalDuplicates,identifyLocalFile} from '../public/src/local-files.js';
 import {parseHTML} from '../public/src/document.js';
+import {t,locale} from '../public/src/i18n.js';
 installDOM();
 const source=await readFile(new URL('../public/src/app.js',import.meta.url),'utf8');
 const code=source.slice(source.indexOf('function duplicateImportDialog('),source.indexOf('async function savePage('));
@@ -17,7 +18,7 @@ function app(rows=[structuredClone(record)],{cacheError=false}={}){
   const doc=documentFor('<html><head></head><body><span id="status-left"></span><dialog id="dialog"><div id="dialog-content"></div></dialog></body></html>');
   const dialog=doc.querySelector('#dialog'),created=[],opened=[],reads=[],cached=[],notices=[];let restored=0;
   dialog.close=value=>{dialog.returnValue=value||'';dialog.open=false;dialog.dispatchEvent(new doc.defaultView.Event('close'));};
-  const context=vm.createContext({document:doc,$:(s,root=doc)=>root.querySelector(s),esc:escapeHTML,formatDate:()=> '10월 23일',
+  const context=vm.createContext({t,locale,document:doc,$:(s,root=doc)=>root.querySelector(s),esc:escapeHTML,formatDate:()=> '10월 23일',
     modal(html,bind){doc.querySelector('#dialog-content').innerHTML=html;dialog.open=true;dialog.returnValue='';const select=doc.querySelector('select');let value=select.firstElementChild.value;Object.defineProperty(select,'value',{configurable:true,get:()=>value,set:next=>value=next});bind(dialog);},
     readLocalHTML:async(input,options)=>{assert.equal(options.identify,false);reads.push(input);if(input.error)throw Error('read failed');return {...input};},findLocalDuplicates,identifyLocalFile,listDocuments:async()=>rows,getDocument:async id=>rows.find(row=>row.id===id),
     putDocumentSourceIdentity:async(id,sourceIdentity)=>{if(cacheError)throw Error('storage full');const row=rows.find(row=>row.id===id);row.sourceIdentity=sourceIdentity;cached.push(id);return row;},toast:message=>notices.push(message),

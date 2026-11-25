@@ -1,3 +1,4 @@
+import {t} from './i18n.js';
 // YouTube videos as subtitle documents. Everything here is pure (no DOM, no
 // network) so it can be tested in Node. The browser parts live in youtube-ui.js.
 //
@@ -127,7 +128,7 @@ export function youtubeDocumentHTML(title,subtitle=null,warnings=[],{chapters=[]
     // Without a known length, the subtitle's last cue gives it.
     const cues=mendCuePunctuation(parseSubtitles(subtitle.text,subtitle.format)),length=duration||Math.max(0,...cues.map(c=>(c.end??c.start)/1000));
     body=renderSubtitles(subtitle.text,subtitle.format,warnings,{mend:true,sections:chapters.length?outlineSections(length,chapters):withFirstWords(outlineSections(length),cues)});
-  }else body=STYLE+'<article class="office-subtitles youtube-empty" data-youtube-empty><strong>아직 자막이 없습니다.</strong><p>위쪽 영상 막대의 「자막 붙이기」로 이 영상의 자막 파일(.srt, .vtt 등)을 고르면, 영상과 함께 움직이는 자막에 형광펜·메모·북마크를 달 수 있습니다. 받는 방법은 내 서재 → 유튜브의 「자막 파일 받는 방법」에 있습니다.</p></article>';
+  }else body=STYLE+'<article class="office-subtitles youtube-empty" data-youtube-empty><strong>'+t('아직 자막이 없습니다.')+'</strong><p>'+t('위쪽 영상 막대의 「자막 붙이기」로 이 영상의 자막 파일(.srt, .vtt 등)을 고르면, 영상과 함께 움직이는 자막에 형광펜·메모·북마크를 달 수 있습니다. 받는 방법은 내 서재 → 유튜브의 「자막 파일 받는 방법」에 있습니다.')+'</p></article>';
   return officeHTML(title,body,warnings);
 }
 
@@ -152,7 +153,7 @@ export function clock(seconds){
 /** A playlist title usable as a library folder name (see library-folders.js folderName). */
 export function playlistFolderName(title,taken=[]){
   let name=String(title||'').normalize('NFC').replace(/[\u0000-\u001f\u007f/\\<>:"|?*]+/g,' ').replace(/\s+/g,' ').trim().replace(/^\.+/,'').replace(/[. ]+$/,'');
-  if(!name||/^(?:HTMLMemo|LibreMemo)(?:[.-]|$)/i.test(name)||/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name))name='YouTube 재생목록';
+  if(!name||/^(?:HTMLMemo|LibreMemo)(?:[.-]|$)/i.test(name)||/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name))name=t('YouTube 재생목록');
   while(new TextEncoder().encode(name).length>200)name=name.slice(0,-1).trim();
   const used=new Set(taken.map(n=>n.normalize('NFC').toLocaleLowerCase('en-US')));
   let candidate=name;for(let n=2;used.has(candidate.toLocaleLowerCase('en-US'));n++)candidate=name+' ('+n+')';
@@ -191,14 +192,14 @@ export function matchSubtitleFiles(files,videos){
 export async function subtitlesFromZip(bytes){
   const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),out=[],decoder=new TextDecoder();
   let end=-1;for(let i=bytes.length-22;i>=Math.max(0,bytes.length-65557);i--)if(view.getUint32(i,true)===0x06054b50){end=i;break;}
-  if(end<0)throw Error('zip 파일을 읽지 못했습니다.');
+  if(end<0)throw Error(t('zip 파일을 읽지 못했습니다.'));
   let p=view.getUint32(end+16,true);
   for(let i=0,count=view.getUint16(end+10,true);i<count&&view.getUint32(p,true)===0x02014b50;i++){
     const method=view.getUint16(p+10,true),size=view.getUint32(p+20,true),length=view.getUint32(p+24,true),nameLength=view.getUint16(p+28,true),local=view.getUint32(p+42,true);
     const path=decoder.decode(bytes.subarray(p+46,p+46+nameLength)),name=path.split('/').pop();
     p+=46+nameLength+view.getUint16(p+30,true)+view.getUint16(p+32,true);
     if(!subtitleFormat(name)||/^__MACOSX\//.test(path)||name.startsWith('._'))continue;
-    if(length>64*1024*1024)throw Error('zip 안의 자막 파일이 너무 큽니다.');
+    if(length>64*1024*1024)throw Error(t('zip 안의 자막 파일이 너무 큽니다.'));
     const start=local+30+view.getUint16(local+26,true)+view.getUint16(local+28,true),data=bytes.subarray(start,start+size);
     let content;
     if(method===0)content=data;
@@ -214,18 +215,18 @@ export async function subtitlesFromZip(bytes){
 // auto-generated → Korean). Other devices are added once this path is settled.
 export const SUBTITLE_EXTENSION='https://chromewebstore.google.com/detail/ognjcegpcoafidcfbepkfgnolnnibcjp';
 export const MAC_GUIDE=[
-  '<b>외부 도구를 사용할 경우:</b> 아래 「확장 프로그램 설치」를 누르거나 아래 주소를 Chrome 주소창에 붙여넣어 Chrome 웹 스토어에서 <b>YouTube Subtitle Downloader</b>를 <b>Chrome에 추가</b>합니다. 이 안내는 아래 주소의 확장 프로그램을 기준으로 합니다. 설치 전에 웹 스토어에서 이름·권한을 확인하세요. 주소창 오른쪽 퍼즐 모양 아이콘에서 핀을 눌러 두면 찾기 쉽습니다.',
-  '아래 「YouTube에서 영상 열기」를 눌러 Chrome에서 영상을 열고 <b>재생</b>을 시작합니다.',
-  '영상 아래쪽의 <b>⚙ 설정</b> → <b>자막</b>에서 원하는 언어를 고릅니다. 한국어 자막이 없으면 <b>영어(자동 생성)</b>를 고른 뒤, 다시 <b>⚙ 설정</b> → <b>자막</b> → <b>자동 번역</b> → <b>한국어</b>를 고릅니다.',
-  '화면에 한국어 자막이 나오면, 주소창 오른쪽의 <b>YouTube Subtitle Downloader</b> 아이콘을 누르고 <b>SRT</b>로 <b>다운로드</b>합니다. 브라우저에서 지정한 다운로드 위치에서 파일을 찾습니다.',
-  '영상 설명란에 <b>0:00 소개</b>처럼 시간과 제목이 적힌 <b>챕터</b>가 있으면, 그 줄들을 드래그해 복사(⌘C)한 뒤 유튜브 창의 「챕터」 칸에 붙여넣으면(⌘V) 사이드바 목차가 챕터로 나옵니다. 없으면 영상 길이에 맞춰 시각 목차를 만듭니다.',
-  'LibreMemo로 돌아와 「자막 파일 고르기」에서 다운로드 폴더의 <b>.srt</b> 파일을 고르고 「만들기」를 누릅니다.',
+  t('<b>외부 도구를 사용할 경우:</b> 아래 「확장 프로그램 설치」를 누르거나 아래 주소를 Chrome 주소창에 붙여넣어 Chrome 웹 스토어에서 <b>YouTube Subtitle Downloader</b>를 <b>Chrome에 추가</b>합니다. 이 안내는 아래 주소의 확장 프로그램을 기준으로 합니다. 설치 전에 웹 스토어에서 이름·권한을 확인하세요. 주소창 오른쪽 퍼즐 모양 아이콘에서 핀을 눌러 두면 찾기 쉽습니다.'),
+  t('아래 「YouTube에서 영상 열기」를 눌러 Chrome에서 영상을 열고 <b>재생</b>을 시작합니다.'),
+  t('영상 아래쪽의 <b>⚙ 설정</b> → <b>자막</b>에서 원하는 언어를 고릅니다. 한국어 자막이 없으면 <b>영어(자동 생성)</b>를 고른 뒤, 다시 <b>⚙ 설정</b> → <b>자막</b> → <b>자동 번역</b> → <b>한국어</b>를 고릅니다.'),
+  t('화면에 한국어 자막이 나오면, 주소창 오른쪽의 <b>YouTube Subtitle Downloader</b> 아이콘을 누르고 <b>SRT</b>로 <b>다운로드</b>합니다. 브라우저에서 지정한 다운로드 위치에서 파일을 찾습니다.'),
+  t('영상 설명란에 <b>0:00 소개</b>처럼 시간과 제목이 적힌 <b>챕터</b>가 있으면, 그 줄들을 드래그해 복사(⌘C)한 뒤 유튜브 창의 「챕터」 칸에 붙여넣으면(⌘V) 사이드바 목차가 챕터로 나옵니다. 없으면 영상 길이에 맞춰 시각 목차를 만듭니다.'),
+  t('LibreMemo로 돌아와 「자막 파일 고르기」에서 다운로드 폴더의 <b>.srt</b> 파일을 고르고 「만들기」를 누릅니다.'),
 ];
-export const SUBTITLE_EXTENSION_WARNING='같은 이름의 확장 프로그램이 여럿 있습니다. 아래는 이 안내에서 사용하는 확장의 주소이며, YouTube 변경이나 영상에 따라 다운로드가 안 될 수 있습니다.';
+export const SUBTITLE_EXTENSION_WARNING=t('같은 이름의 확장 프로그램이 여럿 있습니다. 아래는 이 안내에서 사용하는 확장의 주소이며, YouTube 변경이나 영상에 따라 다운로드가 안 될 수 있습니다.');
 export function extensionLinkHTML(){
-  return '<p class="youtube-guide-extension"><span>'+SUBTITLE_EXTENSION_WARNING+'</span><br>설치 주소: <a href="'+SUBTITLE_EXTENSION+'" target="_blank" rel="noopener noreferrer">'+SUBTITLE_EXTENSION+'</a></p>';
+  return '<p class="youtube-guide-extension"><span>'+SUBTITLE_EXTENSION_WARNING+'</span><br>'+t('설치 주소:')+' <a href="'+SUBTITLE_EXTENSION+'" target="_blank" rel="noopener noreferrer">'+SUBTITLE_EXTENSION+'</a></p>';
 }
 export function guideHTML(){
-  return '<p class="youtube-guide-note">이미 자막 파일이 있으면 확장 프로그램 없이 바로 고르세요. 아래는 Mac Chrome에서 자막 파일을 준비하는 선택 방법입니다. LibreMemo가 자막을 직접 다운로드하거나 번역하는 기능은 아닙니다.</p>'+extensionLinkHTML()+'<ol class="youtube-guide-steps">'+MAC_GUIDE.map(step=>'<li>'+step+'</li>').join('')+'</ol>'
-    +'<p class="youtube-guide-note">휴대폰 등 다른 기기에서는 준비된 자막 파일을 옮겨 「자막 파일 고르기」로 선택하세요. 이미 열린 유튜브 문서에는 「자막 붙이기」 또는 「자막 바꾸기」를 사용합니다.</p>';
+  return '<p class="youtube-guide-note">'+t('이미 자막 파일이 있으면 확장 프로그램 없이 바로 고르세요. 아래는 Mac Chrome에서 자막 파일을 준비하는 선택 방법입니다. LibreMemo가 자막을 직접 다운로드하거나 번역하는 기능은 아닙니다.')+'</p>'+extensionLinkHTML()+'<ol class="youtube-guide-steps">'+MAC_GUIDE.map(step=>'<li>'+step+'</li>').join('')+'</ol>'
+    +'<p class="youtube-guide-note">'+t('휴대폰 등 다른 기기에서는 준비된 자막 파일을 옮겨 「자막 파일 고르기」로 선택하세요. 이미 열린 유튜브 문서에는 「자막 붙이기」 또는 「자막 바꾸기」를 사용합니다.')+'</p>';
 }

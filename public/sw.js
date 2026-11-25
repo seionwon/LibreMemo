@@ -2,6 +2,9 @@ const CACHE = 'htmlmemo-v44';
 const VERSION = 'development';
 const DIGESTS = {};
 const SHELL = ["./","./index.html","./styles.css","./manifest.webmanifest","./example.html","./icons/icon.svg","./icons/icon-192.png","./icons/icon-512.png","./shared/capture.js","./src/app.js","./src/app-themes.js","./src/annotation-review.js","./src/highlight-color-names.js","./src/updates.js","./src/help.js","./src/help-content.js","./src/web.js","./src/markdown.js","./src/document.js","./src/bookmark-location.js","./src/search-index.js","./src/local-files.js","./src/mhtml.js","./src/migrate.js","./src/model.js","./src/reader.js","./src/isolated-runtime.js","./src/read-aloud.js","./src/storage.js","./src/data-folder.js","./src/library-folders.js","./src/folder-tree.js","./src/utils.js","./src/preferences.js","./src/zip.js","./src/bundler.js","./src/distribution.js","./src/install.js","./src/version.js","./src/sync-service.js","./src/sync-crypto.js","./src/sync-adapter.js","./src/sync-ui.js","./src/sync-device-service.js","./src/sync-peer.js","./src/sync-stream.js","./src/sync-temp.js","./src/sync-qr.js","./vendor/markdown-it.js","./vendor/markdown-it-LICENSE.txt","./vendor/html5-qrcode.min.js","./vendor/html5-qrcode-LICENSE.txt","./vendor/qrcodegen-LICENSE.txt"];
+// Worker messages follow the device language (the page setting is not readable here).
+const KO=(()=>{const value=String(self.navigator?.language||'').toLowerCase();return !value||value.startsWith('ko');})();
+const say=(ko,en)=>KO?ko:en;
 const BASE=new URL('./',self.location.href),STORE=CACHE+':'+BASE.pathname,CONTROL='htmlmemo-control-v1:'+BASE.pathname;
 const identity={cache:STORE,version:VERSION};
 const key=name=>new URL('.htmlmemo-update/'+name,BASE).href;
@@ -18,8 +21,8 @@ async function fetchVerified(url,expected,isUpgrade=false){
     if(cached?.ok&&checksum(new Uint8Array(await cached.clone().arrayBuffer()))===expected)return cached;
   }
   const response=await fetch(new Request(url,{cache:'reload',credentials:'same-origin'}));
-  if(!response.ok)throw Error('앱 파일을 받지 못했습니다.');
-  if(expected!==undefined&&checksum(new Uint8Array(await response.clone().arrayBuffer()))!==expected)throw Error('새 앱 파일이 일치하지 않습니다.');
+  if(!response.ok)throw Error(say('앱 파일을 받지 못했습니다.','Could not download the app files.'));
+  if(expected!==undefined&&checksum(new Uint8Array(await response.clone().arrayBuffer()))!==expected)throw Error(say('새 앱 파일이 일치하지 않습니다.','The new app files do not match.'));
   return response;
 }
 async function prepare(){
@@ -88,7 +91,7 @@ self.addEventListener('fetch',event=>{
     const cached=await(await caches.open(value.cache)).match(path,{ignoreSearch:true});
     if(cached)return cached;
     // Never mix a missing old code file with a newer network release.
-    if(navigation||SHELL.some(path=>new URL(path,BASE).pathname===url.pathname))return new Response('앱 파일을 불러오지 못했습니다. 앱을 다시 실행해주세요.',{status:503,headers:{'Content-Type':'text/plain;charset=utf-8'}});
+    if(navigation||SHELL.some(path=>new URL(path,BASE).pathname===url.pathname))return new Response(say('앱 파일을 불러오지 못했습니다. 앱을 다시 실행해주세요.','Could not load the app files. Please restart the app.'),{status:503,headers:{'Content-Type':'text/plain;charset=utf-8'}});
     return fetch(event.request);
   })());
 });
@@ -97,15 +100,15 @@ self.addEventListener('message',event=>{
   event.waitUntil((async()=>{
     try{
       const client=event.source?.id&&await self.clients.get(event.source.id);
-      if(!client||!application(client.url)||client.frameType&&client.frameType!=='top-level')throw Error('앱 창에서만 업데이트할 수 있습니다.');
+      if(!client||!application(client.url)||client.frameType&&client.frameType!=='top-level')throw Error(say('앱 창에서만 업데이트할 수 있습니다.','Updates can only be installed from an app window.'));
       const current=await chosen(client.id),latest=await read('latest');
       if(event.data.type==='HTMLMEMO_UPDATE_INFO'){
         await pin(client.id,current);
         event.ports[0].postMessage({ok:true,available:latest?.cache===STORE&&current.cache!==STORE,version:VERSION,currentVersion:current.version,build:CACHE,selected:(await read('selected'))?.cache===STORE});
       }else{
         await locked(async()=>{
-          if(event.data.build!==CACHE||(await read('latest'))?.cache!==STORE)throw Error('새 버전이 변경되었습니다. 앱을 다시 실행해주세요.');
-          if(!await(await caches.open(STORE)).match(new URL('index.html',BASE).href))throw Error('새 버전 준비를 끝내지 못했습니다.');
+          if(event.data.build!==CACHE||(await read('latest'))?.cache!==STORE)throw Error(say('새 버전이 변경되었습니다. 앱을 다시 실행해주세요.','The new version has changed. Please restart the app.'));
+          if(!await(await caches.open(STORE)).match(new URL('index.html',BASE).href))throw Error(say('새 버전 준비를 끝내지 못했습니다.','Could not finish preparing the new version.'));
           await write('selected',identity);
         });
         // Selection is durable and the old worker can serve this cache on the

@@ -15,7 +15,7 @@ import {readWebPage,PASTE_LIMIT,isWebSearch,BrowserTabs} from './web.js';
 import { readLocalHTML, droppedHTMLFiles, findLocalDuplicates, identifyLocalFile, htmlExportName } from './local-files.js';
 import { normalizePreferences, loadPreferences, storePreferences, serializeSettings, readSettingsFile, PRESET_COLORS, PRESET_PALETTES, normalizeHexColor, hexToRgb, rgbToHex, hexToHsv, hsvToHex } from './preferences.js';
 import {HIGHLIGHT_NAME_LENGTH, namedHighlightColors} from './highlight-color-names.js';
-import {bundledExample,bundledFontBytes} from './distribution.js';
+import {bundledExample,bundledFontBytes,exampleFile} from './distribution.js';
 import { InstallController, isIOS, installableLocation, installationURL, publicAppURL } from './install.js';
 import { APP_VERSION } from './version.js';
 import {t,LANGUAGES,languageChoice,setLanguageChoice,language,locale,localizeStatic} from './i18n.js';
@@ -66,8 +66,8 @@ const active = () => tabs.find(tab => tab.id === activeId);
 const reader = () => active()?.reader;
 const savePicker = () => typeof window.showSaveFilePicker === 'function';
 const openPicker = () => typeof window.showOpenFilePicker === 'function';
-const htmlTypes = [{description:'HTML 문서',accept:{'text/html':['.html','.htm']}}];
-const importTypes = [{description:'문서 · 이미지 · 스프레드시트 · 슬라이드',accept:{'text/html':['.html','.htm'],'multipart/related':['.mhtml','.mht'],'application/x-mimearchive':['.mhtml','.mht'],'application/pdf':['.pdf'],'application/zip':['.librememo'],...OFFICE_MIMES,...IMAGE_MIMES}}];
+const htmlTypes = [{description:t('HTML 문서'),accept:{'text/html':['.html','.htm']}}];
+const importTypes = [{description:t('문서 · 이미지 · 스프레드시트 · 슬라이드'),accept:{'text/html':['.html','.htm'],'multipart/related':['.mhtml','.mht'],'application/x-mimearchive':['.mhtml','.mht'],'application/pdf':['.pdf'],'application/zip':['.librememo'],...OFFICE_MIMES,...IMAGE_MIMES}}];
 const safely = fn => (...args) => { try { Promise.resolve(fn(...args)).catch(showError); } catch(error) { showError(error); } };
 function toast(message, error = false) { const el=$('#toast'),security=isSecurityWarning(message);el.setAttribute('role',security?'alert':'status');el.textContent=message;el.classList.toggle('error',error);el.classList.toggle('security-warning',security);el.hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.hidden=true,error||security?6500:3500); }
 function showError(error) { if (error?.name !== 'AbortError') toast(error?.message || String(error),true); }
@@ -77,16 +77,17 @@ let statusbarTimer=null,lastStatusbarSignature=[];
 // Routine autosave progress is not news: the tab's dot shows unsaved edits, and the
 // statusbar stays down so it never covers the page while annotating. It rises for
 // problems (save errors, retry, incomplete book), going offline/online and other notices.
-const ROUTINE_STATUS=/^(?:저장 중…|주석이 앱에 자동 저장됨|폴더 저장 중…|폴더 저장 완료)$/;
+// Matched against the displayed (possibly translated) status text.
+const ROUTINE_STATUS=new Set(['저장 중…',t('저장 중…'),'주석이 앱에 자동 저장됨',t('주석이 앱에 자동 저장됨'),'폴더 저장 중…',t('폴더 저장 중…'),'폴더 저장 완료',t('폴더 저장 완료')]);
 function statusbarSignature() {
   const left=$('#status-left'),folderButton=$('#data-folder-status'),net=$('#network-status');
   const leftText=(left?.textContent||'').trim(),folderText=(folderButton?.textContent||'').trim();
   return [
-    ROUTINE_STATUS.test(leftText)?'':leftText,
+    ROUTINE_STATUS.has(leftText)?'':leftText,
     $('.save-error',left)?'error':'',
     $('[data-book-incomplete]',left)?'incomplete':'',
     $('#retry-save',left)?'retry':'',
-    ROUTINE_STATUS.test(folderText)?'':folderText,
+    ROUTINE_STATUS.has(folderText)?'':folderText,
     folderButton?.classList.contains('save-error')?'folder-error':'',
     (net?.textContent||'').trim()+(net?.classList.contains('offline')?' offline':''),
   ];
@@ -163,10 +164,10 @@ function modal(html, bind = () => {}) {
   $$('[data-dialog-close]',dialog).forEach(button=>button.onclick=()=>dialog.close()); bind(dialog);
 }
 function annotationExportGuide() {
-  return `<details class="export-guide" data-export-guide><summary>원본·주석 파일 저장·보내는 방법</summary>${$('#export-guide-content').innerHTML}</details>`;
+  return `<details class="export-guide" data-export-guide><summary>${t('원본·주석 파일 저장·보내는 방법')}</summary>${$('#export-guide-content').innerHTML}</details>`;
 }
 function aboutDialog() {
-  modal(`<div class="dialog-heading"><h2>About</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>${$('#about-content').innerHTML}<div class="dialog-actions"><button class="primary-button" data-dialog-close>확인</button></div>`,()=>{$('#app-version').textContent=APP_VERSION;});
+  modal(`<div class="dialog-heading"><h2>About</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div>${$('#about-content').innerHTML}<div class="dialog-actions"><button class="primary-button" data-dialog-close>${t('확인')}</button></div>`,()=>{$('#app-version').textContent=APP_VERSION;});
   $('#dialog [data-dialog-close]').focus();
 }
 function offerAppUpdate(info){
@@ -176,8 +177,8 @@ function offerAppUpdate(info){
     const show=()=>{
       if(shown||other.open||folderSetupController)return;
       shown=true;showPendingUpdate=null;other.removeEventListener('close',show);
-      $('#app-update-version').textContent=info.version===info.currentVersion?'새 업데이트를 적용할 수 있습니다.':`${info.currentVersion} → ${info.version}`;
-      $('#app-update-status').textContent='설치하면 저장을 마친 뒤 앱을 다시 엽니다. 취소하면 기존 버전을 유지하고 다음 실행 때 다시 확인합니다.';
+      $('#app-update-version').textContent=info.version===info.currentVersion?t('새 업데이트를 적용할 수 있습니다.'):`${info.currentVersion} → ${info.version}`;
+      $('#app-update-status').textContent=t('설치하면 저장을 마친 뒤 앱을 다시 엽니다. 취소하면 기존 버전을 유지하고 다음 실행 때 다시 확인합니다.');
       dialog.onclose=()=>{updateController.cancel();finish(false);};
       $('#app-update-cancel').onclick=()=>dialog.close();$('#app-update-close').onclick=()=>dialog.close();
       $('#app-update-install').onclick=()=>{if(!answered)finish(true);else void updateController.install();};
@@ -196,56 +197,56 @@ function appUpdateState(state,error){
   const dialog=$('#app-update-dialog'),busy=['saving','applying','reloading'].includes(state),committing=['applying','reloading'].includes(state);
   updateAppInteraction();
   $('#app-update-install').disabled=busy;$('#app-update-cancel').disabled=committing;$('#app-update-close').disabled=committing;
-  $('#app-update-install').textContent=busy?'설치 중…':'설치';
+  $('#app-update-install').textContent=busy?t('설치 중…'):t('설치');
   if(!dialog.open)return;
-  if(state==='saving')$('#app-update-status').textContent='문서·주석·설정을 저장하는 중입니다…';
-  else if(committing)$('#app-update-status').textContent='새 버전을 적용하고 앱을 다시 여는 중입니다…';
-  else if(state==='error')$('#app-update-status').textContent=(error?.applying?'업데이트 적용을 확인하지 못했습니다. 현재 화면과 자료는 유지됩니다. ':'업데이트하지 못했습니다. 기존 버전과 자료는 유지됩니다. ')+(error?.message||'다시 시도해주세요.');
+  if(state==='saving')$('#app-update-status').textContent=t('문서·주석·설정을 저장하는 중입니다…');
+  else if(committing)$('#app-update-status').textContent=t('새 버전을 적용하고 앱을 다시 여는 중입니다…');
+  else if(state==='error')$('#app-update-status').textContent=(error?.applying?t('업데이트 적용을 확인하지 못했습니다. 현재 화면과 자료는 유지됩니다. '):t('업데이트하지 못했습니다. 기존 버전과 자료는 유지됩니다. '))+(error?.message||t('다시 시도해주세요.'));
 }
 function installGuide(kind) {
-  const heading=kind==='installed'?'설치된 LibreMemo입니다.':'LibreMemo 앱 설치';
+  const heading=kind==='installed'?t('설치된 LibreMemo입니다.'):t('LibreMemo 앱 설치');
   let content;
-  if(kind==='installed')content='<p class="dialog-description">앱 아이콘으로 실행 중입니다. 내 서재에서 문서·이미지·자막을 가져와 읽고 주석을 남겨보세요.</p>';
-  else if(kind==='local')content=`<p class="dialog-description">직접 연 HTML도 읽고 주석을 남길 수 있습니다. 앱 설치는 선택 사항이며, 아래 배포 주소는 설치 없이 브라우저에서 바로 사용할 수 있습니다.</p><p><a class="primary-button" href="${esc(installationURL(location))}">설치할 LibreMemo 열기</a></p>`;
-  else if(kind==='ios')content='<p class="dialog-description">아이폰·아이패드의 Safari 또는 Chrome에서 홈 화면 아이콘을 추가하는 순서입니다. 앱 내부 전용 보관함에 문서·주석·테마 설정이 자동 저장됩니다.</p><ol class="setup-steps"><li>Safari 하단 또는 Chrome 주소창의 <strong>공유</strong> 버튼을 누릅니다.</li><li><strong>홈 화면에 추가</strong>를 선택합니다.</li><li>이름을 확인하고 <strong>추가</strong>를 누릅니다.</li><li>홈 화면의 <strong>LibreMemo</strong> 아이콘으로 앱을 엽니다.</li></ol><p class="dialog-description small">홈 화면 웹앱은 브라우저 탭과 보관함이 분리되므로, 기존 문서를 옮길 때는 설정의 기기 간 동기화나 보관 파일(.librememo)을 사용하세요.</p>';
-  else if(/Android/.test(navigator.userAgent||''))content='<ol class="setup-steps"><li>Chrome의 <strong>메뉴(⋮)</strong>를 엽니다.</li><li><strong>홈 화면에 추가 → 설치</strong>를 선택합니다.</li><li>앱 아이콘으로 LibreMemo를 엽니다.</li></ol><p class="dialog-description small">설치 메뉴가 보이지 않으면 첫 로딩과 오프라인 준비가 끝난 뒤 다시 시도하세요.</p>';
-  else content='<ol class="setup-steps"><li>Chrome 주소창 오른쪽의 <strong>설치</strong> 아이콘을 누릅니다.</li><li>아이콘이 없다면 Chrome 메뉴의 <strong>전송, 저장 및 공유 → 페이지를 앱으로 설치</strong>를 선택합니다.</li><li>설치를 확인하고 앱 아이콘으로 LibreMemo를 엽니다.</li></ol><p class="dialog-description small">설치 안내가 자동으로 열리는 환경에서는 앱 설치 버튼을 다시 누르면 됩니다.</p>';
-  modal(`<div class="dialog-heading"><h2>${heading}</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>${content}<p class="local-only-note">${icon('check',15)} 문서·주석·설정은 기기에만 저장합니다.</p><div class="dialog-actions"><button class="primary-button" data-dialog-close>확인</button></div>`);
+  if(kind==='installed')content=`<p class="dialog-description">${t('앱 아이콘으로 실행 중입니다. 내 서재에서 문서·이미지·자막을 가져와 읽고 주석을 남겨보세요.')}</p>`;
+  else if(kind==='local')content=`<p class="dialog-description">${t('직접 연 HTML도 읽고 주석을 남길 수 있습니다. 앱 설치는 선택 사항이며, 아래 배포 주소는 설치 없이 브라우저에서 바로 사용할 수 있습니다.')}</p><p><a class="primary-button" href="${esc(installationURL(location))}">${t('설치할 LibreMemo 열기')}</a></p>`;
+  else if(kind==='ios')content=`<p class="dialog-description">${t('아이폰·아이패드의 Safari 또는 Chrome에서 홈 화면 아이콘을 추가하는 순서입니다. 앱 내부 전용 보관함에 문서·주석·테마 설정이 자동 저장됩니다.')}</p><ol class="setup-steps"><li>${t('Safari 하단 또는 Chrome 주소창의 <strong>공유</strong> 버튼을 누릅니다.')}</li><li>${t('<strong>홈 화면에 추가</strong>를 선택합니다.')}</li><li>${t('이름을 확인하고 <strong>추가</strong>를 누릅니다.')}</li><li>${t('홈 화면의 <strong>LibreMemo</strong> 아이콘으로 앱을 엽니다.')}</li></ol><p class="dialog-description small">${t('홈 화면 웹앱은 브라우저 탭과 보관함이 분리되므로, 기존 문서를 옮길 때는 설정의 기기 간 동기화나 보관 파일(.librememo)을 사용하세요.')}</p>`;
+  else if(/Android/.test(navigator.userAgent||''))content=`<ol class="setup-steps"><li>${t('Chrome의 <strong>메뉴(⋮)</strong>를 엽니다.')}</li><li>${t('<strong>홈 화면에 추가 → 설치</strong>를 선택합니다.')}</li><li>${t('앱 아이콘으로 LibreMemo를 엽니다.')}</li></ol><p class="dialog-description small">${t('설치 메뉴가 보이지 않으면 첫 로딩과 오프라인 준비가 끝난 뒤 다시 시도하세요.')}</p>`;
+  else content=`<ol class="setup-steps"><li>${t('Chrome 주소창 오른쪽의 <strong>설치</strong> 아이콘을 누릅니다.')}</li><li>${t('아이콘이 없다면 Chrome 메뉴의 <strong>전송, 저장 및 공유 → 페이지를 앱으로 설치</strong>를 선택합니다.')}</li><li>${t('설치를 확인하고 앱 아이콘으로 LibreMemo를 엽니다.')}</li></ol><p class="dialog-description small">${t('설치 안내가 자동으로 열리는 환경에서는 앱 설치 버튼을 다시 누르면 됩니다.')}</p>`;
+  modal(`<div class="dialog-heading"><h2>${heading}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div>${content}<p class="local-only-note">${icon('check',15)} ${t('문서·주석·설정은 기기에만 저장합니다.')}</p><div class="dialog-actions"><button class="primary-button" data-dialog-close>${t('확인')}</button></div>`);
 }
 const usingIOSAppStorage=()=>!supportsDataFolder(window,navigator)&&supportsIOSAppStorage(window,navigator);
 function updateInstall(state) {
-  const button=$('#execution-install'),label=state.busy?'설치 확인 중…':state.installed?'설치 완료':'앱 설치';button.disabled=state.busy;button.textContent=label;button.title=label;button.setAttribute('aria-label',label);
-  $('#install-message').textContent=state.installed?'앱으로 실행 중입니다. 문서·주석·설정은 이 기기에 저장됩니다.':!installableLocation(location)?'PWA 설치는 배포된 앱 주소에서 가능합니다. 문서 읽기와 주석 기능은 계속 사용할 수 있습니다.':isIOS(navigator)?(supportsDataFolder(window,navigator)||supportsIOSAppStorage(window,navigator)?'아이폰·아이패드에서는 Safari 또는 Chrome의 공유 메뉴 → 홈 화면에 추가로 설치하거나 브라우저에서 바로 사용할 수 있습니다.':'아이폰은 전용 저장 폴더 기능 지원이 필요하며, 홈 화면 아이콘 설치만으로 사용할 수 있게 되지는 않습니다.'):'설치하지 않아도 앱의 URL에서 바로 사용할 수 있습니다.';
+  const button=$('#execution-install'),label=state.busy?t('설치 확인 중…'):state.installed?t('설치 완료'):t('앱 설치');button.disabled=state.busy;button.textContent=label;button.title=label;button.setAttribute('aria-label',label);
+  $('#install-message').textContent=state.installed?t('앱으로 실행 중입니다. 문서·주석·설정은 이 기기에 저장됩니다.'):!installableLocation(location)?t('PWA 설치는 배포된 앱 주소에서 가능합니다. 문서 읽기와 주석 기능은 계속 사용할 수 있습니다.'):isIOS(navigator)?(supportsDataFolder(window,navigator)||supportsIOSAppStorage(window,navigator)?t('아이폰·아이패드에서는 Safari 또는 Chrome의 공유 메뉴 → 홈 화면에 추가로 설치하거나 브라우저에서 바로 사용할 수 있습니다.'):t('아이폰은 전용 저장 폴더 기능 지원이 필요하며, 홈 화면 아이콘 설치만으로 사용할 수 있게 되지는 않습니다.')):t('설치하지 않아도 앱의 URL에서 바로 사용할 수 있습니다.');
 }
 function promptText(type, initial = '') {
   const inputTab=active();
   return new Promise(resolve=>{
-    modal(`<form method="dialog" class="note-form"><div class="dialog-heading"><h2>${type==='text'?'텍스트 입력':'메모 남기기'}</h2><button class="icon-button" value="cancel" aria-label="닫기">${icon('close')}</button></div><textarea id="note-text" placeholder="생각을 적어보세요…" maxlength="10000" rows="6">${esc(initial)}</textarea><div class="dialog-actions"><button class="secondary-button" value="cancel">취소</button><button class="primary-button" value="save">저장</button></div></form>`,dialog=>{
+    modal(`<form method="dialog" class="note-form"><div class="dialog-heading"><h2>${type==='text'?t('텍스트 입력'):t('메모 남기기')}</h2><button class="icon-button" value="cancel" aria-label="${t('닫기')}">${icon('close')}</button></div><textarea id="note-text" placeholder="${t('생각을 적어보세요…')}" maxlength="10000" rows="6">${esc(initial)}</textarea><div class="dialog-actions"><button class="secondary-button" value="cancel">${t('취소')}</button><button class="primary-button" value="save">${t('저장')}</button></div></form>`,dialog=>{
       const input=$('#note-text',dialog),current=()=>input.isConnected&&dialog.contains(input);
       input.oninput=()=>inputTab?.checkpoints?.activity();
       const done=()=>{ resolve(dialog.returnValue==='save'&&current()?input.value:null); dialog.removeEventListener('close',done); }; dialog.addEventListener('close',done); requestAnimationFrame(()=>{if(dialog.open&&current())input.focus();});
     });
   });
 }
-function confirmDialog(title, description, label = '확인') {
-  return new Promise(resolve=>modal(`<form method="dialog"><div class="dialog-heading"><h2>${esc(title)}</h2></div><p class="dialog-description">${esc(description)}</p><div class="dialog-actions"><button class="secondary-button" value="cancel">취소</button><button class="primary-button" value="confirm">${esc(label)}</button></div></form>`,dialog=>{
+function confirmDialog(title, description, label = t('확인')) {
+  return new Promise(resolve=>modal(`<form method="dialog"><div class="dialog-heading"><h2>${esc(title)}</h2></div><p class="dialog-description">${esc(description)}</p><div class="dialog-actions"><button class="secondary-button" value="cancel">${t('취소')}</button><button class="primary-button" value="confirm">${esc(label)}</button></div></form>`,dialog=>{
     const done=()=>{resolve(dialog.returnValue==='confirm');dialog.removeEventListener('close',done);};dialog.addEventListener('close',done);
   }));
 }
 function webHelpDialog(tab=webContext(),message=''){
-  modal(`<div class="dialog-heading"><h2>Chrome에서 탐색하고 여기서 메모하기</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>${message?`<p class="web-notice" role="status">${esc(message)}</p>`:''}<p class="dialog-description">LibreMemo는 이 URL만 열면 사용할 수 있습니다. 앱 설치는 선택 사항이며 별도 서버를 설치하거나 실행할 필요는 없습니다.</p><p class="dialog-description small" data-single-file-guide>브라우저에서 웹페이지를 저장할 때는 <strong>Webpage, Single File</strong>(웹페이지, 단일 파일 · .mhtml) 형식이 제공되면 선택하세요. 이미지·스타일을 하나의 파일에 함께 보관합니다. 저장 메뉴는 기기마다 다를 수 있습니다.</p><ol class="setup-steps"><li>주소창에 검색어나 웹 주소를 입력하면 <strong>Chrome의 일반 탭</strong>에서 엽니다. </li><li>필요한 글을 복사한 뒤 <strong>LibreMemo 탭으로 돌아옵니다.</strong> 읽던 문서와 주석은 그대로입니다.</li><li><strong>텍스트 붙여넣기</strong>에서 글과 실제 원문 주소를 넣거나, Chrome에서 저장한 <strong>HTML·MHTML 파일을 가져옵니다.</strong></li></ol><p class="dialog-description small">다른 Chrome 탭의 현재 주소·본문·로그인 정보나 클립보드를 자동으로 읽지 않습니다. 사이트가 탭 연결을 격리하거나 팝업을 막으면 직접 링크를 사용하세요. 이미 가진 HTML 파일은 그대로 가져올 수 있습니다.</p><div class="web-actions">${tab?`<a class="secondary-button" href="${esc(tab.url)}" target="_blank" rel="noopener noreferrer">보낸 주소 열기 ${icon('external',14)}</a>`:''}<button id="web-help-import" class="secondary-button">파일 가져오기</button><button id="web-help-paste" class="primary-button">텍스트 붙여넣기</button></div>`,()=>{
+  modal(`<div class="dialog-heading"><h2>${t('Chrome에서 탐색하고 여기서 메모하기')}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div>${message?`<p class="web-notice" role="status">${esc(message)}</p>`:''}<p class="dialog-description">${t('LibreMemo는 이 URL만 열면 사용할 수 있습니다. 앱 설치는 선택 사항이며 별도 서버를 설치하거나 실행할 필요는 없습니다.')}</p><p class="dialog-description small" data-single-file-guide>${t('브라우저에서 웹페이지를 저장할 때는 <strong>Webpage, Single File</strong>(웹페이지, 단일 파일 · .mhtml) 형식이 제공되면 선택하세요. 이미지·스타일을 하나의 파일에 함께 보관합니다. 저장 메뉴는 기기마다 다를 수 있습니다.')}</p><ol class="setup-steps"><li>${t('주소창에 검색어나 웹 주소를 입력하면 <strong>Chrome의 일반 탭</strong>에서 엽니다.')} </li><li>${t('필요한 글을 복사한 뒤 <strong>LibreMemo 탭으로 돌아옵니다.</strong> 읽던 문서와 주석은 그대로입니다.')}</li><li>${t('<strong>텍스트 붙여넣기</strong>에서 글과 실제 원문 주소를 넣거나, Chrome에서 저장한 <strong>HTML·MHTML 파일을 가져옵니다.</strong>')}</li></ol><p class="dialog-description small">${t('다른 Chrome 탭의 현재 주소·본문·로그인 정보나 클립보드를 자동으로 읽지 않습니다. 사이트가 탭 연결을 격리하거나 팝업을 막으면 직접 링크를 사용하세요. 이미 가진 HTML 파일은 그대로 가져올 수 있습니다.')}</p><div class="web-actions">${tab?`<a class="secondary-button" href="${esc(tab.url)}" target="_blank" rel="noopener noreferrer">${t('보낸 주소 열기')} ${icon('external',14)}</a>`:''}<button id="web-help-import" class="secondary-button">${t('파일 가져오기')}</button><button id="web-help-paste" class="primary-button">${t('텍스트 붙여넣기')}</button></div>`,()=>{
     $('#web-help-import').onclick=safely(async()=>{$('#dialog').close();await importFiles();});
     $('#web-help-paste').onclick=()=>pasteTextDialog(tab);
   });
 }
 function pasteTextDialog(tab=webContext()){
   const search=tab&&isWebSearch(tab.url);
-  modal(`<form id="paste-form"><div class="dialog-heading"><h2>텍스트 붙여넣기</h2><button type="button" class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p class="dialog-description">일반 글이나 마크다운을 붙여넣으세요. 제목·목록·표·강조·코드 서식을 자동으로 적용해 서재에 저장하고 주석을 남깁니다.</p><label class="paste-label" for="paste-title">제목</label><input id="paste-title" class="paste-title" maxlength="300" value="${esc(!search&&tab?.title||'붙여넣은 글')}"><label class="paste-label" for="paste-source">원문 주소 (선택)</label><input id="paste-source" class="paste-title" type="url" value="${esc(!search&&tab?.url||'')}" placeholder="Chrome에서 복사한 실제 글의 https:// 주소"><label class="paste-label" for="paste-text">내용</label><textarea id="paste-text" class="paste-text" maxlength="${PASTE_LIMIT}" rows="8" required placeholder="일반 글이나 마크다운을 붙여넣으세요."></textarea><p class="dialog-description small">최대 200,000자 · 이 기기에만 저장${search?' · 검색 주소 대신 실제 글의 주소를 넣으세요.':''}</p><div class="dialog-actions"><button type="button" class="secondary-button" data-dialog-close>취소</button><button id="paste-save" type="submit" class="primary-button">저장하고 주석 달기</button></div></form>`,()=>{
+  modal(`<form id="paste-form"><div class="dialog-heading"><h2>${t('텍스트 붙여넣기')}</h2><button type="button" class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div><p class="dialog-description">${t('일반 글이나 마크다운을 붙여넣으세요. 제목·목록·표·강조·코드 서식을 자동으로 적용해 서재에 저장하고 주석을 남깁니다.')}</p><label class="paste-label" for="paste-title">${t('제목')}</label><input id="paste-title" class="paste-title" maxlength="300" value="${esc(!search&&tab?.title||t('붙여넣은 글'))}"><label class="paste-label" for="paste-source">${t('원문 주소 (선택)')}</label><input id="paste-source" class="paste-title" type="url" value="${esc(!search&&tab?.url||'')}" placeholder="${t('Chrome에서 복사한 실제 글의 https:// 주소')}"><label class="paste-label" for="paste-text">${t('내용')}</label><textarea id="paste-text" class="paste-text" maxlength="${PASTE_LIMIT}" rows="8" required placeholder="${t('일반 글이나 마크다운을 붙여넣으세요.')}"></textarea><p class="dialog-description small">${t('최대 200,000자 · 이 기기에만 저장')}${search?t(' · 검색 주소 대신 실제 글의 주소를 넣으세요.'):''}</p><div class="dialog-actions"><button type="button" class="secondary-button" data-dialog-close>${t('취소')}</button><button id="paste-save" type="submit" class="primary-button">${t('저장하고 주석 달기')}</button></div></form>`,()=>{
     $('#paste-form').onsubmit=safely(async event=>{
       event.preventDefault();if($('#paste-save').disabled)return;
       const {pastedPage}=await import('./web-paste.js');
       const snapshot=pastedPage({text:$('#paste-text').value,title:$('#paste-title').value,url:$('#paste-source').value.trim()}),button=$('#paste-save');button.disabled=true;
-      try{const saved=await createDocument(snapshot);$('#dialog').close();if(!saved?.queue?.error)toast('붙여넣은 글을 서재에 저장했습니다.');}finally{button.disabled=false;}
+      try{const saved=await createDocument(snapshot);$('#dialog').close();if(!saved?.queue?.error)toast(t('붙여넣은 글을 서재에 저장했습니다.'));}finally{button.disabled=false;}
     });
     requestAnimationFrame(()=>$('#paste-text')?.focus());
   });
@@ -289,7 +290,7 @@ function designThemeDialog(initialCategory='all') {
     }
     return ordered;
   };
-  modal(`<section class="theme-studio" data-theme-studio><div class="dialog-heading"><div class="theme-heading-main"><button id="theme-back-settings" class="text-button theme-back-button" type="button" aria-label="설정으로 돌아가기">${icon('back',15)}<span>설정</span></button><h2>디자인 테마</h2></div><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p id="theme-studio-status" class="dialog-description small theme-studio-status" role="status"></p><div class="theme-quick-bar"><div class="theme-search-box">${icon('search',14)}<input id="theme-search" type="text" autocomplete="off" spellcheck="false" maxlength="60" placeholder="테마·분위기·질감 검색 (한지, 원고지, 오로라…)" aria-label="디자인 테마 검색"><button id="theme-search-clear" type="button" aria-label="테마 검색어 지우기" hidden>${icon('close',13)}</button></div><label class="theme-quick-select" for="theme-appearance"><span>밝기</span><select id="theme-appearance"><option value="light">밝게</option><option value="dark">어둡게</option><option value="system">시스템</option></select></label><button id="theme-random" type="button" class="secondary-button">분위기 추천</button><button id="theme-reset" type="button" class="secondary-button">기본값 복원</button></div><div class="theme-categories" role="group" aria-label="테마 분위기 분류"><button type="button" class="theme-category-chip" data-theme-category="all" aria-pressed="${category==='all'}"><span>전체</span><small>${APP_THEMES.length}</small></button><button type="button" class="theme-category-chip" data-theme-category="favorites" aria-pressed="${category==='favorites'}"><span>★ 즐겨찾기</span><small data-fav-count>${(preferences.designTheme.favorites||[]).length}</small></button>${nonAllCategories.map(item=>`<button type="button" class="theme-category-chip" data-theme-category="${esc(item.id)}" aria-pressed="${item.id===category}"><span>${esc(item.label)}</span><small>${categoryCount(item.id)}</small></button>`).join('')}</div><div id="theme-preset-grid" class="theme-preset-grid" role="group" aria-label="디자인 테마 목록"></div><details id="theme-customizer" class="theme-customizer"${hasCustomOverride(preferences.designTheme)?' open':''}><summary>세부 스타일 맞춤 조합 (모서리·질감·글꼴·윤곽·포인트색)</summary><div class="theme-custom-grid"><label for="theme-shape"><span>모서리 모양</span><select id="theme-shape">${optionItems(THEME_SHAPE_OPTIONS)}</select></label><label for="theme-texture"><span>배경 질감</span><select id="theme-texture">${optionItems(THEME_TEXTURE_OPTIONS)}</select></label><label for="theme-font"><span>앱 글꼴</span><select id="theme-font">${optionItems(THEME_FONT_OPTIONS)}</select></label><label for="theme-frame"><span>카드·윤곽선</span><select id="theme-frame">${optionItems(THEME_FRAME_OPTIONS)}</select></label></div><div class="theme-accent-box"><div class="theme-accent-head"><span>포인트 색상</span><button id="theme-accent-clear" type="button" class="palette-mini-btn">테마 기본색</button></div><div class="theme-accent-swatches">${THEME_ACCENT_PRESETS.map(hex=>`<button type="button" class="swatch" data-theme-accent="${hex}" style="--swatch:${hex}" aria-label="포인트 색상 ${hex}" aria-pressed="false"></button>`).join('')}<input id="theme-accent-picker" type="color" aria-label="포인트 색상 직접 선택" value="#334155"></div></div></details><p class="dialog-description small theme-studio-note">모든 테마는 그림 파일 없이 순수 스타일·절차적 질감·내장 가변 한글 글꼴로 작동해 오프라인에서도 가볍고 빠릅니다. 읽는 문서(PDF·전자책·웹·한글·Office)의 본문 서식은 건드리지 않습니다.</p><div class="dialog-actions"><button type="button" class="primary-button" data-dialog-close>완료</button></div></section>`,dialog=>{
+  modal(`<section class="theme-studio" data-theme-studio><div class="dialog-heading"><div class="theme-heading-main"><button id="theme-back-settings" class="text-button theme-back-button" type="button" aria-label="${t('설정으로 돌아가기')}">${icon('back',15)}<span>${t('설정')}</span></button><h2>${t('디자인 테마')}</h2></div><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div><p id="theme-studio-status" class="dialog-description small theme-studio-status" role="status"></p><div class="theme-quick-bar"><div class="theme-search-box">${icon('search',14)}<input id="theme-search" type="text" autocomplete="off" spellcheck="false" maxlength="60" placeholder="${t('테마·분위기·질감 검색 (한지, 원고지, 오로라…)')}" aria-label="${t('디자인 테마 검색')}"><button id="theme-search-clear" type="button" aria-label="${t('테마 검색어 지우기')}" hidden>${icon('close',13)}</button></div><label class="theme-quick-select" for="theme-appearance"><span>${t('밝기')}</span><select id="theme-appearance"><option value="light">${t('밝게')}</option><option value="dark">${t('어둡게')}</option><option value="system">${t('시스템')}</option></select></label><button id="theme-random" type="button" class="secondary-button">${t('분위기 추천')}</button><button id="theme-reset" type="button" class="secondary-button">${t('기본값 복원')}</button></div><div class="theme-categories" role="group" aria-label="${t('테마 분위기 분류')}"><button type="button" class="theme-category-chip" data-theme-category="all" aria-pressed="${category==='all'}"><span>${t('전체')}</span><small>${APP_THEMES.length}</small></button><button type="button" class="theme-category-chip" data-theme-category="favorites" aria-pressed="${category==='favorites'}"><span>${t('★ 즐겨찾기')}</span><small data-fav-count>${(preferences.designTheme.favorites||[]).length}</small></button>${nonAllCategories.map(item=>`<button type="button" class="theme-category-chip" data-theme-category="${esc(item.id)}" aria-pressed="${item.id===category}"><span>${esc(item.label)}</span><small>${categoryCount(item.id)}</small></button>`).join('')}</div><div id="theme-preset-grid" class="theme-preset-grid" role="group" aria-label="${t('디자인 테마 목록')}"></div><details id="theme-customizer" class="theme-customizer"${hasCustomOverride(preferences.designTheme)?' open':''}><summary>${t('세부 스타일 맞춤 조합 (모서리·질감·글꼴·윤곽·포인트색)')}</summary><div class="theme-custom-grid"><label for="theme-shape"><span>${t('모서리 모양')}</span><select id="theme-shape">${optionItems(THEME_SHAPE_OPTIONS)}</select></label><label for="theme-texture"><span>${t('배경 질감')}</span><select id="theme-texture">${optionItems(THEME_TEXTURE_OPTIONS)}</select></label><label for="theme-font"><span>${t('앱 글꼴')}</span><select id="theme-font">${optionItems(THEME_FONT_OPTIONS)}</select></label><label for="theme-frame"><span>${t('카드·윤곽선')}</span><select id="theme-frame">${optionItems(THEME_FRAME_OPTIONS)}</select></label></div><div class="theme-accent-box"><div class="theme-accent-head"><span>${t('포인트 색상')}</span><button id="theme-accent-clear" type="button" class="palette-mini-btn">${t('테마 기본색')}</button></div><div class="theme-accent-swatches">${THEME_ACCENT_PRESETS.map(hex=>`<button type="button" class="swatch" data-theme-accent="${hex}" style="--swatch:${hex}" aria-label="${t('포인트 색상 {hex}',{hex})}" aria-pressed="false"></button>`).join('')}<input id="theme-accent-picker" type="color" aria-label="${t('포인트 색상 직접 선택')}" value="#334155"></div></div></details><p class="dialog-description small theme-studio-note">${t('모든 테마는 그림 파일 없이 순수 스타일·절차적 질감·내장 가변 한글 글꼴로 작동해 오프라인에서도 가볍고 빠릅니다. 읽는 문서(PDF·전자책·웹·한글·Office)의 본문 서식은 건드리지 않습니다.')}</p><div class="dialog-actions"><button type="button" class="primary-button" data-dialog-close>${t('완료')}</button></div></section>`,dialog=>{
     const grid=$('#theme-preset-grid',dialog),status=$('#theme-studio-status',dialog),searchInput=$('#theme-search',dialog),searchClear=$('#theme-search-clear',dialog);
     const renderCards=()=>{
       const mode=currentBrightness(),favorites=preferences.designTheme.favorites||[],favSet=new Set(favorites);
@@ -298,14 +299,14 @@ function designThemeDialog(initialCategory='all') {
       const items=compactAll?curatedAllSlice(favorites,preferences.designTheme.id):matched;
       const hiddenCount=compactAll?Math.max(0,APP_THEMES.length-items.length):0;
       if(!items.length){
-        grid.innerHTML=`<p class="theme-empty">${category==='favorites'&&!query.trim()?'아직 별표(★)로 고정한 즐겨찾기 테마가 없습니다. 마음에 드는 테마 카드 오른쪽 위의 ★ 버튼을 눌러 보세요.':'검색 조건에 맞는 테마가 없습니다. 다른 키워드나 분류를 선택해 보세요.'}</p>`;
+        grid.innerHTML=`<p class="theme-empty">${category==='favorites'&&!query.trim()?t('아직 별표(★)로 고정한 즐겨찾기 테마가 없습니다. 마음에 드는 테마 카드 오른쪽 위의 ★ 버튼을 눌러 보세요.'):t('검색 조건에 맞는 테마가 없습니다. 다른 키워드나 분류를 선택해 보세요.')}</p>`;
         return;
       }
       grid.innerHTML=items.map(preset=>{
         const resolved=resolveDesignTheme({id:preset.id,shape:'theme',texture:'theme',font:'theme',frame:'theme',accent:''},mode);
         const v=resolved.variables,activePreset=preferences.designTheme.id===preset.id,starred=favSet.has(preset.id);
-        return `<div class="theme-preset-item"><button type="button" class="theme-preset-card${activePreset?' chosen':''}" data-theme-preset="${esc(preset.id)}" aria-pressed="${activePreset}"><span class="theme-card-preview" data-preview-texture="${esc(resolved.texture)}" data-preview-frame="${esc(resolved.frame)}" style="--p-bg:${v['--bg']};--p-surface:${v['--surface']};--p-muted:${v['--surface-muted']};--p-text:${v['--text']};--p-sub:${v['--muted']};--p-line:${v['--line']};--p-accent:${v['--green']};--p-soft:${v['--green-light']};--p-on:${v['--on-green']};--p-radius:${v['--radius-library']};--p-btn-radius:${v['--radius-button']};--p-font:${esc(v['--app-font'])}" aria-hidden="true"><span class="theme-mini-bar"><i style="background:${v['--green']}"></i><i style="background:${v['--muted']}"></i></span><span class="theme-mini-sheet"><b class="theme-mini-sample">가나다 Aa</b><span class="theme-mini-tags"><em class="theme-mini-soft">서재</em><em class="theme-mini-cta">저장</em></span></span></span><span class="theme-card-meta"><strong>${esc(preset.name)}</strong><small>${esc(preset.summary)}</small></span></button><button type="button" class="theme-star-btn${starred?' starred':''}" data-theme-star="${esc(preset.id)}" aria-pressed="${starred}" aria-label="${esc(preset.name)} 즐겨찾기">${icon(starred?'star-filled':'star',13)}</button></div>`;
-      }).join('')+(hiddenCount>0?`<button id="theme-show-all" type="button" class="secondary-button theme-show-all">전체 ${APP_THEMES.length}종 모두 펼치기 (+${hiddenCount})</button>`:'');
+        return `<div class="theme-preset-item"><button type="button" class="theme-preset-card${activePreset?' chosen':''}" data-theme-preset="${esc(preset.id)}" aria-pressed="${activePreset}"><span class="theme-card-preview" data-preview-texture="${esc(resolved.texture)}" data-preview-frame="${esc(resolved.frame)}" style="--p-bg:${v['--bg']};--p-surface:${v['--surface']};--p-muted:${v['--surface-muted']};--p-text:${v['--text']};--p-sub:${v['--muted']};--p-line:${v['--line']};--p-accent:${v['--green']};--p-soft:${v['--green-light']};--p-on:${v['--on-green']};--p-radius:${v['--radius-library']};--p-btn-radius:${v['--radius-button']};--p-font:${esc(v['--app-font'])}" aria-hidden="true"><span class="theme-mini-bar"><i style="background:${v['--green']}"></i><i style="background:${v['--muted']}"></i></span><span class="theme-mini-sheet"><b class="theme-mini-sample">가나다 Aa</b><span class="theme-mini-tags"><em class="theme-mini-soft">${t('서재')}</em><em class="theme-mini-cta">${t('저장')}</em></span></span></span><span class="theme-card-meta"><strong>${esc(preset.name)}</strong><small>${esc(preset.summary)}</small></span></button><button type="button" class="theme-star-btn${starred?' starred':''}" data-theme-star="${esc(preset.id)}" aria-pressed="${starred}" aria-label="${t('{name} 즐겨찾기',{name:esc(preset.name)})}">${icon(starred?'star-filled':'star',13)}</button></div>`;
+      }).join('')+(hiddenCount>0?`<button id="theme-show-all" type="button" class="secondary-button theme-show-all">${t('전체 {n}종 모두 펼치기 (+{hidden})',{n:APP_THEMES.length,hidden:hiddenCount})}</button>`:'');
       $$('[data-theme-preset]',grid).forEach(button=>{
         button.onclick=safely(()=>{
           changePreferences({designTheme:{id:button.dataset.themePreset,shape:'theme',texture:'theme',font:'theme',frame:'theme',accent:'',favorites:preferences.designTheme.favorites||[]}});
@@ -338,7 +339,7 @@ function designThemeDialog(initialCategory='all') {
       $('#theme-accent-clear',dialog).disabled=!dt.accent;
       $('#theme-reset',dialog).disabled=dt.id===DEFAULT_DESIGN_THEME.id&&!hasCustomOverride(dt);
       $$('[data-theme-accent]',dialog).forEach(b=>{const on=dt.accent===b.dataset.themeAccent;b.classList.toggle('chosen',on);b.setAttribute('aria-pressed',String(on));});
-      status.textContent=`현재 적용: ${describeDesignTheme(dt)} · 문서 본문 서식은 보호하고 앱 외관·서재·사이드바·상태바에 즉시 반영합니다.`;
+      status.textContent=t('현재 적용: {theme} · 문서 본문 서식은 보호하고 앱 외관·서재·사이드바·상태바에 즉시 반영합니다.',{theme:describeDesignTheme(dt)});
     };
     $('#theme-back-settings',dialog).onclick=()=>{settingsDialog();$('#settings-design-theme')?.focus();};
     searchInput.oninput=()=>{
@@ -370,7 +371,7 @@ function designThemeDialog(initialCategory='all') {
   });
 }
 function settingsDialog() {
-  modal(`<div class="dialog-heading"><h2>LibreMemo 설정</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><div class="settings-app-actions" role="group" aria-label="앱 실행과 정보"><button id="settings-help" class="secondary-button" type="button" aria-haspopup="dialog">${icon('help',15)} 도움말</button><button id="settings-execution" class="secondary-button" type="button">${icon('external',15)} 실행과 앱 전달</button><button id="settings-about" class="secondary-button" type="button" aria-haspopup="dialog">${icon('info',15)} About</button></div><div class="setting-row"><div><strong>기기 간 동기화</strong><p>문서·주석·북마크·읽기 위치·이력을 주고받고, 앱 설정도 선택해 맞춥니다. 휴지통은 제외합니다.</p></div><button id="settings-sync" class="secondary-button">연결</button></div><p class="local-only-note">${icon('check',15)} 문서·주석·설정은 기기에 저장합니다. 기기 간 동기화는 연결할 때만 암호화해 전송합니다.</p><div class="setting-row"><div><strong>AI 검색</strong><p>선택한 글을 보낼 LLM을 등록하고 사용할 것을 체크합니다.</p></div><button id="settings-ai-search" class="secondary-button">관리</button></div><div class="setting-row"><div><strong>데이터 폴더</strong><p id="settings-folder-status">${esc(folderStatusText())}</p></div><button id="settings-folder" class="secondary-button">${folder||usingIOSAppStorage()?'관리':'폴더 연결'}</button></div>${dataFolderGuide()}<div class="setting-row"><div><strong>언어 · Language</strong><p>메뉴와 도움말의 언어입니다. 바꾸면 앱을 다시 엽니다.</p></div><select id="settings-language" aria-label="언어 · Language">${LANGUAGES.map(entry=>`<option value="${entry.id}">${esc(entry.id==='auto'?entry.label+' · '+entry.native:entry.label)}</option>`).join('')}</select></div><div class="setting-row"><div><strong>화면 테마</strong><p>서재와 도구의 밝기를 선택하세요.</p></div><select id="appearance"><option value="light">밝게</option><option value="dark">어둡게</option><option value="system">시스템</option></select></div><div class="setting-row"><div><strong>디자인 테마</strong><p id="settings-design-theme-summary"><span class="theme-inline-dots" aria-hidden="true"><i style="background:var(--bg)"></i><i style="background:var(--surface)"></i><i style="background:var(--green)"></i></span>${esc(describeDesignTheme(preferences.designTheme))} · 80종 테마와 질감·모서리·글꼴 조합</p></div><button id="settings-design-theme" class="secondary-button" type="button" aria-haspopup="dialog">테마 선택</button></div><div class="setting-row"><div><strong>UI 글자 크기</strong><p>화면 전체와 사이드바·서재·도구의 글자 크기를 조절합니다.</p></div><button id="settings-ui-font" type="button" class="secondary-button" aria-haspopup="dialog">크기 조절</button></div><details class="settings-backup"><summary>이전 설정 JSON 파일 사용 (선택 사항)</summary><p class="dialog-description small">데이터 폴더를 연결했다면 설정 파일을 따로 저장하거나 불러올 필요가 없습니다. 예전에 저장한 설정 JSON을 옮길 때만 사용하세요.</p><p id="settings-file-name" class="settings-file-name">${settingsFileHandle?esc(settingsFileHandle.name):'연결한 설정 파일이 없습니다.'}</p><div class="settings-file-actions"><button id="settings-save" class="secondary-button">${icon('save',15)} 설정 파일 저장</button><button id="settings-load" class="secondary-button">${icon('folder',15)} 설정 파일 불러오기</button><button id="settings-reload" class="secondary-button" ${settingsFileHandle?'':'disabled'}>${icon('reload',15)} 다시 불러오기</button></div></details><p class="dialog-description small">${usingIOSAppStorage()?'웹사이트 데이터를 지우면 이 앱의 내부 보관함도 함께 지워집니다. 지우기 전에 다른 기기에 동기화한 서재나 파일 앱에 내보낸 문서를 확인하세요.':'브라우저 데이터를 지운 뒤에는 연결하던 전용 폴더를 다시 선택해 복원할 수 있습니다. 기기를 바꾸거나 폴더를 잃을 때를 대비해 전용 폴더 전체를 다른 저장장치에도 복사하세요.'}</p>`,()=>{
+  modal(`<div class="dialog-heading"><h2>${t('LibreMemo 설정')}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div><div class="settings-app-actions" role="group" aria-label="${t('앱 실행과 정보')}"><button id="settings-help" class="secondary-button" type="button" aria-haspopup="dialog">${icon('help',15)} ${t('도움말')}</button><button id="settings-execution" class="secondary-button" type="button">${icon('external',15)} ${t('실행과 앱 전달')}</button><button id="settings-about" class="secondary-button" type="button" aria-haspopup="dialog">${icon('info',15)} About</button></div><div class="setting-row"><div><strong>${t('기기 간 동기화')}</strong><p>${t('문서·주석·북마크·읽기 위치·이력을 주고받고, 앱 설정도 선택해 맞춥니다. 휴지통은 제외합니다.')}</p></div><button id="settings-sync" class="secondary-button">${t('연결')}</button></div><p class="local-only-note">${icon('check',15)} ${t('문서·주석·설정은 기기에 저장합니다. 기기 간 동기화는 연결할 때만 암호화해 전송합니다.')}</p><div class="setting-row"><div><strong>${t('AI 검색')}</strong><p>${t('선택한 글을 보낼 LLM을 등록하고 사용할 것을 체크합니다.')}</p></div><button id="settings-ai-search" class="secondary-button">${t('관리')}</button></div><div class="setting-row"><div><strong>${t('데이터 폴더')}</strong><p id="settings-folder-status">${esc(folderStatusText())}</p></div><button id="settings-folder" class="secondary-button">${folder||usingIOSAppStorage()?t('관리'):t('폴더 연결')}</button></div>${dataFolderGuide()}<div class="setting-row"><div><strong>언어 · Language</strong><p>${t('메뉴와 도움말의 언어입니다. 바꾸면 앱을 다시 엽니다.')}</p></div><select id="settings-language" aria-label="언어 · Language">${LANGUAGES.map(entry=>`<option value="${entry.id}">${esc(entry.id==='auto'?entry.label+' · '+entry.native:entry.label)}</option>`).join('')}</select></div><div class="setting-row"><div><strong>${t('화면 테마')}</strong><p>${t('서재와 도구의 밝기를 선택하세요.')}</p></div><select id="appearance"><option value="light">${t('밝게')}</option><option value="dark">${t('어둡게')}</option><option value="system">${t('시스템')}</option></select></div><div class="setting-row"><div><strong>${t('디자인 테마')}</strong><p id="settings-design-theme-summary"><span class="theme-inline-dots" aria-hidden="true"><i style="background:var(--bg)"></i><i style="background:var(--surface)"></i><i style="background:var(--green)"></i></span>${t('{theme} · 80종 테마와 질감·모서리·글꼴 조합',{theme:esc(describeDesignTheme(preferences.designTheme))})}</p></div><button id="settings-design-theme" class="secondary-button" type="button" aria-haspopup="dialog">${t('테마 선택')}</button></div><div class="setting-row"><div><strong>${t('UI 글자 크기')}</strong><p>${t('화면 전체와 사이드바·서재·도구의 글자 크기를 조절합니다.')}</p></div><button id="settings-ui-font" type="button" class="secondary-button" aria-haspopup="dialog">${t('크기 조절')}</button></div><details class="settings-backup"><summary>${t('이전 설정 JSON 파일 사용 (선택 사항)')}</summary><p class="dialog-description small">${t('데이터 폴더를 연결했다면 설정 파일을 따로 저장하거나 불러올 필요가 없습니다. 예전에 저장한 설정 JSON을 옮길 때만 사용하세요.')}</p><p id="settings-file-name" class="settings-file-name">${settingsFileHandle?esc(settingsFileHandle.name):t('연결한 설정 파일이 없습니다.')}</p><div class="settings-file-actions"><button id="settings-save" class="secondary-button">${icon('save',15)} ${t('설정 파일 저장')}</button><button id="settings-load" class="secondary-button">${icon('folder',15)} ${t('설정 파일 불러오기')}</button><button id="settings-reload" class="secondary-button" ${settingsFileHandle?'':'disabled'}>${icon('reload',15)} ${t('다시 불러오기')}</button></div></details><p class="dialog-description small">${usingIOSAppStorage()?t('웹사이트 데이터를 지우면 이 앱의 내부 보관함도 함께 지워집니다. 지우기 전에 다른 기기에 동기화한 서재나 파일 앱에 내보낸 문서를 확인하세요.'):t('브라우저 데이터를 지운 뒤에는 연결하던 전용 폴더를 다시 선택해 복원할 수 있습니다. 기기를 바꾸거나 폴더를 잃을 때를 대비해 전용 폴더 전체를 다른 저장장치에도 복사하세요.')}</p>`,()=>{
     $('#settings-help').onclick=helpDialog;$('#settings-execution').onclick=()=>{$('#dialog').close();activate('execution');$('#execution h1').focus({preventScroll:true});};$('#settings-about').onclick=aboutDialog;
     $('#settings-sync').onclick=deviceSyncDialog;$('#settings-ai-search').onclick=aiSearchDialog;
     $('#settings-folder').onclick=safely(()=>chooseFolder({onConnected:settingsDialog}));
@@ -422,19 +423,19 @@ function reloadStoredPreferences() {
   if (popoverName === 'palette' && (changedPreset || !$('#highlight-color-names')?.open)) renderPalettePopoverContent(r);
 }
 async function restoreSettings(input){
-  if(input?.kind==='file'&&input.queryPermission){const options={mode:'read'};if(await input.queryPermission(options)!=='granted'&&await input.requestPermission(options)!=='granted')throw new Error('설정 파일 읽기 권한이 필요합니다. 파일을 다시 선택해주세요.');}
+  if(input?.kind==='file'&&input.queryPermission){const options={mode:'read'};if(await input.queryPermission(options)!=='granted'&&await input.requestPermission(options)!=='granted')throw new Error(t('설정 파일 읽기 권한이 필요합니다. 파일을 다시 선택해주세요.'));}
   const backup=await readSettingsFile(input);changePreferences(backup.preferences);settingsFolderHint=backup.folderName;await setSetting('settings-folder-hint',settingsFolderHint);
   if(input?.kind==='file'){settingsFileHandle=input;await setSetting('settings-file',input);}else{settingsFileHandle=null;await setSetting('settings-file',null);}
-  toast('설정을 불러와 적용했습니다.'+(settingsFolderHint&&!folder?' 저장 폴더는 다시 연결해주세요.':''));
+  toast(t('설정을 불러와 적용했습니다.')+(settingsFolderHint&&!folder?t(' 저장 폴더는 다시 연결해주세요.'):''));
 }
 async function importSettingsBackup(){
-  if(openPicker()){try{const [handle]=await window.showOpenFilePicker({types:[{description:'LibreMemo 설정',accept:{'application/json':['.json']}}]});await restoreSettings(handle);settingsDialog();return;}catch(error){if(!['SecurityError','NotSupportedError'].includes(error.name))throw error;}}
+  if(openPicker()){try{const [handle]=await window.showOpenFilePicker({types:[{description:t('LibreMemo 설정'),accept:{'application/json':['.json']}}]});await restoreSettings(handle);settingsDialog();return;}catch(error){if(!['SecurityError','NotSupportedError'].includes(error.name))throw error;}}
   $('#settings-file-input').click();
 }
 async function saveSettingsBackup(){
   const json=serializeSettings(preferences,folder?.name||settingsFolderHint);
-  if(savePicker()){try{const handle=await window.showSaveFilePicker({suggestedName:settingsFileHandle?.name||'LibreMemo-settings.json',types:[{description:'LibreMemo 설정',accept:{'application/json':['.json']}}]});const writer=await handle.createWritable();try{await writer.write(json);await writer.close();}catch(error){await writer.abort().catch(()=>{});throw error;}settingsFileHandle=handle;await setSetting('settings-file',handle);settingsDialog();toast('설정을 로컬 파일로 저장했습니다.');return;}catch(error){if(!['SecurityError','NotSupportedError'].includes(error.name))throw error;}}
-  download(json,'LibreMemo-settings.json','application/json;charset=utf-8');toast('설정 JSON 파일을 저장했습니다. 「설정 파일 불러오기」로 다시 열 수 있어요.');
+  if(savePicker()){try{const handle=await window.showSaveFilePicker({suggestedName:settingsFileHandle?.name||'LibreMemo-settings.json',types:[{description:t('LibreMemo 설정'),accept:{'application/json':['.json']}}]});const writer=await handle.createWritable();try{await writer.write(json);await writer.close();}catch(error){await writer.abort().catch(()=>{});throw error;}settingsFileHandle=handle;await setSetting('settings-file',handle);settingsDialog();toast(t('설정을 로컬 파일로 저장했습니다.'));return;}catch(error){if(!['SecurityError','NotSupportedError'].includes(error.name))throw error;}}
+  download(json,'LibreMemo-settings.json','application/json;charset=utf-8');toast(t('설정 JSON 파일을 저장했습니다. 「설정 파일 불러오기」로 다시 열 수 있어요.'));
 }
 function cacheLibraryDocument(record) {
   records=records.filter(item=>item.id!==record.id);trashRecords=trashRecords.filter(item=>item.id!==record.id);
@@ -452,7 +453,7 @@ async function refreshLibrary() {
 }
 // Cached local pictures fill the shared 16:9 card; format tiles cover empty or
 // unsupported content while visible cards prepare their preview in the background.
-const THUMB_KINDS={video:['영상','#cc0000','youtube'],pdf:['PDF','#c2410c','file'],image:['이미지','#2563eb','file'],subtitle:['자막','#7c3aed','subtitles'],word:['문서','#1d4ed8','file'],hangul:['한글','#0e7490','file'],sheet:['표','#15803d','grid'],slides:['슬라이드','#b45309','file'],ebook:['전자책','#a16207','library'],djvu:['DjVu','#6b7280','file'],markdown:['MD','#334155','text'],text:['TXT','#475569','text'],web:['웹','#0f766e','globe']};
+const THUMB_KINDS={video:[t('영상'),'#cc0000','youtube'],pdf:['PDF','#c2410c','file'],image:[t('이미지'),'#2563eb','file'],subtitle:[t('자막'),'#7c3aed','subtitles'],word:[t('문서'),'#1d4ed8','file'],hangul:[t('한글'),'#0e7490','file'],sheet:[t('표'),'#15803d','grid'],slides:[t('슬라이드'),'#b45309','file'],ebook:[t('전자책'),'#a16207','library'],djvu:['DjVu','#6b7280','file'],markdown:['MD','#334155','text'],text:['TXT','#475569','text'],web:[t('웹'),'#0f766e','globe']};
 function thumbKind(record){
   if(record.metadata?.youtube)return 'video';
   if(isPDFDocument(record.metadata))return 'pdf';
@@ -469,17 +470,17 @@ function renderLibrary() {
   indexLibraryFolders();
   if(activeId!=='library')return;
   const filter=$('#library-filter').value.toLocaleLowerCase(),[sort,direction]=libraryTrash?trashSort.split(':'):[preferences.librarySort,preferences.librarySortDirection];
-  if(libraryTrash)trashIndex.update(trashRecords,libraryFolders,folder?.name||'전용 폴더');
+  if(libraryTrash)trashIndex.update(trashRecords,libraryFolders,folder?.name||t('전용 폴더'));
   const result=(libraryTrash?trashIndex:libraryIndex).select({filter,folderId:libraryFolderId,sort,direction,allFolders:libraryTrash}),{documents:shown,folders:shownFolders}=result;
-  const dateField=sort==='created'?'created':sort==='trashedAt'?'trashedAt':'modified',dateLabel=dateField==='created'?'저장일':dateField==='trashedAt'?'삭제일':'수정일';
+  const dateField=sort==='created'?'created':sort==='trashedAt'?'trashedAt':'modified',dateLabel=dateField==='created'?t('저장일'):dateField==='trashedAt'?t('삭제일'):t('수정일');
   const sortControl=$('#library-sort');
-  if(libraryTrash&&!$('[data-trash-sort]',sortControl))sortControl.insertAdjacentHTML('afterbegin','<option value="trashedAt:desc" data-trash-sort>삭제일 · 최신순</option><option value="trashedAt:asc" data-trash-sort>삭제일 · 오래된순</option>');
+  if(libraryTrash&&!$('[data-trash-sort]',sortControl))sortControl.insertAdjacentHTML('afterbegin',`<option value="trashedAt:desc" data-trash-sort>${t('삭제일 · 최신순')}</option><option value="trashedAt:asc" data-trash-sort>${t('삭제일 · 오래된순')}</option>`);
   if(!libraryTrash)$$('[data-trash-sort]',sortControl).forEach(option=>option.remove());sortControl.value=sort+':'+direction;
   const heading=$('#library .library-heading h2');let headingText=heading.firstChild;
   if(headingText?.nodeType!==3){headingText=document.createTextNode('');heading.prepend(headingText);}
-  headingText.nodeValue=libraryTrash?'휴지통 ':'내 서재 ';
-  $('#library-trash').innerHTML=icon('trash',15)+'<span>휴지통</span><small>'+trashRecords.length+'</small>';
-  $('#library-trash').setAttribute('aria-pressed',String(libraryTrash));$('#library-trash').title=libraryTrash?'내 서재로 돌아가기':'휴지통 · '+trashRecords.length+'개';$('#library-trash').setAttribute('aria-label',$('#library-trash').title);
+  headingText.nodeValue=(libraryTrash?t('휴지통'):t('내 서재'))+' ';
+  $('#library-trash').innerHTML=icon('trash',15)+'<span>'+t('휴지통')+'</span><small>'+trashRecords.length+'</small>';
+  $('#library-trash').setAttribute('aria-pressed',String(libraryTrash));$('#library-trash').title=libraryTrash?t('내 서재로 돌아가기'):t('휴지통 · {n}개',{n:trashRecords.length});$('#library-trash').setAttribute('aria-label',$('#library-trash').title);
   $('#library-empty-trash').hidden=!libraryTrash;$('#library-empty-trash').disabled=!trashRecords.length;
   $('#library-trash-info').hidden=!libraryTrash;
   const grid=$('#document-grid');grid.dataset.view=preferences.libraryView;
@@ -487,15 +488,15 @@ function renderLibrary() {
   // A temporary empty cache does not mean the connected folder is empty.
   // Keep the hint hidden until permission, restoration and the library read finish.
   $('#document-count').textContent=libraryTrash?trashRecords.length:records.length; $('#empty-library').hidden=document.documentElement.dataset.storageSetup!=='ready'||shown.length+shownFolders.length>0;
-  $('#empty-library h3').textContent=filter?'검색 결과가 없습니다.':libraryTrash?'휴지통이 비어 있습니다.':libraryFolderId?'이 폴더는 비어 있습니다.':records.length||libraryFolders.length?'이 위치에는 문서가 없습니다.':'첫 문서를 보관해보세요.';
-  $('#empty-library p').innerHTML=filter?'다른 제목·파일명·폴더 이름으로 찾아보세요.':libraryTrash?'내 서재에서 삭제한 문서는 이곳에서 복원할 수 있습니다.':libraryFolderId||records.length||libraryFolders.length?'파일을 가져오거나 문서 메뉴의 「폴더로 이동」을 사용하세요.':'문서·전자책·이미지·자막을 가져오거나 글을 붙여넣어<br>이곳에서 계속 읽고 메모할 수 있어요.';
+  $('#empty-library h3').textContent=filter?t('검색 결과가 없습니다.'):libraryTrash?t('휴지통이 비어 있습니다.'):libraryFolderId?t('이 폴더는 비어 있습니다.'):records.length||libraryFolders.length?t('이 위치에는 문서가 없습니다.'):t('첫 문서를 보관해보세요.');
+  $('#empty-library p').innerHTML=filter?t('다른 제목·파일명·폴더 이름으로 찾아보세요.'):libraryTrash?t('내 서재에서 삭제한 문서는 이곳에서 복원할 수 있습니다.'):libraryFolderId||records.length||libraryFolders.length?t('파일을 가져오거나 문서 메뉴의 「폴더로 이동」을 사용하세요.'):t('문서·전자책·이미지·자막을 가져오거나 글을 붙여넣어<br>이곳에서 계속 읽고 메모할 수 있어요.');
   $('#open-example').hidden=libraryTrash||!!records.length||!!filter;
   $('#empty-icon').innerHTML=icon(libraryTrash?'trash':'file');
   // A theme/tool change or a repeated input event must not rebuild identical cards.
   if(libraryGridState!==result){
   const renderFolderCard=item=>{
-    const name=esc(item.name),starred=!!item.starredAt,starLabel=starred?'별표 해제':'별표 추가';
-    return `<article class="library-folder-card${starred?' is-starred':''}" data-library-item="folder" data-library-id="${item.id}" data-folder-target="${item.id}" draggable="true"><button class="library-folder-open" data-library-folder="${item.id}" title="${esc(libraryPathLabel(item.id))}">${icon('folder',22)}<span><strong>${name}</strong><small>${folderDocumentCount(item.id)}개 문서 · ${libraryFolderChildren.get(item.id)?.length||0}개 하위 폴더</small></span></button><button class="icon-button card-star${starred?' active':''}" type="button" data-folder-star="${item.id}" aria-pressed="${starred}" aria-label="${name} 폴더 ${starLabel}" title="${starLabel}">${icon(starred?'star-filled':'star',15)}</button><button class="icon-button card-menu" data-folder-menu="${item.id}" aria-label="${name} 폴더 메뉴">${icon('more',17)}</button></article>`;
+    const name=esc(item.name),starred=!!item.starredAt,starLabel=starred?t('별표 해제'):t('별표 추가');
+    return `<article class="library-folder-card${starred?' is-starred':''}" data-library-item="folder" data-library-id="${item.id}" data-folder-target="${item.id}" draggable="true"><button class="library-folder-open" data-library-folder="${item.id}" title="${esc(libraryPathLabel(item.id))}">${icon('folder',22)}<span><strong>${name}</strong><small>${t('{n}개 문서',{n:folderDocumentCount(item.id)})} · ${t('{n}개 하위 폴더',{n:libraryFolderChildren.get(item.id)?.length||0})}</small></span></button><button class="icon-button card-star${starred?' active':''}" type="button" data-folder-star="${item.id}" aria-pressed="${starred}" aria-label="${t('{name} 폴더 {action}',{name,action:starLabel})}" title="${starLabel}">${icon(starred?'star-filled':'star',15)}</button><button class="icon-button card-menu" data-folder-menu="${item.id}" aria-label="${t('{name} 폴더 메뉴',{name})}">${icon('more',17)}</button></article>`;
   };
   const renderDocumentCard=record=>{
     const count=record.metadata?.annotations?.length||0,bookmarkCount=record.metadata?.bookmarks?.length||0;const progress=record.metadata?.view?.scrollTop||0;
@@ -504,9 +505,9 @@ function renderLibrary() {
     const timestamp=new Date(record[dateField]),time=String(timestamp.getHours()).padStart(2,'0')+':'+String(timestamp.getMinutes()).padStart(2,'0');
     // Both layouts share one title/source. A decorative preview used to repeat
     // them above the details, and list mode kept a third hidden copy.
-    const place=esc(libraryPathLabel(record.folderId||'')),progressLabel=libraryTrash||filter?place:progress?'이어서 읽기':'새 문서';
-    const starred=!libraryTrash&&!!record.starredAt,starLabel=starred?'별표 해제':'별표 추가';
-    return `<article class="document-card${starred?' is-starred':''}" data-record="${record.id}" ${libraryTrash?'':`data-library-item="document" data-library-id="${record.id}"`} draggable="${!libraryTrash}"><button class="card-open" ${libraryTrash?'data-trash-menu':'data-open'}="${record.id}" ${libraryTrash?`aria-label="${title} 복원 또는 영구 삭제"`:''}>${cardThumb(record)}<div class="card-details"><span class="list-file-icon" aria-hidden="true">${icon(libraryTrash?'trash':'file',16)}</span><div class="library-title"><h3 class="list-title" title="${title}">${title}</h3>${originalName?`<span class="list-filename" title="${originalName}">${originalName}</span>`:''}</div><p class="card-source"><span class="list-host" title="${host}">${host}</span><span class="list-date" title="${dateTitle}" aria-label="${dateTitle}">${date}<span class="card-time"> ${time}</span></span></p><div class="card-meta"><span class="list-mark-counts"><span class="list-annotations" title="주석 ${count}개" aria-label="주석 ${count}개">${icon('highlight',13)} <span>${count}</span></span><span class="list-bookmarks" title="북마크 ${bookmarkCount}개" aria-label="북마크 ${bookmarkCount}개">${icon('bookmark',13)} <span>${bookmarkCount}</span></span></span><span class="list-size">${size}</span><span class="list-progress" title="${progressLabel}">${progressLabel} ${icon(libraryTrash?'undo':'forward',13)}</span></div></div></button>${libraryTrash?'':`<button class="card-star icon-button${starred?' active':''}" type="button" data-card-star="${record.id}" aria-pressed="${starred}" aria-label="${title} ${starLabel}" title="${starLabel}">${icon(starred?'star-filled':'star',15)}</button>`}<button class="card-menu icon-button" ${libraryTrash?'data-trash-menu':'data-card-menu'}="${record.id}" aria-label="${title} ${libraryTrash?'휴지통':'문서'} 메뉴">${icon('more',17)}</button></article>`;
+    const place=esc(libraryPathLabel(record.folderId||'')),progressLabel=libraryTrash||filter?place:progress?t('이어서 읽기'):t('새 문서');
+    const starred=!libraryTrash&&!!record.starredAt,starLabel=starred?t('별표 해제'):t('별표 추가');
+    return `<article class="document-card${starred?' is-starred':''}" data-record="${record.id}" ${libraryTrash?'':`data-library-item="document" data-library-id="${record.id}"`} draggable="${!libraryTrash}"><button class="card-open" ${libraryTrash?'data-trash-menu':'data-open'}="${record.id}" ${libraryTrash?`aria-label="${t('{title} 복원 또는 영구 삭제',{title})}"`:''}>${cardThumb(record)}<div class="card-details"><span class="list-file-icon" aria-hidden="true">${icon(libraryTrash?'trash':'file',16)}</span><div class="library-title"><h3 class="list-title" title="${title}">${title}</h3>${originalName?`<span class="list-filename" title="${originalName}">${originalName}</span>`:''}</div><p class="card-source"><span class="list-host" title="${host}">${host}</span><span class="list-date" title="${dateTitle}" aria-label="${dateTitle}">${date}<span class="card-time"> ${time}</span></span></p><div class="card-meta"><span class="list-mark-counts"><span class="list-annotations" title="${t('주석 {n}개',{n:count})}" aria-label="${t('주석 {n}개',{n:count})}">${icon('highlight',13)} <span>${count}</span></span><span class="list-bookmarks" title="${t('북마크 {n}개',{n:bookmarkCount})}" aria-label="${t('북마크 {n}개',{n:bookmarkCount})}">${icon('bookmark',13)} <span>${bookmarkCount}</span></span></span><span class="list-size">${size}</span><span class="list-progress" title="${progressLabel}">${progressLabel} ${icon(libraryTrash?'undo':'forward',13)}</span></div></div></button>${libraryTrash?'':`<button class="card-star icon-button${starred?' active':''}" type="button" data-card-star="${record.id}" aria-pressed="${starred}" aria-label="${t('{title} {action}',{title,action:starLabel})}" title="${starLabel}">${icon(starred?'star-filled':'star',15)}</button>`}<button class="card-menu icon-button" ${libraryTrash?'data-trash-menu':'data-card-menu'}="${record.id}" aria-label="${libraryTrash?t('{title} 휴지통 메뉴',{title}):t('{title} 문서 메뉴',{title})}">${icon('more',17)}</button></article>`;
   };
   const ordered=result.items||[...shownFolders.map(item=>({kind:'folder',item})),...shown.map(item=>({kind:'document',item}))];
   grid.innerHTML=ordered.map(entry=>entry.kind==='folder'?renderFolderCard(entry.item):renderDocumentCard(entry.item)).join('');
@@ -514,7 +515,7 @@ function renderLibrary() {
   }
   renderLibraryFolders();
   observeCardPreviews(result);
-  if(activeId==='library')$('#status-left').textContent=libraryTrash?`휴지통 ${trashRecords.length}개의 문서 · 복원 가능`:`${records.length}개의 문서 · ${folder?folder.name+' 자동 저장':'이 기기에 보관'}`;
+  if(activeId==='library')$('#status-left').textContent=libraryTrash?t('휴지통 {n}개의 문서 · 복원 가능',{n:trashRecords.length}):t('{n}개의 문서 · {place}',{n:records.length,place:folder?t('{name} 자동 저장',{name:folder.name}):t('이 기기에 보관')});
   renderFolderState();
 }
 let cardPreviewQueue,cardPreviewObserver,cardPreviewState;
@@ -545,7 +546,7 @@ function observeCardPreviews(result){
   }
 }
 function indexLibraryFolders() {
-  if(!libraryIndex.update(records,libraryFolders,folder?.name||'전용 폴더'))return;
+  if(!libraryIndex.update(records,libraryFolders,folder?.name||t('전용 폴더')))return;
   libraryFolderById=libraryIndex.byId;libraryFolderChildren=libraryIndex.children;libraryFolderCounts=libraryIndex.counts;libraryIndexVersion++;
 }
 function folderDocumentCount(id){return libraryFolderCounts.get(id)||0;}
@@ -553,32 +554,32 @@ function libraryPathLabel(id) {
   return libraryIndex.label(id);
 }
 function navigateLibraryFolder(id) {
-  if(id&&!libraryFolderById.has(id))throw Error('폴더가 변경되었습니다. 다시 선택해주세요.');
+  if(id&&!libraryFolderById.has(id))throw Error(t('폴더가 변경되었습니다. 다시 선택해주세요.'));
   libraryTrash=false;libraryFolderId=id;$('#library-filter').value='';for(const item of folderPath(libraryFolders,id,libraryFolderById))libraryCollapsed.delete(item.id);libraryTreeVersion++;renderLibrary();
 }
 function toggleLibraryTrash(){libraryTrash=!libraryTrash;$('#library-filter').value='';libraryTreeVersion++;renderLibrary();}
 function renderLibraryFolders() {
   const state=JSON.stringify([libraryIndexVersion,libraryFolderId,libraryTreeVersion,!!$('#library-filter').value,libraryTrash]);
   if(libraryTreeState===state)return;libraryTreeState=state;
-  const path=folderPath(libraryFolders,libraryFolderId,libraryFolderById),root=folder?.name||'전용 폴더';
-  $('#library-folder-up').innerHTML=icon('back',16);$('#library-folder-up').disabled=!libraryTrash&&!libraryFolderId;$('#library-folder-up').title=libraryTrash?'내 서재로 돌아가기':'상위 폴더';$('#library-folder-up').setAttribute('aria-label',$('#library-folder-up').title);
+  const path=folderPath(libraryFolders,libraryFolderId,libraryFolderById),root=folder?.name||t('전용 폴더');
+  $('#library-folder-up').innerHTML=icon('back',16);$('#library-folder-up').disabled=!libraryTrash&&!libraryFolderId;$('#library-folder-up').title=libraryTrash?t('내 서재로 돌아가기'):t('상위 폴더');$('#library-folder-up').setAttribute('aria-label',$('#library-folder-up').title);
   $('#library-folder-help').innerHTML=icon('info',15);
-  $('#library-new-folder').innerHTML=icon('folder',15)+'<span>새 폴더</span>';
+  $('#library-new-folder').innerHTML=icon('folder',15)+'<span>'+t('새 폴더')+'</span>';
   $('#library-new-folder').hidden=libraryTrash;$('#library-folder-help').hidden=libraryTrash;
   $('#library-breadcrumbs').innerHTML=[{id:'',name:root},...path].map(item=>`<button type="button" data-library-folder="${item.id}" data-folder-target="${item.id}" title="${esc(libraryPathLabel(item.id))}" ${item.id===libraryFolderId?'aria-current="page"':''}>${item.id?'':icon('folder',15)}<span>${esc(item.name)}</span></button>`).join('<span class="breadcrumb-divider" aria-hidden="true">/</span>');
-  if(libraryTrash)$('#library-breadcrumbs').innerHTML='<span class="library-trash-location">휴지통</span>';
+  if(libraryTrash)$('#library-breadcrumbs').innerHTML='<span class="library-trash-location">'+t('휴지통')+'</span>';
   const tree=$('#library-folder-tree');tree.hidden=libraryTrash||!libraryFolders.length;$('#library-layout').classList.toggle('has-folders',!libraryTrash&&!!libraryFolders.length);$('#library-search-scope').hidden=libraryTrash||!$('#library-filter').value;
   const branch=(id,depth)=> (libraryFolderChildren.get(id)||[]).map(item=>{
     const children=libraryFolderChildren.get(item.id)?.length,collapsed=libraryCollapsed.has(item.id);
-    return `<div class="library-tree-row ${item.id===libraryFolderId?'active':''}" style="--folder-depth:${depth}" data-folder-target="${item.id}">${children?`<button class="library-tree-toggle" type="button" data-folder-toggle="${item.id}" aria-label="${esc(item.name)} ${collapsed?'펼치기':'접기'}" aria-expanded="${!collapsed}">${icon(collapsed?'forward':'down',12)}</button>`:'<span class="library-tree-spacer"></span>'}<button class="library-tree-open" type="button" data-library-folder="${item.id}" title="${esc(libraryPathLabel(item.id))}">${icon('folder',14)}<span>${esc(item.name)}</span><small>${folderDocumentCount(item.id)}</small></button></div>${!collapsed?branch(item.id,depth+1):''}`;
+    return `<div class="library-tree-row ${item.id===libraryFolderId?'active':''}" style="--folder-depth:${depth}" data-folder-target="${item.id}">${children?`<button class="library-tree-toggle" type="button" data-folder-toggle="${item.id}" aria-label="${collapsed?t('{name} 펼치기',{name:esc(item.name)}):t('{name} 접기',{name:esc(item.name)})}" aria-expanded="${!collapsed}">${icon(collapsed?'forward':'down',12)}</button>`:'<span class="library-tree-spacer"></span>'}<button class="library-tree-open" type="button" data-library-folder="${item.id}" title="${esc(libraryPathLabel(item.id))}">${icon('folder',14)}<span>${esc(item.name)}</span><small>${folderDocumentCount(item.id)}</small></button></div>${!collapsed?branch(item.id,depth+1):''}`;
   }).join('');
-  tree.innerHTML=`<div class="library-tree-root ${libraryFolderId?'':'active'}" data-folder-target=""><button class="library-tree-open" type="button" data-library-folder="" title="${esc(root)} · 최상위 폴더(root)">${icon('folder',15)}<span>${esc(root)}</span><small>root</small></button></div>${branch('',0)}`;
+  tree.innerHTML=`<div class="library-tree-root ${libraryFolderId?'':'active'}" data-folder-target=""><button class="library-tree-open" type="button" data-library-folder="" title="${t('{name} · 최상위 폴더(root)',{name:esc(root)})}">${icon('folder',15)}<span>${esc(root)}</span><small>root</small></button></div>${branch('',0)}`;
 }
 async function changeLibraryFolder(change) {
   await updateLibraryFolders((folders,documents)=>editLibraryFolders(folders,documents,change));
   await refreshLibrary();
   try{await dataFolder?.flush();}catch(error){showError(error);return;}
-  toast(folder?'폴더와 문서 위치를 전용 폴더에 저장했습니다.':'서재에 저장했습니다. 데이터 폴더를 연결하면 폴더 구조도 함께 보관됩니다.');
+  toast(folder?t('폴더와 문서 위치를 전용 폴더에 저장했습니다.'):t('서재에 저장했습니다. 데이터 폴더를 연결하면 폴더 구조도 함께 보관됩니다.'));
 }
 let starQueue=Promise.resolve();
 function runStarChange(task){starQueue=starQueue.then(task,task);return starQueue;}
@@ -605,7 +606,7 @@ function toggleFolderStar(id) {
 }
 function libraryFolderNameDialog(item=null) {
   const parentId=libraryFolderId;
-  modal(`<form id="library-folder-form"><div class="dialog-heading"><h2>${item?'폴더 이름 변경':'새 폴더'}</h2><button class="icon-button" type="button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p class="dialog-description small">위치: ${esc(libraryPathLabel(item?item.parentId:parentId))}</p><label class="paste-label" for="library-folder-name">폴더 이름</label><input id="library-folder-name" class="paste-title" maxlength="100" required value="${esc(item?.name||'')}" autocomplete="off"><p class="dialog-description small">전용 폴더 아래에 실제 하위 폴더를 만듭니다. 같은 위치의 이름은 겹칠 수 없습니다.</p><p id="library-folder-error" class="folder-form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary-button" data-dialog-close>취소</button><button id="library-folder-save" class="primary-button" type="submit">${item?'변경':'만들기'}</button></div></form>`,dialog=>{
+  modal(`<form id="library-folder-form"><div class="dialog-heading"><h2>${item?t('폴더 이름 변경'):t('새 폴더')}</h2><button class="icon-button" type="button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div><p class="dialog-description small">${t('위치: {path}',{path:esc(libraryPathLabel(item?item.parentId:parentId))})}</p><label class="paste-label" for="library-folder-name">${t('폴더 이름')}</label><input id="library-folder-name" class="paste-title" maxlength="100" required value="${esc(item?.name||'')}" autocomplete="off"><p class="dialog-description small">${t('전용 폴더 아래에 실제 하위 폴더를 만듭니다. 같은 위치의 이름은 겹칠 수 없습니다.')}</p><p id="library-folder-error" class="folder-form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary-button" data-dialog-close>${t('취소')}</button><button id="library-folder-save" class="primary-button" type="submit">${item?t('변경'):t('만들기')}</button></div></form>`,dialog=>{
     $('#library-folder-form').onsubmit=safely(async event=>{event.preventDefault();const button=$('#library-folder-save');if(button.disabled)return;button.disabled=true;
       try{await changeLibraryFolder(item?{type:'rename',id:item.id,name:$('#library-folder-name').value}:{type:'create',id:uid(),parentId,name:$('#library-folder-name').value});dialog.close();}
       catch(error){$('#library-folder-error').textContent=error.message;}finally{button.disabled=false;}
@@ -615,16 +616,16 @@ function libraryFolderNameDialog(item=null) {
 function libraryFolderMenu(id) {
   const item=libraryFolderById.get(id);if(!item)return;
   const occupied=(libraryFolderChildren.get(id)?.length||0)||records.some(r=>r.folderId===id),starred=!!item.starredAt;
-  modal(`<div class="dialog-heading"><h2>${esc(item.name)}</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p class="dialog-description small">${esc(libraryPathLabel(id))}</p><div class="document-actions"><button id="folder-menu-open" class="menu-button">${icon('folder')} 폴더 열기</button><button id="folder-menu-star" class="menu-button${starred?' starred':''}">${icon(starred?'star-filled':'star')} ${starred?'별표 해제':'별표 추가'}</button><button id="folder-menu-rename" class="menu-button">${icon('pen')} 이름 변경</button><button id="folder-menu-move" class="menu-button">${icon('forward')} 다른 폴더로 이동</button><button id="folder-menu-delete" class="menu-button danger" ${occupied?'disabled':''} title="${occupied?'문서와 하위 폴더를 먼저 옮기세요.':'비어 있는 폴더 삭제'}">${icon('trash')} 빈 폴더 삭제</button></div><p class="dialog-description small">비어 있는 폴더만 삭제할 수 있습니다. 앱에 등록되지 않은 외부 파일은 이동·삭제하지 않습니다.</p>`,dialog=>{
+  modal(`<div class="dialog-heading"><h2>${esc(item.name)}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div><p class="dialog-description small">${esc(libraryPathLabel(id))}</p><div class="document-actions"><button id="folder-menu-open" class="menu-button">${icon('folder')} ${t('폴더 열기')}</button><button id="folder-menu-star" class="menu-button${starred?' starred':''}">${icon(starred?'star-filled':'star')} ${starred?t('별표 해제'):t('별표 추가')}</button><button id="folder-menu-rename" class="menu-button">${icon('pen')} ${t('이름 변경')}</button><button id="folder-menu-move" class="menu-button">${icon('forward')} ${t('다른 폴더로 이동')}</button><button id="folder-menu-delete" class="menu-button danger" ${occupied?'disabled':''} title="${occupied?t('문서와 하위 폴더를 먼저 옮기세요.'):t('비어 있는 폴더 삭제')}">${icon('trash')} ${t('빈 폴더 삭제')}</button></div><p class="dialog-description small">${t('비어 있는 폴더만 삭제할 수 있습니다. 앱에 등록되지 않은 외부 파일은 이동·삭제하지 않습니다.')}</p>`,dialog=>{
     $('#folder-menu-open').onclick=()=>{dialog.close();navigateLibraryFolder(id);};$('#folder-menu-star').onclick=safely(async()=>{dialog.close();await toggleFolderStar(id);});$('#folder-menu-rename').onclick=()=>libraryFolderNameDialog(item);$('#folder-menu-move').onclick=()=>libraryMoveDialog('folder',item);
-    $('#folder-menu-delete').onclick=safely(async()=>{if(!await confirmDialog('빈 폴더를 삭제할까요?',libraryPathLabel(id)+' · 문서와 주석은 삭제하지 않습니다.','삭제'))return;await changeLibraryFolder({type:'delete',id});});
+    $('#folder-menu-delete').onclick=safely(async()=>{if(!await confirmDialog(t('빈 폴더를 삭제할까요?'),t('{path} · 문서와 주석은 삭제하지 않습니다.',{path:libraryPathLabel(id)}),t('삭제')))return;await changeLibraryFolder({type:'delete',id});});
   });
 }
 function libraryMoveDialog(type,item) {
   const forbidden=type==='folder'?folderDescendants(libraryFolders,item.id):new Set(),current=type==='folder'?item.parentId:item.folderId||'';
   const destinations=[{id:'',label:libraryPathLabel('')+' (root)'},...libraryFolders.map(f=>({id:f.id,label:libraryPathLabel(f.id)})).sort((a,b)=>a.label.localeCompare(b.label,'ko'))].filter(f=>!forbidden.has(f.id));
   const available=destinations.some(f=>f.id!==current),initial=destinations.find(f=>f.id!==current)?.id;
-  modal(`<form id="library-move-form"><div class="dialog-heading"><h2>${type==='folder'?'폴더':'문서'} 이동</h2><button type="button" class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p class="dialog-description"><strong>${esc(item.title||item.name)}</strong></p><p class="dialog-description small">현재 위치: ${esc(libraryPathLabel(current))}</p><label class="paste-label" for="library-folder-destination">옮길 폴더</label><select id="library-folder-destination" class="folder-destination">${destinations.map(f=>`<option value="${f.id}" ${f.id===current?'disabled':''} ${f.id===initial?'selected':''}>${esc(f.label)}</option>`).join('')}</select><p class="dialog-description small">${available?'주석·북마크·읽기 위치·저장 이력은 그대로 유지합니다.': '이동할 수 있는 다른 폴더가 없습니다. 먼저 서재에서 새 폴더를 만드세요.'}</p><p id="library-move-error" class="folder-form-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" type="button" data-dialog-close>취소</button><button id="library-move-save" class="primary-button" type="submit" ${available?'':'disabled'}>이동</button></div></form>`,dialog=>{
+  modal(`<form id="library-move-form"><div class="dialog-heading"><h2>${type==='folder'?t('폴더 이동'):t('문서 이동')}</h2><button type="button" class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div><p class="dialog-description"><strong>${esc(item.title||item.name)}</strong></p><p class="dialog-description small">${t('현재 위치: {path}',{path:esc(libraryPathLabel(current))})}</p><label class="paste-label" for="library-folder-destination">${t('옮길 폴더')}</label><select id="library-folder-destination" class="folder-destination">${destinations.map(f=>`<option value="${f.id}" ${f.id===current?'disabled':''} ${f.id===initial?'selected':''}>${esc(f.label)}</option>`).join('')}</select><p class="dialog-description small">${available?t('주석·북마크·읽기 위치·저장 이력은 그대로 유지합니다.'): t('이동할 수 있는 다른 폴더가 없습니다. 먼저 서재에서 새 폴더를 만드세요.')}</p><p id="library-move-error" class="folder-form-error" role="alert"></p><div class="dialog-actions"><button class="secondary-button" type="button" data-dialog-close>${t('취소')}</button><button id="library-move-save" class="primary-button" type="submit" ${available?'':'disabled'}>${t('이동')}</button></div></form>`,dialog=>{
     $('#library-move-form').onsubmit=safely(async event=>{event.preventDefault();const button=$('#library-move-save');if(button.disabled)return;button.disabled=true;
       try{const parentId=$('#library-folder-destination').value;await changeLibraryFolder(type==='folder'?{type:'move',id:item.id,parentId}:{type:'move-documents',ids:[item.id],parentId});dialog.close();}
       catch(error){$('#library-move-error').textContent=error.message;}finally{button.disabled=false;}
@@ -672,8 +673,8 @@ function renderTabs() {
     tab.host.setAttribute('role','tabpanel');tab.host.setAttribute('aria-labelledby',button.id);
     const title=$('.tab-title',el);if(title.textContent!==tab.title)title.textContent=tab.title;
     $('.tab-dirty',el).hidden=!tab.opening && !tab.queue?.editsPending;
-    $('[data-close]',el).setAttribute('aria-label',tab.title+' 탭 닫기');
-    $('[data-close]',el).title=tab.title+' 탭 닫기';$('[data-close]',el).tabIndex=selected?0:-1;
+    $('[data-close]',el).setAttribute('aria-label',t('{title} 탭 닫기',{title:tab.title}));
+    $('[data-close]',el).title=t('{title} 탭 닫기',{title:tab.title});$('[data-close]',el).tabIndex=selected?0:-1;
     nodes.delete(tab.id);
   }
   for(const node of nodes.values())node.remove();
@@ -728,7 +729,7 @@ function activate(id) {
   if(active()?.asleep)safely(()=>wakeTab(active()))();
   if(reader()){if(!sameSidebar)renderToolbar();if(reader().documentSidebarUI?.isConnected&&!reader().tocStrip){reader().applyTocWidth(preferences.sidebarWidth*reader().sidebarUnit(),{persist:false,snapStrip:false});reader().syncAfterTocResize();}if(!sameSidebar)restoreSidebar();if(reader().dynamicDirty)reader().scheduleDynamicRefresh();}else $('#toolbar').hidden=true;
   if(id==='library')renderLibrary();else pauseCardPreviews();
-  if(id==='execution'){$('#status-left').textContent='앱 설치 · URL 공유 · 모든 데이터는 이 기기에 저장';document.title='앱 설치 · URL 공유 · LibreMemo';syncStatusbarVisibility();}
+  if(id==='execution'){$('#status-left').textContent=t('앱 설치 · URL 공유 · 모든 데이터는 이 기기에 저장');document.title=t('앱 설치 · URL 공유 · LibreMemo');syncStatusbarVisibility();}
 }
 async function selectTab(id) {
   const tab=tabs.find(tab=>tab.id===id);if(!tab)return;
@@ -740,12 +741,12 @@ function updateChrome() {
   $('.chrome').dataset.page=local?'document':tab?'browser':activeId;
   if(!$('.chrome').classList.contains('address-editing'))$('#address').value=local?tab.record.name:tab?.url||'';
   $('#address-icon').innerHTML=icon(local?'file':'globe',15);$('#local-label').hidden=!local;
-  setIconButton('#save-page',execution?'globe':local?'download':tab?.external?'folder':'save',execution?'URL 복사':local?'내보내기':tab?.external?'Chrome에서 가져오기':'페이지 저장',17);
-  if(local){$('#save-page').title='내보내기 · 원본 포함 보관 파일, 읽기용 HTML, 주석 포함 PDF, 발췌 노트 복사';$('#save-page').setAttribute('aria-description','원본·주석·북마크를 파일로 보관하거나 표시한 글과 메모를 마크다운으로 복사합니다.');}
+  setIconButton('#save-page',execution?'globe':local?'download':tab?.external?'folder':'save',execution?t('URL 복사'):local?t('내보내기'):tab?.external?t('Chrome에서 가져오기'):t('페이지 저장'),17);
+  if(local){$('#save-page').title=t('내보내기 · 원본 포함 보관 파일, 읽기용 HTML, 주석 포함 PDF, 발췌 노트 복사');$('#save-page').setAttribute('aria-description',t('원본·주석·북마크를 파일로 보관하거나 표시한 글과 메모를 마크다운으로 복사합니다.'));}
   else $('#save-page').removeAttribute('aria-description');
   $('#save-page').disabled=execution?sharingApp:!tab||!!tab.capturing;
-  if(local)saveStatus(tab); else if(tab){$('#status-left').textContent=tab.external?'웹 탐색은 브라우저 탭 · 복사한 글과 저장한 HTML은 여기서 주석 달기':tab.capturing?'읽기용 사본을 준비하는 중…':tab.readable?'페이지 저장 → 주석 달기 · 추가 설치 없음':'앱 문서를 준비하는 중…';if(typeof syncStatusbarVisibility==='function')syncStatusbarVisibility();}
-  document.title=tab?tab.title+' · LibreMemo':'LibreMemo · 나만의 앱 서재';
+  if(local)saveStatus(tab); else if(tab){$('#status-left').textContent=tab.external?t('웹 탐색은 브라우저 탭 · 복사한 글과 저장한 HTML은 여기서 주석 달기'):tab.capturing?t('읽기용 사본을 준비하는 중…'):tab.readable?t('페이지 저장 → 주석 달기 · 추가 설치 없음'):t('앱 문서를 준비하는 중…');if(typeof syncStatusbarVisibility==='function')syncStatusbarVisibility();}
+  document.title=tab?tab.title+' · LibreMemo':t('LibreMemo · 나만의 앱 서재');
 }
 function createHost(id,type) { const host=document.createElement('div');host.id='workspace-'+id;host.className='workspace-host '+type+'-host';host.hidden=true;$('#workspaces').append(host);return host; }
 // A hidden long document is released entirely and reopened from storage on
@@ -764,18 +765,18 @@ function wakeTab(tab) {
       const record=await getDocument(tab.record.id);
       // The user may have moved on while storage answered; opening would pull them back.
       if(!tabs.includes(tab)||activeId!==tab.id)return tabs.find(t=>t.id===tab.id);
-      if(!record||record.trashedAt){await closeTab(tab.id);throw Error('문서가 휴지통으로 이동했거나 삭제되었습니다. 서재를 다시 확인해주세요.');}
+      if(!record||record.trashedAt){await closeTab(tab.id);throw Error(t('문서가 휴지통으로 이동했거나 삭제되었습니다. 서재를 다시 확인해주세요.'));}
       const position=tabs.indexOf(tab);tabs.splice(position,1);tab.host.remove();
       return await openRecord(record,null,{wake:{id:tab.id,position,history:tab.history}});
     }finally{tab.waking=null;}
   })();
 }
 async function openRecord(record, prepared = null, {deferReady = false, sourceIdentity = null, wake = null} = {}) {
-  if(!record||record.trashedAt)throw Error('휴지통의 문서는 먼저 복원한 뒤 열어주세요.');
+  if(!record||record.trashedAt)throw Error(t('휴지통의 문서는 먼저 복원한 뒤 열어주세요.'));
   libraryTrash=false;
   const existing=tabs.find(tab=>tab.record?.id===record.id);if(existing){if(existing.closePromise){await existing.closePromise;return openRecord(record,prepared,{deferReady,sourceIdentity});}activate(existing.id);return existing.asleep?wakeTab(existing):existing;}
   if(!prepared && typeof record.html!=='string' && !record.file)record=await getDocument(record.id);
-  if(!record||record.trashedAt)throw Error('문서가 휴지통으로 이동했거나 삭제되었습니다. 서재를 다시 확인해주세요.');
+  if(!record||record.trashedAt)throw Error(t('문서가 휴지통으로 이동했거나 삭제되었습니다. 서재를 다시 확인해주세요.'));
   const opened=tabs.find(tab=>tab.record?.id===record.id);if(opened){if(opened.closePromise){await opened.closePromise;return openRecord(record,prepared,{deferReady,sourceIdentity});}activate(opened.id);return opened.asleep?wakeTab(opened):opened;}
   // The library already holds a prepared, sanitized snapshot. Reopening it
   // should parse it once in the iframe, not clone the entire book in DOMParser first.
@@ -859,7 +860,7 @@ async function openRecord(record, prepared = null, {deferReady = false, sourceId
 function saveStatus(tab) {
   const queue=tab.queue;if(!queue)return;
   const failure=queue.error||tab.checkpoints?.error;
-  const label=queue.error?(queue.editsPending?'주석 자동 저장 실패 · ':'읽기 위치 저장 실패 · ')+queue.error.message:tab.checkpoints?.error?'주석은 자동 저장됨 · 이력 저장 실패 · '+tab.checkpoints.error.message:queue.editsPending||tab.opening?'저장 중…':'주석이 앱에 자동 저장됨';
+  const label=queue.error?(queue.editsPending?t('주석 자동 저장 실패 · {error}',{error:queue.error.message}):t('읽기 위치 저장 실패 · {error}',{error:queue.error.message})):tab.checkpoints?.error?t('주석은 자동 저장됨 · 이력 저장 실패 · {error}',{error:tab.checkpoints.error.message}):queue.editsPending||tab.opening?t('저장 중…'):t('주석이 앱에 자동 저장됨');
   const status=$('#status-left');let state=$('.save-state',status);
   if(!state){status.replaceChildren();state=document.createElement('span');status.append(state);}
   const className=`save-state ${failure?'save-error':''}`;
@@ -870,12 +871,12 @@ function saveStatus(tab) {
   let retry=$('#retry-save');
   if(failure){
     if(!retry){retry=document.createElement('button');retry.id='retry-save';retry.className='text-button';status.append(retry);}
-    retry.textContent='저장 재시도';retry.onclick=safely(async()=>{await tab.queue.flush();await tab.checkpoints?.flush({force:true});});
+    retry.textContent=t('저장 재시도');retry.onclick=safely(async()=>{await tab.queue.flush();await tab.checkpoints?.flush({force:true});});
   }else retry?.remove();
   let bookNotice = $('[data-book-incomplete]', status);
   if (tab.reader?.bookIntegrity?.complete === false) {
     if (!bookNotice) { bookNotice = document.createElement('button'); bookNotice.className = 'text-button save-error'; bookNotice.dataset.bookIncomplete = ''; status.append(bookNotice); }
-    bookNotice.textContent = '책 본문 누락 · 원본 HTML 가져오기';
+    bookNotice.textContent = t('책 본문 누락 · 원본 HTML 가져오기');
     bookNotice.title = tab.reader.bookIntegrity.message;
     bookNotice.onclick = safely(importFiles);
   } else bookNotice?.remove();
@@ -898,8 +899,8 @@ async function createDocument(snapshot, handle = null, name = null, local = {}) 
   // New, size-unmatched files prepare the reader and fingerprint concurrently.
   // Attach a rejection handler now; openRecord awaits it before baseline save.
   const identity=identifyLocalFile(local);identity.catch(()=>{});
-  const office=!!snapshot.office;if(office){toast('문서를 읽는 중…');snapshot=await prepareOffice(snapshot,({page,pages})=>toast('문서를 읽는 중… '+page+' / '+pages+'쪽'));}
-  if(snapshot.image){toast('이미지를 여는 중…');const {prepareImage}=await import('./image-document.js');snapshot=await prepareImage(snapshot);}
+  const office=!!snapshot.office;if(office){toast(t('문서를 읽는 중…'));snapshot=await prepareOffice(snapshot,({page,pages})=>toast(t('문서를 읽는 중… {page} / {pages}쪽',{page,pages})));}
+  if(snapshot.image){toast(t('이미지를 여는 중…'));const {prepareImage}=await import('./image-document.js');snapshot=await prepareImage(snapshot);}
   const parsed=snapshot.pdf?preparePDF(snapshot.pdf,{title:snapshot.title,metadata:snapshot.metadata,freshAnnotations:!!local.freshAnnotations}):snapshot.file ? {...parseHTML('<html><head></head><body></body></html>',{title:snapshot.title,viewport:snapshot.viewport,warnings:snapshot.warnings,execution:{allowScripts:!!snapshot.allowScripts}}),file:snapshot.file,nativeScroll:true,freshAnnotations:!!local.freshAnnotations} : parseHTML(snapshot.html,{title:snapshot.title,source:snapshot.url,viewport:snapshot.viewport,warnings:snapshot.warnings},{includeMetadata:true,allowScripts:snapshot.allowScripts,freshAnnotations:!!local.freshAnnotations});
   if(snapshot.archiveMetadata){parsed.metadata=structuredClone(snapshot.archiveMetadata);if(local.freshAnnotations){parsed.metadata.annotations=[];parsed.metadata.bookmarks=[];delete parsed.metadata.outlineEdits;parsed.metadata.view={scrollTop:0,scrollLeft:0,autoFit:true};}parsed.savedMetadata=true;}
   const title=parsed.metadata.title; const record={id:uid(),title,name:name||handle?.name||filename(title),source:parsed.metadata.source,created:Date.now(),modified:Date.now(),folderId:local.libraryFolderId??libraryFolderId,fileHandle:handle,originalHandle:local.originalHandle||null,metadata:parsed.metadata};
@@ -920,33 +921,33 @@ async function createDocument(snapshot, handle = null, name = null, local = {}) 
   tab.opening=false;renderLibrary();activate(tab.id);
   if(tab.queue.error)return tab;
   if(tab.reader.bookIntegrity?.complete === false)toast(tab.reader.bookIntegrity.message, true);
-  else if(parsed.metadata.warnings.length)toast(office?'문서를 열었습니다. 표시 범위 안내를 본문에서 확인해주세요.':`페이지를 저장했습니다. ${parsed.metadata.warnings.length}개의 리소스를 보관하지 못했습니다. 문서 정보에서 확인할 수 있어요.`,true);
-  else toast(local.originalHandle||name?'문서를 주석 탭에서 열었습니다.':'서재에 저장하고 주석 탭에서 열었습니다.');
+  else if(parsed.metadata.warnings.length)toast(office?t('문서를 열었습니다. 표시 범위 안내를 본문에서 확인해주세요.'):t('페이지를 저장했습니다. {n}개의 리소스를 보관하지 못했습니다. 문서 정보에서 확인할 수 있어요.',{n:parsed.metadata.warnings.length}),true);
+  else toast(local.originalHandle||name?t('문서를 주석 탭에서 열었습니다.'):t('서재에 저장하고 주석 탭에서 열었습니다.'));
   return tab;
 }
 function dataFolderGuide() {
   if(usingIOSAppStorage()){
-    return `<details class="export-guide" data-folder-guide><summary>앱 전용 보관함과 새 기기로 옮기는 방법</summary><p>iPhone·iPad에서는 LibreMemo가 앱 내부에 보관함을 자동으로 준비해 문서·주석·북마크·이력·설정을 저장합니다. 설정 → 데이터 폴더 → 관리 → 저장 상태 점검에서 확인하세요.</p><p>다른 기기에서 이어 보려면 설정 → 기기 간 동기화에서 서재 전체를 선택하세요. 휴지통에서 남길 문서는 먼저 복원하고, 설정도 옮기려면 앱 설정도 동기화를 켜세요. 문서 하나를 따로 보관하려면 문서를 열고 내보내기 → 원본 포함 보관 파일 (.librememo)을 선택해 파일 앱 등에 저장하세요.</p></details>`;
+    return `<details class="export-guide" data-folder-guide><summary>${t('앱 전용 보관함과 새 기기로 옮기는 방법')}</summary><p>${t('iPhone·iPad에서는 LibreMemo가 앱 내부에 보관함을 자동으로 준비해 문서·주석·북마크·이력·설정을 저장합니다. 설정 → 데이터 폴더 → 관리 → 저장 상태 점검에서 확인하세요.')}</p><p>${t('다른 기기에서 이어 보려면 설정 → 기기 간 동기화에서 서재 전체를 선택하세요. 휴지통에서 남길 문서는 먼저 복원하고, 설정도 옮기려면 앱 설정도 동기화를 켜세요. 문서 하나를 따로 보관하려면 문서를 열고 내보내기 → 원본 포함 보관 파일 (.librememo)을 선택해 파일 앱 등에 저장하세요.')}</p></details>`;
   }
-  return `<details class="export-guide" data-folder-guide><summary>전용 폴더 자동 저장과 새 기기로 옮기는 방법</summary><p>처음 실행할 때 Documents(문서)를 선택하면 그 아래에 <strong>입력한 이름의 전용 하위 폴더</strong>를 만듭니다. 예: <code>문서/LibreMemo</code>. 문서 폴더 전체 선택이 제한되면 선택 창에서 하위 폴더를 만든 뒤 기존 저장 폴더 연결로 선택하세요.</p><p>연결하면 기존 서재와 앞으로 가져오는 모든 문서·표·슬라이드 원본의 복사본, 주석·북마크·주석 이력·읽기 위치·앱 설정을 자동 보관합니다. 원래 파일을 이동·삭제해도 보관한 문서는 열 수 있습니다. <strong>설정 파일을 따로 저장할 필요가 없습니다.</strong></p><p>폴더 연결 시 브라우저 내부 데이터의 자동 삭제 방지도 함께 요청합니다. 브라우저가 허용하지 않아도 전용 폴더 자동 저장은 계속됩니다.</p><p>평소에는 원본 복사본과 주석을 분리해 저장하며 원본에 새 주석을 합치지 않습니다. <strong>다른 사람에게 문서와 주석을 보내려면 상단의 내보내기 → 원본 포함 보관 파일(.librememo)로 저장한 뒤 그 파일을 보내세요.</strong> 원본·현재 주석·북마크·읽던 위치를 함께 담으며, 받는 분은 LibreMemo의 파일 가져오기로 엽니다. 읽기용 HTML 사본은 읽기 화면과 주석을 한 .html 파일에 담고, PDF 원본 문서는 주석 포함 PDF로 다른 PDF 뷰어에도 전달할 수 있습니다. 원본 파일만 보내면 앱에서 추가한 주석은 전달되지 않습니다. 내보내기는 현재 문서만 포함하므로 전체 백업·새 기기 이동에는 전용 폴더 전체를 복사하세요.</p><ol><li>새 기기로 옮기기 전에 <strong>폴더 자동 저장 완료</strong> 표시를 확인하고 앱을 닫습니다.</li><li><strong>전용 폴더 전체를 하위 폴더·파일 빠짐없이</strong> 새 기기의 Documents(문서) 폴더로 복사합니다. 일부 HTML만 옮기면 주석·설정이 빠집니다.</li><li>새 기기의 LibreMemo에서 <strong>설정 → 데이터 폴더 → 폴더 연결</strong>로 옮긴 폴더를 선택하고 쓰기를 허용하면 모두 자동 복원됩니다.</li></ol><p>브라우저가 권한을 회수하거나 폴더를 옮겼다면 다시 연결해야 합니다. 권한·용량·저장 오류는 화면 아래와 설정에 계속 표시하며 변경은 앱에 남겨둡니다. 저장이 끝나기 전에 앱을 강제 종료하지 마세요. 서로 다른 기기의 동시 편집을 실시간 동기화하지는 않습니다.</p></details>`;
+  return `<details class="export-guide" data-folder-guide><summary>${t('전용 폴더 자동 저장과 새 기기로 옮기는 방법')}</summary><p>${t('처음 실행할 때 Documents(문서)를 선택하면 그 아래에 <strong>입력한 이름의 전용 하위 폴더</strong>를 만듭니다. 예: <code>문서/LibreMemo</code>. 문서 폴더 전체 선택이 제한되면 선택 창에서 하위 폴더를 만든 뒤 기존 저장 폴더 연결로 선택하세요.')}</p><p>${t('연결하면 기존 서재와 앞으로 가져오는 모든 문서·표·슬라이드 원본의 복사본, 주석·북마크·주석 이력·읽기 위치·앱 설정을 자동 보관합니다. 원래 파일을 이동·삭제해도 보관한 문서는 열 수 있습니다. <strong>설정 파일을 따로 저장할 필요가 없습니다.</strong>')}</p><p>${t('폴더 연결 시 브라우저 내부 데이터의 자동 삭제 방지도 함께 요청합니다. 브라우저가 허용하지 않아도 전용 폴더 자동 저장은 계속됩니다.')}</p><p>${t('평소에는 원본 복사본과 주석을 분리해 저장하며 원본에 새 주석을 합치지 않습니다. <strong>다른 사람에게 문서와 주석을 보내려면 상단의 내보내기 → 원본 포함 보관 파일(.librememo)로 저장한 뒤 그 파일을 보내세요.</strong> 원본·현재 주석·북마크·읽던 위치를 함께 담으며, 받는 분은 LibreMemo의 파일 가져오기로 엽니다. 읽기용 HTML 사본은 읽기 화면과 주석을 한 .html 파일에 담고, PDF 원본 문서는 주석 포함 PDF로 다른 PDF 뷰어에도 전달할 수 있습니다. 원본 파일만 보내면 앱에서 추가한 주석은 전달되지 않습니다. 내보내기는 현재 문서만 포함하므로 전체 백업·새 기기 이동에는 전용 폴더 전체를 복사하세요.')}</p><ol><li>${t('새 기기로 옮기기 전에 <strong>폴더 자동 저장 완료</strong> 표시를 확인하고 앱을 닫습니다.')}</li><li>${t('<strong>전용 폴더 전체를 하위 폴더·파일 빠짐없이</strong> 새 기기의 Documents(문서) 폴더로 복사합니다. 일부 HTML만 옮기면 주석·설정이 빠집니다.')}</li><li>${t('새 기기의 LibreMemo에서 <strong>설정 → 데이터 폴더 → 폴더 연결</strong>로 옮긴 폴더를 선택하고 쓰기를 허용하면 모두 자동 복원됩니다.')}</li></ol><p>${t('브라우저가 권한을 회수하거나 폴더를 옮겼다면 다시 연결해야 합니다. 권한·용량·저장 오류는 화면 아래와 설정에 계속 표시하며 변경은 앱에 남겨둡니다. 저장이 끝나기 전에 앱을 강제 종료하지 마세요. 서로 다른 기기의 동시 편집을 실시간 동기화하지는 않습니다.')}</p></details>`;
 }
 function folderStatusText() {
-  const label=isIOSAppStorageHandle(folder)?'앱 전용 보관함('+folder.name+')':folder?.name;
-  if(!folder)return '데이터 폴더 미연결 · 브라우저 데이터 삭제 시 잃을 수 있습니다.';
-  if(dataFolder?.state==='error')return '폴더 저장 중단 · '+label+' · 다시 연결 필요';
-  if(document.documentElement.dataset.storageSetup==='checking')return '저장 폴더 연결 중… · '+label;
-  if(tabs.some(t=>t.queue?.error))return '앱 저장 실패 · 폴더가 최신 상태가 아닙니다.';
-  if(dataFolder?.pending||tabs.some(t=>t.opening||t.queue?.pending))return '폴더 자동 저장 중… · '+label;
-  return '폴더 자동 저장 완료 · '+label;
+  const label=isIOSAppStorageHandle(folder)?t('앱 전용 보관함({name})',{name:folder.name}):folder?.name;
+  if(!folder)return t('데이터 폴더 미연결 · 브라우저 데이터 삭제 시 잃을 수 있습니다.');
+  if(dataFolder?.state==='error')return t('폴더 저장 중단 · {name} · 다시 연결 필요',{name:label});
+  if(document.documentElement.dataset.storageSetup==='checking')return t('저장 폴더 연결 중… · {name}',{name:label});
+  if(tabs.some(t=>t.queue?.error))return t('앱 저장 실패 · 폴더가 최신 상태가 아닙니다.');
+  if(dataFolder?.pending||tabs.some(t=>t.opening||t.queue?.pending))return t('폴더 자동 저장 중… · {name}',{name:label});
+  return t('폴더 자동 저장 완료 · {name}',{name:label});
 }
 function renderFolderState() {
   const status=folderStatusText(),error=!!folder&&(dataFolder?.state==='error'||tabs.some(t=>t.queue?.error)),button=$('#data-folder-status');
   if(!button)return;
-  if(!folder)button.textContent='폴더 미연결';
-  else if(error)button.textContent='폴더 저장 중단';
-  else if(document.documentElement.dataset.storageSetup==='checking')button.textContent='폴더 연결 중…';
-  else button.textContent=dataFolder?.pending||tabs.some(t=>t.opening||t.queue?.pending)?'폴더 저장 중…':'폴더 저장 완료';
-  button.title=status;button.setAttribute('aria-label',status+' · 저장 위치 관리');button.classList.toggle('save-error',error||!!folder&&tabs.some(t=>t.queue?.error));
+  if(!folder)button.textContent=t('폴더 미연결');
+  else if(error)button.textContent=t('폴더 저장 중단');
+  else if(document.documentElement.dataset.storageSetup==='checking')button.textContent=t('폴더 연결 중…');
+  else button.textContent=dataFolder?.pending||tabs.some(t=>t.opening||t.queue?.pending)?t('폴더 저장 중…'):t('폴더 저장 완료');
+  button.title=status;button.setAttribute('aria-label',t('{status} · 저장 위치 관리',{status}));button.classList.toggle('save-error',error||!!folder&&tabs.some(t=>t.queue?.error));
   if($('#settings-folder-status'))$('#settings-folder-status').textContent=status;
   if(typeof syncStatusbarVisibility==='function')syncStatusbarVisibility();
 }
@@ -969,7 +970,7 @@ async function connectDataFolder(selected,onConnected,{resume=false,signal}={}) 
   rememberFolderWelcome();
   if(document.documentElement.dataset.storageSetup==='paused')return;
   completeFolderSetup();
-  $('#dialog').close();if(typeof onConnected==='function')onConnected();toast('문서·주석·설정을 '+folder.name+' 폴더에 자동 저장했습니다. 새 기기로는 폴더 전체를 옮기세요.');
+  $('#dialog').close();if(typeof onConnected==='function')onConnected();toast(t('문서·주석·설정을 {name} 폴더에 자동 저장했습니다. 새 기기로는 폴더 전체를 옮기세요.',{name:folder.name}));
 }
 function completeFolderSetup() {
   $('#folder-reconnect').hidden=true;$('#folder-reconnect').replaceChildren();$('#folder-setup-paused').hidden=true;$('#app').hidden=false;
@@ -981,7 +982,7 @@ function pauseFolderSetup() {
   folderSetupController?.abort();
   $('#folder-reconnect').hidden=true;$('#folder-reconnect').replaceChildren();
   document.documentElement.dataset.storageSetup='paused';$('#app').hidden=true;$('#folder-setup-paused').hidden=false;
-  const button=$('#folder-setup-resume');button.disabled=!!folderSetupController;button.textContent=folderSetupController?'연결 마무리 중…':'저장 폴더 연결';$(folderSetupController?'#folder-setup-paused-title':'#folder-setup-resume').focus();
+  const button=$('#folder-setup-resume');button.disabled=!!folderSetupController;button.textContent=folderSetupController?t('연결 마무리 중…'):t('저장 폴더 연결');$(folderSetupController?'#folder-setup-paused-title':'#folder-setup-resume').focus();
   for(const resolve of folderSetupWaiters.splice(0))resolve(false);
 }
 function resumeFolderSetup() {
@@ -997,7 +998,7 @@ function beginFolderAttempt() {
 }
 function finishFolderAttempt() {
   folderSetupController=null;
-  const retry=$('#folder-setup-resume');retry.disabled=false;retry.textContent='저장 폴더 연결';
+  const retry=$('#folder-setup-resume');retry.disabled=false;retry.textContent=t('저장 폴더 연결');
   if(document.documentElement.dataset.storageSetup==='paused')retry.focus();
   showPendingUpdate?.();
 }
@@ -1007,10 +1008,10 @@ async function prepareStoredLibrary(resume) {
   const timer=setTimeout(()=>{
     const screen=$('#folder-reconnect');
     screen.innerHTML=`<section data-folder-connecting>
-      <h1 id="folder-reconnect-title">저장 폴더를 연결하는 중입니다</h1>
+      <h1 id="folder-reconnect-title">${t('저장 폴더를 연결하는 중입니다')}</h1>
       <p class="folder-reconnect-name">${icon('folder',18)}<strong>${esc(folder.name)}</strong></p>
-      <p class="dialog-description" role="status">서재의 저장 상태를 확인하고 있습니다. 다른 창에서 저장 중이면 끝나는 대로 이어집니다.</p>
-      <div class="dialog-actions"><button id="cancel-folder-setup" class="secondary-button" type="button">취소</button></div>
+      <p class="dialog-description" role="status">${t('서재의 저장 상태를 확인하고 있습니다. 다른 창에서 저장 중이면 끝나는 대로 이어집니다.')}</p>
+      <div class="dialog-actions"><button id="cancel-folder-setup" class="secondary-button" type="button">${t('취소')}</button></div>
     </section>`;
     $('#app').hidden=true;screen.hidden=false;
     const cancel=$('#cancel-folder-setup',screen);cancel.onclick=pauseFolderSetup;
@@ -1028,14 +1029,14 @@ async function prepareStoredLibrary(resume) {
 }
 function chromeRequiredDialog() {
   document.documentElement.dataset.storageSetup='unsupported';
-  setStatusLeft('Chrome에서 실행해주세요.');
-  modal(`<section class="folder-welcome" data-chrome-required><div class="dialog-heading"><h2>Google Chrome에서 실행해주세요</h2></div><p id="chrome-required-message" class="folder-welcome-intro"><strong>${esc(CHROME_REQUIRED_MESSAGE)}</strong></p><p class="dialog-description">Chrome에서 아래 앱 주소를 열어주세요. 전용 저장 폴더를 지원하는 최신 Chrome이 필요합니다.</p><label class="paste-label" for="chrome-app-url">LibreMemo 주소</label><input id="chrome-app-url" class="paste-title" type="url" readonly value="${esc(PUBLIC_APP_URL)}"><p id="chrome-copy-status" class="dialog-description small" role="status" aria-live="polite"></p><div class="dialog-actions folder-welcome-actions"><button id="chrome-copy-url" class="primary-button" type="button">앱 주소 복사</button><a class="secondary-button" href="https://www.google.com/chrome/" target="_blank" rel="noopener noreferrer">Chrome 다운로드</a></div></section>`,dialog=>{
+  setStatusLeft(t('Chrome에서 실행해주세요.'));
+  modal(`<section class="folder-welcome" data-chrome-required><div class="dialog-heading"><h2>${t('Google Chrome에서 실행해주세요')}</h2></div><p id="chrome-required-message" class="folder-welcome-intro"><strong>${esc(CHROME_REQUIRED_MESSAGE)}</strong></p><p class="dialog-description">${t('Chrome에서 아래 앱 주소를 열어주세요. 전용 저장 폴더를 지원하는 최신 Chrome이 필요합니다.')}</p><label class="paste-label" for="chrome-app-url">${t('LibreMemo 주소')}</label><input id="chrome-app-url" class="paste-title" type="url" readonly value="${esc(PUBLIC_APP_URL)}"><p id="chrome-copy-status" class="dialog-description small" role="status" aria-live="polite"></p><div class="dialog-actions folder-welcome-actions"><button id="chrome-copy-url" class="primary-button" type="button">${t('앱 주소 복사')}</button><a class="secondary-button" href="https://www.google.com/chrome/" target="_blank" rel="noopener noreferrer">${t('Chrome 다운로드')}</a></div></section>`,dialog=>{
     dialog.setAttribute('aria-describedby','chrome-required-message');dialog.oncancel=event=>event.preventDefault();
     const button=$('#chrome-copy-url'),input=$('#chrome-app-url'),status=$('#chrome-copy-status');
     button.onclick=async()=>{
       if(button.disabled)return;button.disabled=true;
-      try{await navigator.clipboard.writeText(PUBLIC_APP_URL);status.textContent='앱 주소를 복사했습니다. Chrome 주소창에 붙여넣어 실행해주세요.';}
-      catch{input.focus();input.select();status.textContent='선택된 앱 주소를 직접 복사해 Chrome 주소창에 붙여넣어주세요.';}
+      try{await navigator.clipboard.writeText(PUBLIC_APP_URL);status.textContent=t('앱 주소를 복사했습니다. Chrome 주소창에 붙여넣어 실행해주세요.');}
+      catch{input.focus();input.select();status.textContent=t('선택된 앱 주소를 직접 복사해 Chrome 주소창에 붙여넣어주세요.');}
       finally{button.disabled=false;}
     };
     button.focus();
@@ -1045,10 +1046,10 @@ function folderWelcomeDialog() {
   if(!supportsDataFolder(window,navigator)&&!usingIOSAppStorage())return chromeRequiredDialog();
   folderSetupPending=true;document.documentElement.dataset.storageSetup='required';
   if(folder)return folderResumeScreen();
-  const content=`<section class="folder-welcome" data-folder-welcome><div class="dialog-heading"><h2>저장 폴더를 먼저 설정하세요</h2></div><p class="folder-welcome-intro">문서·주석·설정을 자동 저장할 <strong>전용 폴더를 연결해야 앱을 사용할 수 있습니다.</strong></p><label class="paste-label" for="storage-folder-name">새 저장 폴더 이름</label><input id="storage-folder-name" class="paste-title" maxlength="120" value="LibreMemo" autocomplete="off" spellcheck="false"><ol class="folder-welcome-steps"><li><strong>문서(Documents) 폴더를 선택하세요.</strong><p>새 폴더 만들기는 Documents(문서)에서 시작합니다. 문서 폴더가 없는 기기에서는 저장할 상위 폴더를 선택하세요.</p></li><li><strong>하위에 전용 폴더를 만듭니다.</strong><p>선택한 위치에 Documents 또는 문서 폴더가 있으면 그 안에 만듭니다. 기본 위치는 <b>문서/LibreMemo</b>이며 원하는 이름을 사용할 수 있습니다.</p></li><li><strong>폴더 사용과 쓰기를 허용하세요.</strong><p>연결과 첫 자동 저장이 끝나면 앱이 열립니다. <b>방문할 때마다 허용</b>이 있으면 선택하세요.</p></li></ol><details class="folder-welcome-existing"><summary>기존 저장 폴더를 연결하거나 옮겨 왔나요?</summary><p>아래 <b>기존 저장 폴더 연결</b>로 전용 폴더 자체를 선택하세요. 그 안의 문서·주석·설정을 자동 복원합니다. 브라우저가 문서 폴더 전체 선택을 제한하면 선택 창에서 하위 폴더를 만든 뒤 이 버튼으로 연결할 수도 있습니다.</p></details><p class="folder-welcome-move">새 기기로 옮길 때는 <strong>이 폴더 전체</strong>를 복사하면 됩니다.</p><p id="folder-connection-status" class="folder-welcome-status" role="status" aria-live="polite">버튼을 누른 뒤에만 폴더 선택 창이 열립니다. 설정을 마쳐야 계속할 수 있습니다.</p><div class="dialog-actions folder-welcome-actions"><button id="create-storage-folder" class="primary-button" type="button">새 저장 폴더 만들기</button><button id="select-storage-folder" class="secondary-button" type="button">기존 저장 폴더 연결</button></div></section>`;
+  const content=`<section class="folder-welcome" data-folder-welcome><div class="dialog-heading"><h2>${t('저장 폴더를 먼저 설정하세요')}</h2></div><p class="folder-welcome-intro">${t('문서·주석·설정을 자동 저장할 <strong>전용 폴더를 연결해야 앱을 사용할 수 있습니다.</strong>')}</p><label class="paste-label" for="storage-folder-name">${t('새 저장 폴더 이름')}</label><input id="storage-folder-name" class="paste-title" maxlength="120" value="LibreMemo" autocomplete="off" spellcheck="false"><ol class="folder-welcome-steps"><li><strong>${t('문서(Documents) 폴더를 선택하세요.')}</strong><p>${t('새 폴더 만들기는 Documents(문서)에서 시작합니다. 문서 폴더가 없는 기기에서는 저장할 상위 폴더를 선택하세요.')}</p></li><li><strong>${t('하위에 전용 폴더를 만듭니다.')}</strong><p>${t('선택한 위치에 Documents 또는 문서 폴더가 있으면 그 안에 만듭니다. 기본 위치는 <b>문서/LibreMemo</b>이며 원하는 이름을 사용할 수 있습니다.')}</p></li><li><strong>${t('폴더 사용과 쓰기를 허용하세요.')}</strong><p>${t('연결과 첫 자동 저장이 끝나면 앱이 열립니다. <b>방문할 때마다 허용</b>이 있으면 선택하세요.')}</p></li></ol><details class="folder-welcome-existing"><summary>${t('기존 저장 폴더를 연결하거나 옮겨 왔나요?')}</summary><p>${t('아래 <b>기존 저장 폴더 연결</b>로 전용 폴더 자체를 선택하세요. 그 안의 문서·주석·설정을 자동 복원합니다. 브라우저가 문서 폴더 전체 선택을 제한하면 선택 창에서 하위 폴더를 만든 뒤 이 버튼으로 연결할 수도 있습니다.')}</p></details><p class="folder-welcome-move">${t('새 기기로 옮길 때는 <strong>이 폴더 전체</strong>를 복사하면 됩니다.')}</p><p id="folder-connection-status" class="folder-welcome-status" role="status" aria-live="polite">${t('버튼을 누른 뒤에만 폴더 선택 창이 열립니다. 설정을 마쳐야 계속할 수 있습니다.')}</p><div class="dialog-actions folder-welcome-actions"><button id="create-storage-folder" class="primary-button" type="button">${t('새 저장 폴더 만들기')}</button><button id="select-storage-folder" class="secondary-button" type="button">${t('기존 저장 폴더 연결')}</button></div></section>`;
   modal(content,dialog=>{
-    const heading=$('.dialog-heading',dialog),close=document.createElement('button');close.type='button';close.className='icon-button';close.setAttribute('aria-label','저장 폴더 연결 취소');close.innerHTML=icon('close');close.onclick=()=>dialog.close();heading.append(close);
-    const cancel=document.createElement('button');cancel.type='button';cancel.id='cancel-folder-setup';cancel.className='secondary-button';cancel.textContent='취소';cancel.onclick=()=>dialog.close();$('.dialog-actions',dialog).prepend(cancel);
+    const heading=$('.dialog-heading',dialog),close=document.createElement('button');close.type='button';close.className='icon-button';close.setAttribute('aria-label',t('저장 폴더 연결 취소'));close.innerHTML=icon('close');close.onclick=()=>dialog.close();heading.append(close);
+    const cancel=document.createElement('button');cancel.type='button';cancel.id='cancel-folder-setup';cancel.className='secondary-button';cancel.textContent=t('취소');cancel.onclick=()=>dialog.close();$('.dialog-actions',dialog).prepend(cancel);
     // Native close requests include Android Back and desktop Escape. Never reopen a canceled dialog.
     dialog.onclose=()=>{if(dialog.querySelector('[data-folder-welcome]')&&!dialog.open)pauseFolderSetup();};
     bindFolderConnection();$('#create-storage-folder').focus();
@@ -1058,7 +1059,7 @@ function folderResumeScreen() {
   const iosStorage=usingIOSAppStorage();
   const dialog=$('#dialog');dialog.onclose=null;if(dialog.open)dialog.close();$('#dialog-content').replaceChildren();
   const screen=$('#folder-reconnect');$('#app').hidden=true;$('#folder-setup-paused').hidden=true;screen.hidden=false;
-  screen.innerHTML=`<section data-folder-resume data-folder-welcome><img src="./icons/icon.svg" alt="" width="32" height="32"><h1 id="folder-reconnect-title">이어서 사용하기</h1><p class="folder-reconnect-name">${icon('folder',18)}<strong>${esc(folder.name||'기존 저장 폴더')}</strong></p><p id="folder-connection-status" class="folder-welcome-status" role="status" aria-live="polite">${esc(['NotAllowedError','SecurityError'].includes(dataFolder?.error?.name)?'계속을 누르면 기존 폴더의 접근 권한을 확인합니다.':dataFolder?.failureMessage||'계속을 누르면 기존 폴더로 연결합니다.')}</p><div class="dialog-actions"><button id="cancel-folder-setup" class="secondary-button" type="button">취소</button><button id="resume-data-folder" class="primary-button" type="button">계속</button></div><details class="folder-reconnect-help" ${iosStorage?'hidden':''}><summary>다른 폴더·권한 도움말</summary><p>설정한 폴더를 기억하고 있습니다. 폴더를 다시 선택할 필요가 없습니다.</p><p>Chrome 권한 창에 <strong>방문할 때마다 허용</strong>이 있으면 선택하세요. 권한이 유지되면 다음 실행부터 이 화면 없이 자동으로 엽니다. 브라우저가 권한을 다시 요구하면 계속을 눌러 허용해주세요.</p><button id="select-storage-folder" class="secondary-button" type="button">다른 저장 폴더 선택</button></details></section>`;
+  screen.innerHTML=`<section data-folder-resume data-folder-welcome><img src="./icons/icon.svg" alt="" width="32" height="32"><h1 id="folder-reconnect-title">${t('이어서 사용하기')}</h1><p class="folder-reconnect-name">${icon('folder',18)}<strong>${esc(folder.name||t('기존 저장 폴더'))}</strong></p><p id="folder-connection-status" class="folder-welcome-status" role="status" aria-live="polite">${esc(['NotAllowedError','SecurityError'].includes(dataFolder?.error?.name)?t('계속을 누르면 기존 폴더의 접근 권한을 확인합니다.'):dataFolder?.failureMessage||t('계속을 누르면 기존 폴더로 연결합니다.'))}</p><div class="dialog-actions"><button id="cancel-folder-setup" class="secondary-button" type="button">${t('취소')}</button><button id="resume-data-folder" class="primary-button" type="button">${t('계속')}</button></div><details class="folder-reconnect-help" ${iosStorage?'hidden':''}><summary>${t('다른 폴더·권한 도움말')}</summary><p>${t('설정한 폴더를 기억하고 있습니다. 폴더를 다시 선택할 필요가 없습니다.')}</p><p>${t('Chrome 권한 창에 <strong>방문할 때마다 허용</strong>이 있으면 선택하세요. 권한이 유지되면 다음 실행부터 이 화면 없이 자동으로 엽니다. 브라우저가 권한을 다시 요구하면 계속을 눌러 허용해주세요.')}</p><button id="select-storage-folder" class="secondary-button" type="button">${t('다른 저장 폴더 선택')}</button></details></section>`;
   $('#cancel-folder-setup',screen).onclick=pauseFolderSetup;
   bindFolderConnection(undefined,screen);$('#resume-data-folder',screen).focus();
 }
@@ -1075,19 +1076,19 @@ function bindFolderConnection(onConnected,root=$('#dialog')) {
       else if(createNew){const childName=storageFolderName(name.value);const parent=await window.showDirectoryPicker({id:'htmlmemo-storage-parent-v1',mode:'readwrite',startIn:'documents'});if(canceled())return;selected=await createStorageSubfolder(parent,childName,lastSetupAttempt);lastSetupAttempt=selected;}
       else selected=await window.showDirectoryPicker({id:'htmlmemo-storage-v2',mode:'readwrite',startIn:folder||'documents'});
       if(canceled())return;
-      status.textContent='문서·주석·설정을 복원하고 폴더에 저장하는 중… 앱을 닫지 마세요.';
+      status.textContent=t('문서·주석·설정을 복원하고 폴더에 저장하는 중… 앱을 닫지 마세요.');
       await connectDataFolder(selected,onConnected,{resume:usePrevious,signal:attempt?.signal});
     }catch(error){
       folder=dataFolder.handle||folder;renderFolderState();
-      if(error?.name==='AbortError')status.textContent=usePrevious?'폴더 연결 확인을 취소했습니다. 계속을 눌러 다시 확인해주세요.':folderSetupPending?'폴더 선택을 취소했습니다. 저장 폴더를 설정해야 앱을 사용할 수 있습니다. 다시 선택해주세요.':'폴더 연결은 변경하지 않았습니다. 연결하려면 전용 하위 폴더를 선택하세요.';
-      else if(['NotAllowedError','SecurityError'].includes(error?.name))status.textContent=usePrevious?'기존 저장 폴더의 쓰기를 허용해야 계속할 수 있습니다. 계속을 눌러 다시 허용해주세요.':'브라우저가 폴더 연결을 허용하지 않았습니다. 문서/LibreMemo 같은 전용 하위 폴더를 선택하고 쓰기를 허용하세요.';
-      else status.textContent='폴더에 저장하지 못했습니다. 기존 문서는 유지됩니다. '+(error?.message||String(error));
+      if(error?.name==='AbortError')status.textContent=usePrevious?t('폴더 연결 확인을 취소했습니다. 계속을 눌러 다시 확인해주세요.'):folderSetupPending?t('폴더 선택을 취소했습니다. 저장 폴더를 설정해야 앱을 사용할 수 있습니다. 다시 선택해주세요.'):t('폴더 연결은 변경하지 않았습니다. 연결하려면 전용 하위 폴더를 선택하세요.');
+      else if(['NotAllowedError','SecurityError'].includes(error?.name))status.textContent=usePrevious?t('기존 저장 폴더의 쓰기를 허용해야 계속할 수 있습니다. 계속을 눌러 다시 허용해주세요.'):t('브라우저가 폴더 연결을 허용하지 않았습니다. 문서/LibreMemo 같은 전용 하위 폴더를 선택하고 쓰기를 허용하세요.');
+      else status.textContent=t('폴더에 저장하지 못했습니다. 기존 문서는 유지됩니다. {error}',{error:error?.message||String(error)});
     }finally{for(const control of [button,create,resume,name])if(control)control.disabled=false;if(setup)finishFolderAttempt();}
   };
   button.onclick=safely(()=>connect());if(create)create.onclick=safely(()=>connect(false,true));if($('#resume-data-folder',root))$('#resume-data-folder',root).onclick=safely(()=>connect(true));
 }
 function iosStorageDialog({onConnected}={}) {
-  modal(`<div class="dialog-heading"><h2>아이폰·아이패드 전용 보관함</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p class="dialog-description">아이폰·아이패드에서는 브라우저의 <strong>앱 내부 전용 보관함(OPFS · LibreMemo)</strong>에 문서 원본 복사본·주석·북마크·이력·디자인 테마 설정을 자동 저장합니다.</p><p class="dialog-description small">iOS·iPadOS는 외부 폴더 직접 연결(showDirectoryPicker)을 제공하지 않으므로 별도 폴더 선택 창 없이 안전한 내부 전용 폴더를 바로 사용합니다.</p><ul class="setup-steps"><li><strong>다른 기기와 함께 쓰기:</strong> 설정 → <strong>기기 간 동기화</strong>로 PC·안드로이드·아이패드와 서재 및 테마 설정을 암호화해 주고받으세요.</li><li><strong>개별 문서 백업·전달:</strong> 문서를 열고 상단의 <strong>내보내기 → 원본 포함 보관 파일(.librememo)</strong>로 파일 앱이나 공유 시트에 저장하세요.</li><li><strong>주의:</strong> 브라우저의 웹사이트 데이터를 지우면 내부 보관함도 함께 삭제됩니다. 홈 화면 웹앱과 브라우저 탭은 보관함이 각각 독립되어 있습니다.</li></ul><p id="folder-connection-status" class="dialog-description" role="status">${esc(folderStatusText())}</p><div class="dialog-actions"><button class="secondary-button" data-dialog-close>닫기</button><button id="ios-storage-verify" class="primary-button" type="button">저장 상태 점검</button></div>`,dialog=>{
+  modal(`<div class="dialog-heading"><h2>${t('아이폰·아이패드 전용 보관함')}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div><p class="dialog-description">${t('아이폰·아이패드에서는 브라우저의 <strong>앱 내부 전용 보관함(OPFS · LibreMemo)</strong>에 문서 원본 복사본·주석·북마크·이력·디자인 테마 설정을 자동 저장합니다.')}</p><p class="dialog-description small">${t('iOS·iPadOS는 외부 폴더 직접 연결(showDirectoryPicker)을 제공하지 않으므로 별도 폴더 선택 창 없이 안전한 내부 전용 폴더를 바로 사용합니다.')}</p><ul class="setup-steps"><li>${t('<strong>다른 기기와 함께 쓰기:</strong> 설정 → <strong>기기 간 동기화</strong>로 PC·안드로이드·아이패드와 서재 및 테마 설정을 암호화해 주고받으세요.')}</li><li>${t('<strong>개별 문서 백업·전달:</strong> 문서를 열고 상단의 <strong>내보내기 → 원본 포함 보관 파일(.librememo)</strong>로 파일 앱이나 공유 시트에 저장하세요.')}</li><li>${t('<strong>주의:</strong> 브라우저의 웹사이트 데이터를 지우면 내부 보관함도 함께 삭제됩니다. 홈 화면 웹앱과 브라우저 탭은 보관함이 각각 독립되어 있습니다.')}</li></ul><p id="folder-connection-status" class="dialog-description" role="status">${esc(folderStatusText())}</p><div class="dialog-actions"><button class="secondary-button" data-dialog-close>${t('닫기')}</button><button id="ios-storage-verify" class="primary-button" type="button">${t('저장 상태 점검')}</button></div>`,dialog=>{
     $('#ios-storage-verify',dialog).onclick=safely(async()=>{
       const button=$('#ios-storage-verify',dialog);button.disabled=true;
       try{const handle=await openIOSAppStorage(navigator);await connectDataFolder(handle,onConnected,{resume:!!folder});}
@@ -1098,7 +1099,7 @@ function iosStorageDialog({onConnected}={}) {
 function chooseFolder({onConnected} = {}) {
   if(usingIOSAppStorage()){iosStorageDialog({onConnected});return;}
   if(!supportsDataFolder(window,navigator)){chromeRequiredDialog();return;}
-  modal(`<div class="dialog-heading"><h2>저장 폴더 연결</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p class="dialog-description">Documents(문서) 안의 <strong>LibreMemo 전용 하위 폴더</strong>를 선택하세요. 선택 창에서 <strong>원하는 이름의 새 폴더</strong>를 만들 수 있습니다. 예: <code>문서/LibreMemo</code>.</p><p class="dialog-description small">홈·문서·다운로드 폴더 전체와 시스템 폴더는 브라우저가 연결을 제한합니다. “Can't open this folder”가 나오면 전용 하위 폴더를 선택하세요. 읽기·쓰기 권한을 허용하며, “방문할 때마다 허용” 선택지가 있으면 선택하세요.</p><p class="dialog-description">기존 서재도 이곳에 복사하며 이후 가져오는 문서·주석·설정은 자동 저장합니다. <strong>옮겨 온 데이터 폴더를 선택하면 자동 복원</strong>합니다. 기존 문서와 충돌하는 복원본은 별도 사본으로 남겨 덮어쓰지 않습니다.</p><p class="dialog-description"><strong>새 기기로는 이 폴더 전체를 옮기세요.</strong> 설정 JSON을 별도로 저장할 필요가 없습니다. 모든 하위 파일을 함께 복사해야 합니다.</p>${dataFolderGuide()}<p id="folder-connection-status" class="dialog-description" role="status">${esc(folderStatusText())}</p><div class="dialog-actions"><button class="secondary-button" data-dialog-close>닫기</button>${folder?'<button id="resume-data-folder" class="secondary-button">다시 연결</button>':''}<button id="select-storage-folder" class="primary-button">${folder?'다른 폴더 선택':'폴더 선택'}</button></div>`,()=>{
+  modal(`<div class="dialog-heading"><h2>${t('저장 폴더 연결')}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div><p class="dialog-description">${t('Documents(문서) 안의 <strong>LibreMemo 전용 하위 폴더</strong>를 선택하세요. 선택 창에서 <strong>원하는 이름의 새 폴더</strong>를 만들 수 있습니다. 예: <code>문서/LibreMemo</code>.')}</p><p class="dialog-description small">${t('홈·문서·다운로드 폴더 전체와 시스템 폴더는 브라우저가 연결을 제한합니다. “Can\'t open this folder”가 나오면 전용 하위 폴더를 선택하세요. 읽기·쓰기 권한을 허용하며, “방문할 때마다 허용” 선택지가 있으면 선택하세요.')}</p><p class="dialog-description">${t('기존 서재도 이곳에 복사하며 이후 가져오는 문서·주석·설정은 자동 저장합니다. <strong>옮겨 온 데이터 폴더를 선택하면 자동 복원</strong>합니다. 기존 문서와 충돌하는 복원본은 별도 사본으로 남겨 덮어쓰지 않습니다.')}</p><p class="dialog-description">${t('<strong>새 기기로는 이 폴더 전체를 옮기세요.</strong> 설정 JSON을 별도로 저장할 필요가 없습니다. 모든 하위 파일을 함께 복사해야 합니다.')}</p>${dataFolderGuide()}<p id="folder-connection-status" class="dialog-description" role="status">${esc(folderStatusText())}</p><div class="dialog-actions"><button class="secondary-button" data-dialog-close>${t('닫기')}</button>${folder?`<button id="resume-data-folder" class="secondary-button">${t('다시 연결')}</button>`:''}<button id="select-storage-folder" class="primary-button">${folder?t('다른 폴더 선택'):t('폴더 선택')}</button></div>`,()=>{
     bindFolderConnection(onConnected);
   });
 }
@@ -1128,7 +1129,7 @@ function handleFileDrop(event){
   void (async()=>{for(const file of await files)await openLocalFile(file,parentId);})().catch(showError);
 }
 function imagePasteDialog(){
-  modal(`<section data-image-paste><div class="dialog-heading"><h2>스크린샷·이미지 붙여넣기</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><div class="rounded-xl border border-dashed border-line bg-canvas p-5 text-center outline-none focus-visible:ring-2 focus-visible:ring-brand" data-image-paste-target tabindex="0" autofocus><p class="font-semibold">복사한 스크린샷을 여기 붙여넣으세요.</p><p class="mt-2 text-sm text-muted"><kbd>⌘V</kbd> / <kbd>Ctrl+V</kbd> · 이미지 파일을 끌어놓아도 됩니다.</p></div><p class="dialog-description small mt-3">Mac: Control + Shift + ⌘ + 4로 영역을 복사합니다.<br>Windows: Win + Shift + S로 영역을 복사합니다.<br>휴대폰: 스크린샷을 저장한 뒤 파일 가져오기에서 선택하세요.</p><p class="dialog-description small">원본을 보관하고 주석은 별도로 자동 저장합니다. PNG·APNG·JPEG·WebP·AVIF·GIF·BMP·SVG를 지원합니다. 이미지 속 글자의 선택·검색에는 문자 인식(OCR)이 필요하며 현재는 제공하지 않습니다.</p><p class="dialog-description small" data-image-paste-status role="status"></p><div class="dialog-actions"><button class="secondary-button" data-image-file>파일 가져오기</button><button class="primary-button" data-image-clipboard>클립보드에서 붙여넣기</button></div></section>`,dialog=>{
+  modal(`<section data-image-paste><div class="dialog-heading"><h2>${t('스크린샷·이미지 붙여넣기')}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div><div class="rounded-xl border border-dashed border-line bg-canvas p-5 text-center outline-none focus-visible:ring-2 focus-visible:ring-brand" data-image-paste-target tabindex="0" autofocus><p class="font-semibold">${t('복사한 스크린샷을 여기 붙여넣으세요.')}</p><p class="mt-2 text-sm text-muted">${t('<kbd>⌘V</kbd> / <kbd>Ctrl+V</kbd> · 이미지 파일을 끌어놓아도 됩니다.')}</p></div><p class="dialog-description small mt-3">${t('Mac: Control + Shift + ⌘ + 4로 영역을 복사합니다.<br>Windows: Win + Shift + S로 영역을 복사합니다.<br>휴대폰: 스크린샷을 저장한 뒤 파일 가져오기에서 선택하세요.')}</p><p class="dialog-description small">${t('원본을 보관하고 주석은 별도로 자동 저장합니다. PNG·APNG·JPEG·WebP·AVIF·GIF·BMP·SVG를 지원합니다. 이미지 속 글자의 선택·검색에는 문자 인식(OCR)이 필요하며 현재는 제공하지 않습니다.')}</p><p class="dialog-description small" data-image-paste-status role="status"></p><div class="dialog-actions"><button class="secondary-button" data-image-file>${t('파일 가져오기')}</button><button class="primary-button" data-image-clipboard>${t('클립보드에서 붙여넣기')}</button></div></section>`,dialog=>{
     $('[data-image-file]',dialog).onclick=safely(async()=>{dialog.close();await importFiles();});
     $('[data-image-clipboard]',dialog).onclick=async()=>{
       const button=$('[data-image-clipboard]',dialog),status=$('[data-image-paste-status]',dialog),parentId=libraryFolderId;button.disabled=true;
@@ -1137,9 +1138,9 @@ function imagePasteDialog(){
         const items=await navigator.clipboard.read(),files=[];
         for(const item of items){const type=item.types.find(type=>type==='image/png')||item.types.find(type=>Object.hasOwn(IMAGE_MIMES,type));if(type){const file=clipboardImageFile(await item.getType(type),files.length);if(file)files.push(file);}}
         if(!dialog.open||!status.isConnected)return;
-        if(!files.length){status.textContent='클립보드에 이미지가 없습니다. 스크린샷이나 이미지를 먼저 복사해주세요.';return;}
+        if(!files.length){status.textContent=t('클립보드에 이미지가 없습니다. 스크린샷이나 이미지를 먼저 복사해주세요.');return;}
         dialog.close();for(const file of files)await openLocalFile(file,parentId);
-      }catch(error){if(dialog.open&&status.isConnected){status.textContent='위 붙여넣기 영역을 누른 뒤 ⌘V / Ctrl+V를 누르거나 파일 가져오기를 사용해주세요.';$('[data-image-paste-target]',dialog)?.focus();}else showError(error);}
+      }catch(error){if(dialog.open&&status.isConnected){status.textContent=t('위 붙여넣기 영역을 누른 뒤 ⌘V / Ctrl+V를 누르거나 파일 가져오기를 사용해주세요.');$('[data-image-paste-target]',dialog)?.focus();}else showError(error);}
       finally{if(button.isConnected)button.disabled=false;}
     };
     requestAnimationFrame(()=>$('[data-image-paste-target]',dialog)?.focus());
@@ -1151,7 +1152,7 @@ const youtubeUI=()=>import('./youtube-ui.js');
 const SUBTITLE_ACCEPT='.srt,.vtt,.smi,.sami,.ass,.ssa,.zip';
 async function pickSubtitleFiles(multiple=true){
   if(openPicker()){
-    try{const handles=await window.showOpenFilePicker({multiple,types:[{description:'자막 파일',accept:{'text/plain':['.srt','.vtt','.smi','.sami','.ass','.ssa'],'application/zip':['.zip']}}]});return await Promise.all(handles.map(handle=>handle.getFile()));}
+    try{const handles=await window.showOpenFilePicker({multiple,types:[{description:t('자막 파일'),accept:{'text/plain':['.srt','.vtt','.smi','.sami','.ass','.ssa'],'application/zip':['.zip']}}]});return await Promise.all(handles.map(handle=>handle.getFile()));}
     catch(error){if(error?.name==='AbortError')return [];if(!['SecurityError','NotSupportedError','TypeError'].includes(error?.name))throw error;}
   }
   return new Promise(resolve=>{
@@ -1166,7 +1167,7 @@ async function readSubtitleFiles(files){
   for(const file of files){
     if(/\.zip$/i.test(file.name)){for(const entry of await subtitlesFromZip(new Uint8Array(await file.arrayBuffer())))out.push({name:entry.name,text:decodeSubtitle(entry.bytes),format:subtitleFormat(entry.name)});continue;}
     const format=subtitleFormat(file.name);if(!format){skipped.push(file.name);continue;}
-    if(file.size>64*1024*1024)throw Error(file.name+': 자막 파일이 너무 큽니다.');
+    if(file.size>64*1024*1024)throw Error(t('{name}: 자막 파일이 너무 큽니다.',{name:file.name}));
     out.push({name:file.name,text:decodeSubtitle(new Uint8Array(await file.arrayBuffer())),format});
   }
   return {subtitles:out,skipped};
@@ -1210,10 +1211,10 @@ function sceneBookmarks(doc,marks){
 async function rebuildYouTubeDocument(old,{subtitle,chapters}={}){
   const tab=tabs.find(t=>t.record?.id===old.id),newSubtitle=!!subtitle;
   if(tab){await tab.reader?.ready;await tab.queue.flush();await tab.checkpoints.flush({force:true});}
-  const current=await getDocument(old.id);if(!current||current.trashedAt)throw Error(`「${old.title}」 문서를 찾지 못했습니다.`);
+  const current=await getDocument(old.id);if(!current||current.trashedAt)throw Error(t('「{title}」 문서를 찾지 못했습니다.',{title:old.title}));
   const metadata=structuredClone(tab?.reader?.metadata||current.metadata),annotations=metadata.annotations||[],bookmarks=metadata.bookmarks||[],marks=annotations.length+bookmarks.length;
-  const sceneCount=annotations.filter(isVideoNote).length,subtitleAction=metadata.youtube?.subtitle?'바꾸기':'붙이기';
-  if(marks&&newSubtitle&&!await confirmDialog('자막을 '+(metadata.youtube?.subtitle?'바꿀까요?':'붙일까요?'),`「${old.title}」${sceneCount?`의 시점 메모 ${sceneCount}개는 영상의 시점을 그대로 유지합니다. `:'의 '}${marks>sceneCount?`주석·북마크 ${marks-sceneCount}개는 새 자막의 같은 문장으로 옮기며, 찾지 못한 것은 목록에 남깁니다. `:''}기존 문서는 사본으로 휴지통에 보관합니다(복원 가능).`,'자막 '+subtitleAction))return null;
+  const sceneCount=annotations.filter(isVideoNote).length,subtitleAction=metadata.youtube?.subtitle?t('자막 바꾸기'):t('자막 붙이기');
+  if(marks&&newSubtitle&&!await confirmDialog(metadata.youtube?.subtitle?t('자막을 바꿀까요?'):t('자막을 붙일까요?'),(sceneCount?t('「{title}」의 시점 메모 {n}개는 영상의 시점을 그대로 유지합니다. ',{title:old.title,n:sceneCount}):t('「{title}」의 ',{title:old.title}))+(marks>sceneCount?t('주석·북마크 {n}개는 새 자막의 같은 문장으로 옮기며, 찾지 못한 것은 목록에 남깁니다. ',{n:marks-sceneCount}):'')+t('기존 문서는 사본으로 휴지통에 보관합니다(복원 가능).'),subtitleAction))return null;
   if(!subtitle&&current.originalFile&&metadata.youtube?.subtitle)subtitle={name:current.originalFile.name||current.name,text:await current.originalFile.text(),format:subtitleFormat(current.originalFile.name||current.name)||'srt'};
   chapters??=metadata.youtube?.chapters||[];
   const warnings=[],parsed=parseHTML(youtubeDocumentHTML(old.title,subtitle||null,warnings,{chapters}),{title:old.title,source:metadata.source,warnings},{includeMetadata:true,allowScripts:false});
@@ -1230,7 +1231,7 @@ async function rebuildYouTubeDocument(old,{subtitle,chapters}={}){
     }finally{probe.dispose();oldProbe?.dispose();}
     if(newSubtitle){
       // The whole previous document, restorable from the trash.
-      const backup={id:uid(),title:old.title+' (자막 바꾸기 전)',name:current.name,source:current.source,created:Date.now(),modified:Date.now(),folderId:current.folderId||'',fileHandle:null,originalHandle:null,metadata:structuredClone(current.metadata)};
+      const backup={id:uid(),title:old.title+t(' (자막 바꾸기 전)'),name:current.name,source:current.source,created:Date.now(),modified:Date.now(),folderId:current.folderId||'',fileHandle:null,originalHandle:null,metadata:structuredClone(current.metadata)};
       if(current.originalFile)backup.originalFile=current.originalFile;
       await saveDocumentHTML(backup,current.html,{revision:{baseline:true}});await trashDocument(backup.id);
     }
@@ -1247,7 +1248,7 @@ async function rebuildYouTubeDocument(old,{subtitle,chapters}={}){
 /** Attach subtitle files to the given video documents (matched by name), or to `only` when it is one file for one video. */
 async function attachYouTubeSubtitles(files,candidates,{only=null,chapters}={}){
   const {subtitles,skipped}=await readSubtitleFiles(files);
-  if(!subtitles.length)throw Error(skipped.length?'자막 파일(.srt, .vtt, .smi, .ass, .ssa 또는 그것을 담은 .zip)을 골라주세요.':'고른 파일에 자막이 없습니다.');
+  if(!subtitles.length)throw Error(skipped.length?t('자막 파일(.srt, .vtt, .smi, .ass, .ssa 또는 그것을 담은 .zip)을 골라주세요.'):t('고른 파일에 자막이 없습니다.'));
   const videos=candidates.map(r=>({videoId:r.metadata.youtube.videoId,title:r.title,record:r}));
   let {matches,unmatched}=matchSubtitleFiles(subtitles,videos);
   if(only&&subtitles.length===1&&!matches.size){matches=new Map([[only.metadata.youtube.videoId,subtitles[0]]]);unmatched=[];}
@@ -1260,34 +1261,34 @@ async function attachYouTubeSubtitles(files,candidates,{only=null,chapters}={}){
   }
   await refreshLibrary();try{await dataFolder?.flush();}catch(error){showError(error);}
   for(const record of reopen)await openRecord(record);
-  const notes=[lostAnnotations||lostBookmarks?`새 자막에서 찾지 못한 주석 ${lostAnnotations}개·북마크 ${lostBookmarks}개는 목록에 남겨 두었습니다.`:'',unmatched.length?`영상을 찾지 못한 자막 ${unmatched.length}개: ${unmatched.slice(0,3).map(s=>s.name).join(', ')}${unmatched.length>3?' …':''}`:'',skipped.length?`자막이 아닌 파일 ${skipped.length}개는 건너뛰었습니다.`:''].filter(Boolean);
-  toast((attached?`자막 ${attached}개를 붙였습니다.`:'붙인 자막이 없습니다.')+(notes.length?' '+notes.join(' '):''),!attached);
+  const notes=[lostAnnotations||lostBookmarks?t('새 자막에서 찾지 못한 주석 {annotations}개·북마크 {bookmarks}개는 목록에 남겨 두었습니다.',{annotations:lostAnnotations,bookmarks:lostBookmarks}):'',unmatched.length?t('영상을 찾지 못한 자막 {n}개: {names}',{n:unmatched.length,names:unmatched.slice(0,3).map(s=>s.name).join(', ')+(unmatched.length>3?' …':'')}):'',skipped.length?t('자막이 아닌 파일 {n}개는 건너뛰었습니다.',{n:skipped.length}):''].filter(Boolean);
+  toast((attached?t('자막 {n}개를 붙였습니다.',{n:attached}):t('붙인 자막이 없습니다.'))+(notes.length?' '+notes.join(' '):''),!attached);
   return attached;
 }
 const chaptersText=chapters=>(chapters||[]).map(c=>clock(c.t)+' '+c.title).join('\n');
 /** Paste or edit a video's chapters; the sidebar outline is rebuilt from them. */
 function chaptersDialog(record){
-  modal(`<section class="youtube-dialog"><div class="dialog-heading"><h2>목차(챕터)</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>
-    <p class="dialog-description">YouTube 영상 설명란의 챕터 줄(예: <code>0:00 소개</code>)을 붙여넣으면 사이드바 목차가 챕터로 바뀝니다. 비우고 저장하면 영상 길이에 맞춘 시각 목차로 돌아갑니다.</p>
-    <textarea class="youtube-chapters" data-chapters rows="9" spellcheck="false" placeholder="0:00 소개&#10;1:23 첫 번째 주제&#10;12:05 두 번째 주제">${esc(chaptersText(record.metadata.youtube.chapters))}</textarea>
+  modal(`<section class="youtube-dialog"><div class="dialog-heading"><h2>${t('목차(챕터)')}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div>
+    <p class="dialog-description">${t('YouTube 영상 설명란의 챕터 줄(예: <code>0:00 소개</code>)을 붙여넣으면 사이드바 목차가 챕터로 바뀝니다. 비우고 저장하면 영상 길이에 맞춘 시각 목차로 돌아갑니다.')}</p>
+    <textarea class="youtube-chapters" data-chapters rows="9" spellcheck="false" placeholder="${t('0:00 소개&#10;1:23 첫 번째 주제&#10;12:05 두 번째 주제')}">${esc(chaptersText(record.metadata.youtube.chapters))}</textarea>
     <p class="dialog-status" data-chapters-status role="status"></p>
-    <div class="dialog-actions"><button class="secondary-button" data-dialog-close>취소</button><button class="primary-button" data-chapters-save>저장</button></div></section>`,dialog=>{
+    <div class="dialog-actions"><button class="secondary-button" data-dialog-close>${t('취소')}</button><button class="primary-button" data-chapters-save>${t('저장')}</button></div></section>`,dialog=>{
     const area=$('[data-chapters]',dialog),status=$('[data-chapters-status]',dialog),save=$('[data-chapters-save]',dialog);
-    const check=()=>{const found=parseChapters(area.value);status.textContent=!area.value.trim()?'영상 길이에 맞춘 시각 목차를 씁니다.':found.length?`챕터 ${found.length}개를 찾았습니다.`:'시간이 적힌 줄을 두 개 이상 찾지 못했습니다.';save.disabled=!!area.value.trim()&&!found.length;};
+    const check=()=>{const found=parseChapters(area.value);status.textContent=!area.value.trim()?t('영상 길이에 맞춘 시각 목차를 씁니다.'):found.length?t('챕터 {n}개를 찾았습니다.',{n:found.length}):t('시간이 적힌 줄을 두 개 이상 찾지 못했습니다.');save.disabled=!!area.value.trim()&&!found.length;};
     area.oninput=check;check();
     save.onclick=safely(async()=>{
       save.disabled=true;
-      try{const result=await rebuildYouTubeDocument(record,{chapters:parseChapters(area.value)});if(!result)return;dialog.close();await refreshLibrary();try{await dataFolder?.flush();}catch(error){showError(error);}if(result.reopen)await openRecord(result.record);toast('목차를 바꿨습니다.');}
+      try{const result=await rebuildYouTubeDocument(record,{chapters:parseChapters(area.value)});if(!result)return;dialog.close();await refreshLibrary();try{await dataFolder?.flush();}catch(error){showError(error);}if(result.reopen)await openRecord(result.record);toast(t('목차를 바꿨습니다.'));}
       finally{if(save.isConnected)save.disabled=false;}
     });
     requestAnimationFrame(()=>area.focus());
   });
 }
 function youtubeShortcutsDialog(rows){
-  modal(`<section class="youtube-shortcuts"><div class="dialog-heading"><h2>${icon('youtube',20)} 키보드 단축키</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>
-    <p class="dialog-description">YouTube 플레이어와 같은 단축키입니다. 글자를 입력하는 칸에서는 동작하지 않습니다. 영상 화면을 눌러 YouTube 쪽에 키보드가 가 있을 때는 YouTube가 직접 처리합니다.</p>
-    <div class="help-table-scroll"><table><thead><tr><th scope="col">키</th><th scope="col">동작</th></tr></thead><tbody>${rows.map(([key,label])=>`<tr><th scope="row"><kbd>${esc(key)}</kbd></th><td>${esc(label)}</td></tr>`).join('')}</tbody></table></div>
-    <div class="dialog-actions"><button class="primary-button" data-dialog-close>닫기</button></div></section>`);
+  modal(`<section class="youtube-shortcuts"><div class="dialog-heading"><h2>${icon('youtube',20)} ${t('키보드 단축키')}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div>
+    <p class="dialog-description">${t('YouTube 플레이어와 같은 단축키입니다. 글자를 입력하는 칸에서는 동작하지 않습니다. 영상 화면을 눌러 YouTube 쪽에 키보드가 가 있을 때는 YouTube가 직접 처리합니다.')}</p>
+    <div class="help-table-scroll"><table><thead><tr><th scope="col">${t('키')}</th><th scope="col">${t('동작')}</th></tr></thead><tbody>${rows.map(([key,label])=>`<tr><th scope="row"><kbd>${esc(key)}</kbd></th><td>${esc(label)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="dialog-actions"><button class="primary-button" data-dialog-close>${t('닫기')}</button></div></section>`);
 }
 function mountYouTube(tab){
   tab.youtube?.dispose();tab.youtube=null;
@@ -1297,10 +1298,10 @@ function mountYouTube(tab){
     const record=()=>records.find(r=>r.id===tab.record.id)||tab.record;
     tab.youtube=new YouTubePane(tab,{
       onNote:(seconds,note)=>youtubeMomentDialog(tab,seconds,note),
-      onDeleteNote:safely(async note=>{if(await confirmDialog('시점 메모를 삭제할까요?',clock(note.videoAnchor.seconds)+' · '+note.text.slice(0,160),'삭제')){tab.reader.remove(note.id);await tab.queue.flush();toast('시점 메모를 삭제했습니다. 실행 취소로 되돌릴 수 있습니다.');}}),
+      onDeleteNote:safely(async note=>{if(await confirmDialog(t('시점 메모를 삭제할까요?'),clock(note.videoAnchor.seconds)+' · '+note.text.slice(0,160),t('삭제'))){tab.reader.remove(note.id);await tab.queue.flush();toast(t('시점 메모를 삭제했습니다. 실행 취소로 되돌릴 수 있습니다.'));}}),
       // Playback position is a reading position: saved quietly, never as an annotation edit.
       onTime:now=>{tab.queue.schedule({background:true});if(now)void tab.queue.flush().catch(()=>{});},
-      onBookmark:title=>{tab.reader.addBookmark(title);if(reader()===tab.reader){if(tab.reader.documentSidebarUI?.isConnected&&tab.reader.documentSidebarMode==='bookmarks')tab.reader.showDocumentSidebarView('bookmarks');else if(sidebarMode==='bookmarks')renderSidebar('bookmarks');}toast('이 장면을 북마크했습니다.');},
+      onBookmark:title=>{tab.reader.addBookmark(title);if(reader()===tab.reader){if(tab.reader.documentSidebarUI?.isConnected&&tab.reader.documentSidebarMode==='bookmarks')tab.reader.showDocumentSidebarView('bookmarks');else if(sidebarMode==='bookmarks')renderSidebar('bookmarks');}toast(t('이 장면을 북마크했습니다.'));},
       onChapters:()=>chaptersDialog(record()),
       onAttach:safely(async()=>{
         const files=await pickSubtitleFiles(true);if(!files.length)return;
@@ -1329,23 +1330,23 @@ function youtubeMomentDialog(tab=null,seconds=0,note=null,initialURL=''){
     findNote:({video,seconds,targetId})=>{const record=target(video,targetId),opened=tabs.find(t=>t.record?.id===record?.id&&t.reader);return structuredClone(findVideoNote(opened?.reader.metadata||record?.metadata,video?.videoId,seconds));},
     ...(tab?{currentTime:()=>tab.youtube?.time()??seconds}:{onSubtitles:youtubeSubtitleDialog}),
     save:async({video,seconds,text,targetId,note:selectedNote,signal})=>{
-      if(tab&&(!tabs.includes(tab)||tab.reader.disposed))throw Error('영상을 다시 열고 메모를 저장해주세요.');
-      const duration=tab?.youtube?.player?.getDuration?.();if(duration>0&&seconds>duration)throw Error('영상 길이('+clock(duration)+') 안의 시점을 입력해주세요.');
+      if(tab&&(!tabs.includes(tab)||tab.reader.disposed))throw Error(t('영상을 다시 열고 메모를 저장해주세요.'));
+      const duration=tab?.youtube?.player?.getDuration?.();if(duration>0&&seconds>duration)throw Error(t('영상 길이({duration}) 안의 시점을 입력해주세요.',{duration:clock(duration)}));
       draft=makeVideoNote(video.videoId,seconds,text,selectedNote);
       let record=target(video,targetId);
       if(!record){
         const ui=await youtubeUI(),[info,thumbnail]=await Promise.all([ui.videoInfo(video.videoId),ui.thumbnailData(video.videoId)]);
         signal.throwIfAborted();
-        record=await saveYouTubeRecord({title:info.title||'YouTube 영상 '+video.videoId,youtube:{videoId:video.videoId,channel:info.channel,thumbnail},folderId,mediaTime:seconds,annotations:[draft]});savedRecord=record;
+        record=await saveYouTubeRecord({title:info.title||t('YouTube 영상 {id}',{id:video.videoId}),youtube:{videoId:video.videoId,channel:info.channel,thumbnail},folderId,mediaTime:seconds,annotations:[draft]});savedRecord=record;
       }else{
         const opened=tabs.find(t=>t.record?.id===record.id&&t.reader);
         const current=await getDocument(record.id);signal.throwIfAborted();
-        if(!current||current.trashedAt)throw Error('이 영상이 삭제되거나 휴지통으로 이동했습니다. 서재를 다시 확인해주세요.');
-        if((current.folderId||'')!==folderId||current.metadata.youtube?.videoId!==video.videoId)throw Error('영상의 폴더가 변경되었습니다. 서재에서 다시 열어주세요.');
+        if(!current||current.trashedAt)throw Error(t('이 영상이 삭제되거나 휴지통으로 이동했습니다. 서재를 다시 확인해주세요.'));
+        if((current.folderId||'')!==folderId||current.metadata.youtube?.videoId!==video.videoId)throw Error(t('영상의 폴더가 변경되었습니다. 서재에서 다시 열어주세요.'));
         const latest=opened?.reader.metadata||current.metadata,collision=findVideoNote(latest,video.videoId,seconds),previous=selectedNote&&latest.annotations.find(a=>a.id===selectedNote.id);
-        if(selectedNote&&!previous)throw Error('이 메모가 이미 삭제되었습니다. 새 메모를 남겨주세요.');
-        if(collision&&collision.id!==draft.id)throw Error('전후 3초 이내의 메모가 생겼습니다. 시간을 다시 선택해 기존 메모를 확인해주세요.');
-        if(previous&&(previous.text!==selectedNote.text||previous.modified!==selectedNote.modified))throw Error('메모가 다른 곳에서 변경되었습니다. 닫았다가 다시 열어주세요.');
+        if(selectedNote&&!previous)throw Error(t('이 메모가 이미 삭제되었습니다. 새 메모를 남겨주세요.'));
+        if(collision&&collision.id!==draft.id)throw Error(t('전후 3초 이내의 메모가 생겼습니다. 시간을 다시 선택해 기존 메모를 확인해주세요.'));
+        if(previous&&(previous.text!==selectedNote.text||previous.modified!==selectedNote.modified))throw Error(t('메모가 다른 곳에서 변경되었습니다. 닫았다가 다시 열어주세요.'));
         if(opened){
           const items=opened.reader.metadata.annotations,found=items.some(a=>a.id===draft.id);
           opened.reader.commit(found?items.map(a=>a.id===draft.id?draft:a):[...items,draft]);await opened.queue.flush();
@@ -1361,29 +1362,29 @@ function youtubeMomentDialog(tab=null,seconds=0,note=null,initialURL=''){
         await refreshLibrary();const opened=await openRecord(record);await opened.reader.ready;
         // Module mounting is asynchronous; keep the exact scene until the pane is ready.
         if(opened.youtube){opened.youtube.renderNotes();opened.youtube.revealNote(draft,false);}else opened.pendingVideoNote=draft;
-        toast('시점 메모를 저장했습니다. 시간을 누르면 해당 장면부터 재생합니다.');
+        toast(t('시점 메모를 저장했습니다. 시간을 누르면 해당 장면부터 재생합니다.'));
       };
     },
   });
 }
 function youtubeSubtitleDialog(initialURL=''){
   const firstTime=!localStorage.getItem('librememo-youtube-guide-seen');
-  modal(`<section data-youtube-dialog class="youtube-dialog"><div class="dialog-heading"><h2>${icon('youtube',20)} 유튜브 영상에 주석 달기</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>
-    <div class="youtube-modes" role="group" aria-label="주석 방식"><button type="button" data-youtube-mode="moments" aria-pressed="false">${icon('video-note',17)} 시점 메모</button><button type="button" aria-pressed="true">${icon('subtitles',17)} 자막에 주석</button></div>
-    <p class="dialog-description">YouTube 영상이나 재생목록 주소를 넣고, 받아 둔 자막 파일을 고르세요. 영상은 위에서 재생되고, 아래 자막에 형광펜·메모·북마크를 달 수 있습니다.</p>
-    <label class="youtube-field"><span>YouTube 주소</span><input type="url" data-youtube-url inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=… 또는 재생목록 주소"></label>
+  modal(`<section data-youtube-dialog class="youtube-dialog"><div class="dialog-heading"><h2>${icon('youtube',20)} ${t('유튜브 영상에 주석 달기')}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div>
+    <div class="youtube-modes" role="group" aria-label="${t('주석 방식')}"><button type="button" data-youtube-mode="moments" aria-pressed="false">${icon('video-note',17)} ${t('시점 메모')}</button><button type="button" aria-pressed="true">${icon('subtitles',17)} ${t('자막에 주석')}</button></div>
+    <p class="dialog-description">${t('YouTube 영상이나 재생목록 주소를 넣고, 받아 둔 자막 파일을 고르세요. 영상은 위에서 재생되고, 아래 자막에 형광펜·메모·북마크를 달 수 있습니다.')}</p>
+    <label class="youtube-field"><span>${t('YouTube 주소')}</span><input type="url" data-youtube-url inputmode="url" autocomplete="off" spellcheck="false" placeholder="${t('https://www.youtube.com/watch?v=… 또는 재생목록 주소')}"></label>
     <p class="youtube-detect" data-youtube-detect aria-live="polite"></p>
-    <div class="youtube-files"><button type="button" class="secondary-button" data-youtube-files>${icon('subtitles',16)} 자막 파일 고르기</button><span data-youtube-file-list>고른 자막 없음 · 나중에 붙여도 됩니다</span></div>
-    <details class="youtube-chapter-box"><summary>챕터 (선택) · 영상 설명란의 「0:00 소개」 같은 줄을 붙여넣으면 목차가 됩니다</summary>
-      <textarea class="youtube-chapters" data-youtube-chapters rows="6" spellcheck="false" placeholder="0:00 소개&#10;1:23 첫 번째 주제&#10;12:05 두 번째 주제"></textarea><p class="youtube-guide-note" data-youtube-chapter-status>챕터가 없으면 10분이 넘는 영상은 길이의 1/10마다, 10분 이하인 영상은 1분마다 시각을 목차로 만듭니다.</p></details>
-    <fieldset class="youtube-options"><legend>옵션</legend>
-      <label><input type="checkbox" data-youtube-folder checked> 재생목록이면 재생목록 이름의 폴더를 만들고 영상마다 문서를 만들기</label>
-      <label>앞뒤로 건너뛰기 <select data-youtube-skip>${[5,10,15].map(n=>`<option value="${n}">${n}초</option>`).join('')}</select></label>
+    <div class="youtube-files"><button type="button" class="secondary-button" data-youtube-files>${icon('subtitles',16)} ${t('자막 파일 고르기')}</button><span data-youtube-file-list>${t('고른 자막 없음 · 나중에 붙여도 됩니다')}</span></div>
+    <details class="youtube-chapter-box"><summary>${t('챕터 (선택) · 영상 설명란의 「0:00 소개」 같은 줄을 붙여넣으면 목차가 됩니다')}</summary>
+      <textarea class="youtube-chapters" data-youtube-chapters rows="6" spellcheck="false" placeholder="${t('0:00 소개&#10;1:23 첫 번째 주제&#10;12:05 두 번째 주제')}"></textarea><p class="youtube-guide-note" data-youtube-chapter-status>${t('챕터가 없으면 10분이 넘는 영상은 길이의 1/10마다, 10분 이하인 영상은 1분마다 시각을 목차로 만듭니다.')}</p></details>
+    <fieldset class="youtube-options"><legend>${t('옵션')}</legend>
+      <label><input type="checkbox" data-youtube-folder checked> ${t('재생목록이면 재생목록 이름의 폴더를 만들고 영상마다 문서를 만들기')}</label>
+      <label>${t('앞뒤로 건너뛰기')} <select data-youtube-skip>${[5,10,15].map(n=>`<option value="${n}">${t('{n}초',{n})}</option>`).join('')}</select></label>
     </fieldset>
-    <details class="youtube-guide" ${firstTime?'open':''}><summary>자막 파일 받는 방법 (Mac · Chrome)</summary>
-      <p class="youtube-guide-buttons"><a class="secondary-button" href="${esc(SUBTITLE_EXTENSION)}" target="_blank" rel="noopener noreferrer">${icon('external',15)} 확장 프로그램 설치</a><button type="button" class="secondary-button" data-youtube-open disabled>${icon('youtube',15)} YouTube에서 영상 열기</button></p>${guideHTML()}</details>
+    <details class="youtube-guide" ${firstTime?'open':''}><summary>${t('자막 파일 받는 방법 (Mac · Chrome)')}</summary>
+      <p class="youtube-guide-buttons"><a class="secondary-button" href="${esc(SUBTITLE_EXTENSION)}" target="_blank" rel="noopener noreferrer">${icon('external',15)} ${t('확장 프로그램 설치')}</a><button type="button" class="secondary-button" data-youtube-open disabled>${icon('youtube',15)} ${t('YouTube에서 영상 열기')}</button></p>${guideHTML()}</details>
     <p class="dialog-status" data-youtube-status role="status"></p>
-    <div class="dialog-actions"><button class="secondary-button" data-dialog-close>취소</button><button class="primary-button" data-youtube-create disabled>만들기</button></div></section>`,dialog=>{
+    <div class="dialog-actions"><button class="secondary-button" data-dialog-close>${t('취소')}</button><button class="primary-button" data-youtube-create disabled>${t('만들기')}</button></div></section>`,dialog=>{
     try{localStorage.setItem('librememo-youtube-guide-seen','1');}catch{}
     const $d=selector=>$(selector,dialog),url=$d('[data-youtube-url]'),status=$d('[data-youtube-status]'),create=$d('[data-youtube-create]'),chapterArea=$d('[data-youtube-chapters]');
     let files=[],parsed=null,busy=false;
@@ -1391,56 +1392,56 @@ function youtubeSubtitleDialog(initialURL=''){
     $d('[data-youtube-skip]').onchange=event=>youtubeUI().then(ui=>ui.setSkipSeconds(Number(event.target.value)));
     const playlistMode=()=>!!parsed?.playlistId&&$d('[data-youtube-folder]').checked;
     const chapters=()=>playlistMode()?undefined:parseChapters(chapterArea.value);
-    chapterArea.oninput=()=>{const found=parseChapters(chapterArea.value);$d('[data-youtube-chapter-status]').textContent=!chapterArea.value.trim()?'챕터가 없으면 10분이 넘는 영상은 길이의 1/10마다, 10분 이하인 영상은 1분마다 시각을 목차로 만듭니다.':found.length?`챕터 ${found.length}개를 찾았습니다. 사이드바 목차로 씁니다.`:'시간이 적힌 줄을 두 개 이상 찾지 못했습니다. 「0:00 소개」처럼 붙여넣어 주세요.';};
+    chapterArea.oninput=()=>{const found=parseChapters(chapterArea.value);$d('[data-youtube-chapter-status]').textContent=!chapterArea.value.trim()?t('챕터가 없으면 10분이 넘는 영상은 길이의 1/10마다, 10분 이하인 영상은 1분마다 시각을 목차로 만듭니다.'):found.length?t('챕터 {n}개를 찾았습니다. 사이드바 목차로 씁니다.',{n:found.length}):t('시간이 적힌 줄을 두 개 이상 찾지 못했습니다. 「0:00 소개」처럼 붙여넣어 주세요.');};
     const existing=()=>playlistMode()?playlistRecords(parsed.playlistId):parsed?.videoId?youtubeRecords().filter(r=>r.metadata.youtube.videoId===parsed.videoId):[];
     const update=()=>{
       parsed=parseYouTubeInput(url.value);
       const found=existing();
-      $d('[data-youtube-detect]').textContent=!url.value.trim()?'':!parsed?'YouTube 영상·재생목록 주소가 아닙니다.':(playlistMode()?'재생목록입니다. 폴더를 만들고 영상마다 문서를 만듭니다. 챕터는 각 영상의 「목차」에서 넣습니다.':'영상 1개입니다.')+(found.length?` 이미 서재에 ${found.length}개가 있어 고른 자막만 붙입니다.`:'');
+      $d('[data-youtube-detect]').textContent=!url.value.trim()?'':!parsed?t('YouTube 영상·재생목록 주소가 아닙니다.'):(playlistMode()?t('재생목록입니다. 폴더를 만들고 영상마다 문서를 만듭니다. 챕터는 각 영상의 「목차」에서 넣습니다.'):t('영상 1개입니다.'))+(found.length?t(' 이미 서재에 {n}개가 있어 고른 자막만 붙입니다.',{n:found.length}):'');
       $d('[data-youtube-open]').disabled=!parsed?.videoId;create.disabled=busy||!parsed||found.length&&!files.length;
-      create.textContent=found.length?'자막 붙이기':'만들기';
+      create.textContent=found.length?t('자막 붙이기'):t('만들기');
     };
     url.oninput=update;$d('[data-youtube-folder]').onchange=update;
     $d('[data-youtube-open]').onclick=()=>{if(parsed?.videoId)window.open(watchURL(parsed.videoId),'_blank','noopener');};
-    $d('[data-youtube-files]').onclick=async()=>{const picked=await pickSubtitleFiles(true);if(!picked.length)return;files=picked;$d('[data-youtube-file-list]').textContent=files.length===1?files[0].name:`${files.length}개 파일 · ${files.slice(0,2).map(f=>f.name).join(', ')}${files.length>2?' …':''}`;update();};
+    $d('[data-youtube-files]').onclick=async()=>{const picked=await pickSubtitleFiles(true);if(!picked.length)return;files=picked;$d('[data-youtube-file-list]').textContent=files.length===1?files[0].name:t('{n}개 파일 · {names}',{n:files.length,names:files.slice(0,2).map(f=>f.name).join(', ')+(files.length>2?' …':'')});update();};
     create.onclick=safely(async()=>{
       if(busy||!parsed)return;busy=true;create.disabled=true;const say=text=>{if(status.isConnected)status.textContent=text;};
       try{
         const found=existing();
-        if(found.length){say('자막을 붙이는 중…');const attached=await attachYouTubeSubtitles(files,found,{only:found.length===1?found[0]:null,chapters:chapters()});if(attached)dialog.close();return;}
+        if(found.length){say(t('자막을 붙이는 중…'));const attached=await attachYouTubeSubtitles(files,found,{only:found.length===1?found[0]:null,chapters:chapters()});if(attached)dialog.close();return;}
         const {subtitles,skipped}=files.length?await readSubtitleFiles(files):{subtitles:[],skipped:[]};
-        if(files.length&&!subtitles.length)throw Error('고른 파일에서 자막(.srt, .vtt, .smi, .ass, .ssa)을 찾지 못했습니다.');
+        if(files.length&&!subtitles.length)throw Error(t('고른 파일에서 자막(.srt, .vtt, .smi, .ass, .ssa)을 찾지 못했습니다.'));
         const ui=await youtubeUI();
         if(playlistMode()){
-          say('재생목록을 읽는 중…');
+          say(t('재생목록을 읽는 중…'));
           const [ids,info]=await Promise.all([ui.playlistVideoIds(parsed.playlistId),ui.playlistInfo(parsed.playlistId)]);
-          if(!ids.length)throw Error('재생목록에 영상이 없습니다.');
-          let done=0;say(`영상 ${ids.length}개의 제목과 썸네일을 받는 중… 0/${ids.length}`);
-          const videos=await ui.mapLimit(ids,4,async videoId=>{const [meta,thumbnail]=await Promise.all([ui.videoInfo(videoId),ui.thumbnailData(videoId)]);say(`영상 ${ids.length}개의 제목과 썸네일을 받는 중… ${++done}/${ids.length}`);return {videoId,title:meta.title,channel:meta.channel,thumbnail};});
+          if(!ids.length)throw Error(t('재생목록에 영상이 없습니다.'));
+          let done=0;say(t('영상 {n}개의 제목과 썸네일을 받는 중… {done}/{n}',{n:ids.length,done:0}));
+          const videos=await ui.mapLimit(ids,4,async videoId=>{const [meta,thumbnail]=await Promise.all([ui.videoInfo(videoId),ui.thumbnailData(videoId)]);say(t('영상 {n}개의 제목과 썸네일을 받는 중… {done}/{n}',{n:ids.length,done:++done}));return {videoId,title:meta.title,channel:meta.channel,thumbnail};});
           const prefix=new RegExp('^'+(info.title||'￿').replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*[-:|·–—]\\s*','i');
-          videos.forEach((v,i)=>{v.title=(v.title.replace(prefix,'').trim()||v.title||`영상 ${i+1}`);});
+          videos.forEach((v,i)=>{v.title=(v.title.replace(prefix,'').trim()||v.title||t('영상 {n}',{n:i+1}));});
           const {matches,unmatched}=matchSubtitleFiles(subtitles,videos);
           const parentId=libraryFolderId,taken=libraryFolders.filter(f=>f.parentId===parentId).map(f=>f.name),folderId=uid(),name=playlistFolderName(info.title,taken);
           await updateLibraryFolders((folders,documents)=>editLibraryFolders(folders,documents,{type:'create',id:folderId,parentId,name}));
           const base=Date.now();
           for(const [i,v] of videos.entries()){
-            say(`문서를 만드는 중… ${i+1}/${videos.length}`);
+            say(t('문서를 만드는 중… {done}/{n}',{done:i+1,n:videos.length}));
             // Earlier videos get later times, so "newest first" lists the playlist in order.
             await saveYouTubeRecord({title:v.title,youtube:{videoId:v.videoId,playlistId:parsed.playlistId,index:i,playlistTitle:info.title,channel:v.channel||info.channel,thumbnail:v.thumbnail},subtitle:matches.get(v.videoId)||null,folderId,created:base-i*1000});
           }
           dialog.close();libraryFolderId=folderId;await refreshLibrary();activate('library');
           try{await dataFolder?.flush();}catch(error){showError(error);}
-          toast(`「${name}」 폴더에 영상 ${videos.length}개를 만들었습니다. 자막 ${matches.size}개를 붙였습니다.`+(unmatched.length?` 영상을 찾지 못한 자막 ${unmatched.length}개는 각 영상의 「자막 붙이기」로 붙여주세요.`:'')+(skipped.length?` 자막이 아닌 파일 ${skipped.length}개는 건너뛰었습니다.`:''));
+          toast(t('「{name}」 폴더에 영상 {n}개를 만들었습니다.',{name,n:videos.length})+t(' 자막 {n}개를 붙였습니다.',{n:matches.size})+(unmatched.length?t(' 영상을 찾지 못한 자막 {n}개는 각 영상의 「자막 붙이기」로 붙여주세요.',{n:unmatched.length}):'')+(skipped.length?t(' 자막이 아닌 파일 {n}개는 건너뛰었습니다.',{n:skipped.length}):''));
           return;
         }
-        say('영상 정보를 받는 중…');
+        say(t('영상 정보를 받는 중…'));
         const [meta,thumbnail]=await Promise.all([ui.videoInfo(parsed.videoId),ui.thumbnailData(parsed.videoId)]);
-        const title=meta.title||'YouTube 영상 '+parsed.videoId,video={videoId:parsed.videoId,title};
+        const title=meta.title||t('YouTube 영상 {id}',{id:parsed.videoId}),video={videoId:parsed.videoId,title};
         const subtitle=subtitles.length>1?(matchSubtitleFiles(subtitles,[video]).matches.get(parsed.videoId)||subtitles[0]):subtitles[0]||null;
         const record=await saveYouTubeRecord({title,youtube:{videoId:parsed.videoId,playlistId:parsed.playlistId,channel:meta.channel,thumbnail,chapters:chapters()},subtitle,mediaTime:parsed.start});
         dialog.close();renderLibrary();await openRecord(record);
         try{await dataFolder?.flush();}catch(error){showError(error);}
-        toast(subtitle?'영상과 자막을 열었습니다. 자막의 시각을 누르면 그 장면으로 갑니다.':'영상을 열었습니다. 영상 막대의 「자막 붙이기」로 자막 파일을 붙이세요.');
+        toast(subtitle?t('영상과 자막을 열었습니다. 자막의 시각을 누르면 그 장면으로 갑니다.'):t('영상을 열었습니다. 영상 막대의 「자막 붙이기」로 자막 파일을 붙이세요.'));
       }catch(error){say(error.message||String(error));throw error;}
       finally{busy=false;if(create.isConnected)update();}
     });
@@ -1451,10 +1452,10 @@ function youtubeSubtitleDialog(initialURL=''){
 function duplicateImportDialog(local, matches) {
   const choices=[...matches].sort((a,b)=>Number(!!b.metadata?.annotations?.length)-Number(!!a.metadata?.annotations?.length)||(b.modified||0)-(a.modified||0));
   const options=choices.map((record,index)=>{
-    const stamp=new Date(record.modified||record.created||Date.now()).toLocaleString('ko-KR');
-    return `<option value="${esc(record.id)}">${index+1}. ${esc(record.title||record.name)} · 주석 ${record.metadata?.annotations?.length||0}개 · ${esc(stamp)}</option>`;
+    const stamp=new Date(record.modified||record.created||Date.now()).toLocaleString(locale());
+    return `<option value="${esc(record.id)}">${index+1}. ${esc(record.title||record.name)} · ${t('주석 {n}개',{n:record.metadata?.annotations?.length||0})} · ${esc(stamp)}</option>`;
   }).join('');
-  return new Promise(resolve=>modal(`<form method="dialog" data-duplicate-import><div class="dialog-heading"><h2>이미 불러온 문서입니다</h2></div><p class="dialog-description"><strong>${esc(local.name)}</strong> 파일은 이미 보관함에 있습니다. 새롭게 열어 별도의 주석을 시작할까요?</p><p class="dialog-description small">새롭게 열면 주석과 북마크가 없는 독립 사본을 만듭니다. 기존 문서와 주석, 원본 파일은 변경하지 않습니다.</p><label class="duplicate-import-target">기존 주석 파일<select id="duplicate-import-target" aria-label="기존 주석 파일">${options}</select></label><div class="dialog-actions duplicate-import-actions"><button class="secondary-button" value="cancel" autofocus>취소</button><button class="secondary-button" value="new">새롭게 열기</button><button class="primary-button" value="existing">기존의 주석 파일로 가기</button></div></form>`,dialog=>{
+  return new Promise(resolve=>modal(`<form method="dialog" data-duplicate-import><div class="dialog-heading"><h2>${t('이미 불러온 문서입니다')}</h2></div><p class="dialog-description">${t('<strong>{name}</strong> 파일은 이미 보관함에 있습니다. 새롭게 열어 별도의 주석을 시작할까요?',{name:esc(local.name)})}</p><p class="dialog-description small">${t('새롭게 열면 주석과 북마크가 없는 독립 사본을 만듭니다. 기존 문서와 주석, 원본 파일은 변경하지 않습니다.')}</p><label class="duplicate-import-target">${t('기존 주석 파일')}<select id="duplicate-import-target" aria-label="${t('기존 주석 파일')}">${options}</select></label><div class="dialog-actions duplicate-import-actions"><button class="secondary-button" value="cancel" autofocus>${t('취소')}</button><button class="secondary-button" value="new">${t('새롭게 열기')}</button><button class="primary-button" value="existing">${t('기존의 주석 파일로 가기')}</button></div></form>`,dialog=>{
     $('[data-duplicate-import]',dialog).addEventListener('keydown',event=>{if(event.key==='Escape')event.stopPropagation();});
     dialog.addEventListener('close',()=>resolve({action:['new','existing'].includes(dialog.returnValue)?dialog.returnValue:'cancel',id:$('#duplicate-import-target').value}),{once:true});
   }));
@@ -1470,7 +1471,7 @@ function openLocalFile(input,parentId=libraryFolderId) {
 }
 async function importLocalFile(input,parentId) {
   try{
-    $('#status-left').textContent='문서를 읽고 중복을 확인하는 중…';
+    $('#status-left').textContent=t('문서를 읽고 중복을 확인하는 중…');
     const local=await readLocalHTML(input,{native:true,allowScripts:true,identify:false});
     local.libraryFolderId=parentId;
     const matches=await findLocalDuplicates(local,await listDocuments(),getDocument);
@@ -1482,19 +1483,19 @@ async function importLocalFile(input,parentId) {
           try{
             const saved=await putDocumentSourceIdentity(record.id,identity);
             if(saved)record.sourceIdentity=saved.sourceIdentity;
-          }catch{toast('파일은 확인했지만 확인 결과를 보관하지 못했습니다. 다음에는 다시 검사합니다.',true);}
+          }catch{toast(t('파일은 확인했지만 확인 결과를 보관하지 못했습니다. 다음에는 다시 검사합니다.'),true);}
         }
       }
       const choice=await duplicateImportDialog(local,matches);
       if(choice.action==='cancel')return null;
       if(choice.action==='existing'){
         const record=matches.find(record=>record.id===choice.id);
-        if(!record)throw new Error('기존 주석 문서를 선택해주세요.');
+        if(!record)throw new Error(t('기존 주석 문서를 선택해주세요.'));
         return await openRecord(record);
       }
       local.freshAnnotations=true;
     }
-    $('#status-left').textContent='문서를 준비하는 중…';
+    $('#status-left').textContent=t('문서를 준비하는 중…');
     await new Promise(resolve=>setTimeout(resolve,0));
     return await createDocument(local.snapshot,local.handle,local.name,local);
   }finally{if(activeId==='library')renderLibrary();else updateChrome();}
@@ -1515,7 +1516,7 @@ async function capturePage(tab) {
       const live=browserDocument(tab);
       snapshot=live?await HTMLMemoCapture.captureDocument(live):await readWebPage(tab.url);
     }catch(error){
-      webHelpDialog(tab,'직접 가져오지 못했습니다. 사이트의 읽기 제한, 로그인 또는 네트워크 상태를 확인하세요. '+(error.message||''));
+      webHelpDialog(tab,t('직접 가져오지 못했습니다. 사이트의 읽기 제한, 로그인 또는 네트워크 상태를 확인하세요. {error}',{error:error.message||''}));
       return false;
     }
     // The app's own library is sufficient. A file picker is only needed for
@@ -1540,11 +1541,11 @@ function focusBrowserTab(tab){
 function resumeBrowser(){
   if(document.hidden||!lastWebTab?.away||!tabs.includes(lastWebTab))return;
   lastWebTab.away=false;lastWebTab.returned=true;renderBrowserState(lastWebTab);
-  if(reader())toast('읽던 문서로 돌아왔습니다. 복사한 글은 내 서재 → 텍스트 붙여넣기로 가져오세요.');
+  if(reader())toast(t('읽던 문서로 돌아왔습니다. 복사한 글은 내 서재 → 텍스트 붙여넣기로 가져오세요.'));
 }
 function renderExternalTab(tab){
   const search=isWebSearch(tab.url);
-  tab.host.innerHTML=`<div class="browser-handoff"><div class="handoff-heading">${icon('external',32)}<p class="eyebrow">CHROME · HTMLMEMO</p><h2>${search?'검색은 Chrome에서, 메모는 여기서.':'웹 탐색은 Chrome에서, 주석은 여기서.'}</h2><p data-single-file-guide>외부 사이트는 이 앱을 연 브라우저의 일반 탭에서 엽니다.<br>브라우저의 페이지 저장에서 <strong>Webpage, Single File</strong>(웹페이지, 단일 파일 · .mhtml) 형식을 선택한 다음, LibreMemo에서 여세요.</p></div><p class="web-notice" data-web-status role="status"></p><div class="web-actions"><button class="primary-button" data-browser-focus>브라우저로 전환 ${icon('external',15)}</button><button class="secondary-button" data-browser-paste>글 붙여넣고 주석 달기</button><button class="secondary-button" data-browser-import>파일 가져오기</button></div><p class="handoff-return">Chrome 탭에서 필요한 글을 복사한 뒤 LibreMemo 탭으로 돌아오세요.<br>읽던 문서와 주석은 그대로 유지됩니다. <kbd>Ctrl/⌘ Shift V</kbd>로 붙여넣기 창을 바로 열 수 있습니다.</p><details class="handoff-details"><summary>보낸 주소 · 직접 가져오기</summary><a data-open-external href="${esc(tab.url)}" target="_blank" rel="noopener noreferrer">${esc(tab.url)} ${icon('external',13)}</a><p>이 주소는 LibreMemo에서 마지막으로 보낸 주소입니다. Chrome에서 이동한 현재 주소는 읽지 않습니다. 검색 결과의 글을 가져올 때는 붙여넣기 창에 실제 원문 주소를 넣으세요.</p><button class="secondary-button" data-capture${search?' disabled':''}>이 주소에서 직접 저장</button><p>검색 페이지는 직접 저장하지 않습니다. 일반 페이지도 사이트가 읽기를 허용할 때만 저장됩니다.</p></details></div>`;
+  tab.host.innerHTML=`<div class="browser-handoff"><div class="handoff-heading">${icon('external',32)}<p class="eyebrow">CHROME · HTMLMEMO</p><h2>${search?t('검색은 Chrome에서, 메모는 여기서.'):t('웹 탐색은 Chrome에서, 주석은 여기서.')}</h2><p data-single-file-guide>${t('외부 사이트는 이 앱을 연 브라우저의 일반 탭에서 엽니다.<br>브라우저의 페이지 저장에서 <strong>Webpage, Single File</strong>(웹페이지, 단일 파일 · .mhtml) 형식을 선택한 다음, LibreMemo에서 여세요.')}</p></div><p class="web-notice" data-web-status role="status"></p><div class="web-actions"><button class="primary-button" data-browser-focus>${t('브라우저로 전환')} ${icon('external',15)}</button><button class="secondary-button" data-browser-paste>${t('글 붙여넣고 주석 달기')}</button><button class="secondary-button" data-browser-import>${t('파일 가져오기')}</button></div><p class="handoff-return">${t('Chrome 탭에서 필요한 글을 복사한 뒤 LibreMemo 탭으로 돌아오세요.<br>읽던 문서와 주석은 그대로 유지됩니다. <kbd>Ctrl/⌘ Shift V</kbd>로 붙여넣기 창을 바로 열 수 있습니다.')}</p><details class="handoff-details"><summary>${t('보낸 주소 · 직접 가져오기')}</summary><a data-open-external href="${esc(tab.url)}" target="_blank" rel="noopener noreferrer">${esc(tab.url)} ${icon('external',13)}</a><p>${t('이 주소는 LibreMemo에서 마지막으로 보낸 주소입니다. Chrome에서 이동한 현재 주소는 읽지 않습니다. 검색 결과의 글을 가져올 때는 붙여넣기 창에 실제 원문 주소를 넣으세요.')}</p><button class="secondary-button" data-capture${search?' disabled':''}>${t('이 주소에서 직접 저장')}</button><p>${t('검색 페이지는 직접 저장하지 않습니다. 일반 페이지도 사이트가 읽기를 허용할 때만 저장됩니다.')}</p></details></div>`;
   $('[data-browser-focus]',tab.host).onclick=()=>focusBrowserTab(tab);
   $('[data-browser-paste]',tab.host).onclick=()=>pasteTextDialog(tab);
   $('[data-browser-import]',tab.host).onclick=safely(importFiles);
@@ -1556,13 +1557,13 @@ async function openBrowser(input,forceNew=true){
   const existing=tabs.find(tab=>tab.type==='browser'&&tab.url===url);
   if(existing){if(!current?.reader)activate(existing.id);else renderTabs();if(existing.external)focusBrowserTab(existing);return existing;}
   if(!forceNew&&current?.type==='browser'&&current.external===external){await navigate(current,url);return current;}
-  const tab={id:uid(),type:'browser',title:isWebSearch(url)?'웹 검색':displayHost(url),url,history:[url],cursor:0,readable:false,loading:!external,external};
+  const tab={id:uid(),type:'browser',title:isWebSearch(url)?t('웹 검색'):displayHost(url),url,history:[url],cursor:0,readable:false,loading:!external,external};
   tab.host=createHost(tab.id,'browser');tabs.push(tab);
   if(external){
     renderExternalTab(tab);if(!current?.reader)activate(tab.id);else{renderTabs();updateChrome();}
     focusBrowserTab(tab);return tab;
   }
-  tab.host.innerHTML=`<div class="browser-note"><span>${icon('globe',15)} 앱 문서 미리보기</span><a class="text-button" data-open-external href="${esc(url)}" target="_blank" rel="noopener noreferrer">새 탭에서 열기 ${icon('external',13)}</a><button class="text-button" data-capture>페이지 저장 ${icon('save',13)}</button><button class="text-button" data-web-help>가져오기 안내</button></div><div class="web-status" data-web-status role="status"></div><iframe class="browser-frame" title="앱 문서 미리보기" sandbox="allow-same-origin" referrerpolicy="no-referrer"></iframe>`;
+  tab.host.innerHTML=`<div class="browser-note"><span>${icon('globe',15)} ${t('앱 문서 미리보기')}</span><a class="text-button" data-open-external href="${esc(url)}" target="_blank" rel="noopener noreferrer">${t('새 탭에서 열기')} ${icon('external',13)}</a><button class="text-button" data-capture>${t('페이지 저장')} ${icon('save',13)}</button><button class="text-button" data-web-help>${t('가져오기 안내')}</button></div><div class="web-status" data-web-status role="status"></div><iframe class="browser-frame" title="${t('앱 문서 미리보기')}" sandbox="allow-same-origin" referrerpolicy="no-referrer"></iframe>`;
   tab.frame=$('iframe',tab.host);
   tab.frame.addEventListener('load',()=>{
     tab.loading=false;const doc=browserDocument(tab);tab.readable=!!doc;
@@ -1593,40 +1594,40 @@ function renderBrowserState(tab){
   const status=$('[data-web-status]',tab.host),capture=$('[data-capture]',tab.host);if(!status)return;
   if(tab.external){
     const unavailable=tab.browserState==='blocked'||tab.browserState==='unavailable';
-    status.textContent=unavailable?'탭 열기 또는 전환이 제한됐습니다. 아래 「보낸 주소」의 링크를 눌러 직접 여세요.':tab.returned?'복사한 글을 붙여넣거나 저장한 HTML을 가져오세요.':'브라우저 탭으로 보냈습니다.';
-    $('[data-browser-focus]',tab.host).textContent=browserTabs.available(tab.id)?'브라우저로 전환':'브라우저에서 다시 열기';
+    status.textContent=unavailable?t('탭 열기 또는 전환이 제한됐습니다. 아래 「보낸 주소」의 링크를 눌러 직접 여세요.'):tab.returned?t('복사한 글을 붙여넣거나 저장한 HTML을 가져오세요.'):t('브라우저 탭으로 보냈습니다.');
+    $('[data-browser-focus]',tab.host).textContent=browserTabs.available(tab.id)?t('브라우저로 전환'):t('브라우저에서 다시 열기');
     capture.disabled=!!tab.capturing||isWebSearch(tab.url);
     return;
   }
-  status.textContent=tab.capturing?'읽기용 사본을 준비하는 중…':tab.readable?'이 페이지는 앱에서 저장할 수 있습니다. 페이지 저장 후 바로 주석을 남기세요.':'앱 문서를 준비하는 중입니다. 외부 사이트는 브라우저 탭에서 엽니다.';
+  status.textContent=tab.capturing?t('읽기용 사본을 준비하는 중…'):tab.readable?t('이 페이지는 앱에서 저장할 수 있습니다. 페이지 저장 후 바로 주석을 남기세요.'):t('앱 문서를 준비하는 중입니다. 외부 사이트는 브라우저 탭에서 엽니다.');
   capture.disabled=!!tab.capturing;$('[data-open-external]',tab.host).href=tab.url;
 }
 async function navigate(tab,url){
-  if(tab.capturing){toast('가져오기가 끝난 뒤 주소를 이동해주세요.');return;}
+  if(tab.capturing){toast(t('가져오기가 끝난 뒤 주소를 이동해주세요.'));return;}
   url=normalizeURL(url);if(externalURL(url)!==tab.external)return openBrowser(url);
-  tab.url=url;tab.title=isWebSearch(url)?'웹 검색':displayHost(url);tab.history.splice(tab.cursor+1);tab.history.push(url);tab.cursor++;
+  tab.url=url;tab.title=isWebSearch(url)?t('웹 검색'):displayHost(url);tab.history.splice(tab.cursor+1);tab.history.push(url);tab.cursor++;
   if(tab.external){renderExternalTab(tab);renderTabs();updateChrome();focusBrowserTab(tab);return;}
   tab.readable=false;tab.loading=true;tab.frame.src=url;renderBrowserState(tab);renderTabs();updateChrome();
 }
 function toolbarButton(action,name,label,extra='',content=icon(name,18)) {return `<button class="tool-button" data-action="${action}" aria-label="${label}" title="${label}" ${extra}>${content}</button>`;}
-function penSettingsButton() {return toolbarButton('palette','palette','펜과 색상','','<span class="pen-settings-lines" aria-hidden="true"><span class="pen-settings-stroke"></span><span class="pen-settings-highlight"></span><span class="pen-settings-duration"><span class="pen-settings-alpha"></span></span></span>');}
+function penSettingsButton() {return toolbarButton('palette','palette',t('펜과 색상'),'','<span class="pen-settings-lines" aria-hidden="true"><span class="pen-settings-stroke"></span><span class="pen-settings-highlight"></span><span class="pen-settings-duration"><span class="pen-settings-alpha"></span></span></span>');}
 function annotationToolFamily(tool) {return {area:'highlight','area-underline':'underline',text:'note','rect-filled':'rect'}[tool]||tool;}
 function annotationColorKey(r) {return annotationToolFamily(r.tool)==='highlight'?'highlightColor':'color';}
 function annotationColor(r) {return r[annotationColorKey(r)];}
 function annotationToolMode(r) {return r.tool==='rect'&&r.rectFill?'rect-filled':r.tool;}
 function annotationToolModes(group) {
   return {
-    highlight:{title:'형광펜',key:'H',modes:[['highlight','highlight','글자 형광펜','선택한 글자를 따라 표시'],['area','area','영역 형광펜','원하는 영역을 드래그해 표시']]},
-    underline:{title:'밑줄',key:'U',modes:[['underline','underline','글자 밑줄','선택한 글자를 따라 표시'],['area-underline','area-underline','영역 밑줄','원하는 위치에 직접 그리기']]},
-    note:{title:'메모 · 텍스트',key:'N',modes:[['note','note','메모 상자','상자 안에 메모 쓰기'],['text','text','자유 텍스트','배경 상자 없이 글자만 쓰기']]},
-    rect:{title:'사각형',key:'R',modes:[['rect','rect','채움 없음','테두리만 그리기'],['rect-filled','rect-filled','채움 있음','형광펜/채움 투명도로 내부 채우기']]},
-    eraser:{title:'지우개',key:'E',modes:[['eraser','eraser','개별 주석 지우기','지울 주석을 직접 선택'],['clear','trash','주석 모두 지우기','확인한 뒤 전체 삭제 · 실행 취소 가능',true]]},
+    highlight:{title:t('형광펜'),key:'H',modes:[['highlight','highlight',t('글자 형광펜'),t('선택한 글자를 따라 표시')],['area','area',t('영역 형광펜'),t('원하는 영역을 드래그해 표시')]]},
+    underline:{title:t('밑줄'),key:'U',modes:[['underline','underline',t('글자 밑줄'),t('선택한 글자를 따라 표시')],['area-underline','area-underline',t('영역 밑줄'),t('원하는 위치에 직접 그리기')]]},
+    note:{title:t('메모 · 텍스트'),key:'N',modes:[['note','note',t('메모 상자'),t('상자 안에 메모 쓰기')],['text','text',t('자유 텍스트'),t('배경 상자 없이 글자만 쓰기')]]},
+    rect:{title:t('사각형'),key:'R',modes:[['rect','rect',t('채움 없음'),t('테두리만 그리기')],['rect-filled','rect-filled',t('채움 있음'),t('형광펜/채움 투명도로 내부 채우기')]]},
+    eraser:{title:t('지우개'),key:'E',modes:[['eraser','eraser',t('개별 주석 지우기'),t('지울 주석을 직접 선택')],['clear','trash',t('주석 모두 지우기'),t('확인한 뒤 전체 삭제 · 실행 취소 가능'),true]]},
   }[group];
 }
 function showAnnotationToolModes(group, keyboard = false) {
   const r=reader(),definition=annotationToolModes(group);if(!r||!definition)return;
   const current=annotationToolFamily(r.tool)===group?annotationToolMode(r):r.toolChoices?.[group]||group;
-  showPopover('tool-mode-'+group,`<div class="popover-heading"><h3>${definition.title} 방식</h3><button type="button" class="icon-button popover-close" data-popover-close aria-label="${definition.title} 방식 닫기">${icon('close',16)}</button></div><div class="annotation-tool-modes" role="menu" aria-label="${definition.title} 방식">${definition.modes.map(([id,name,label,hint,command])=>`<button type="button" class="menu-button${command?' danger':''}" role="${command?'menuitem':'menuitemradio'}" data-tool-mode="${id}" ${command?`data-tool-command${!r.metadata.annotations.length?' disabled':''}`:`aria-checked="${id===current}"`}>${icon(name,18)}<span><strong>${label}</strong><small>${hint}</small></span>${!command&&id===current?icon('check',14):''}</button>`).join('')}</div>`,()=>{
+  showPopover('tool-mode-'+group,`<div class="popover-heading"><h3>${t('{tool} 방식',{tool:definition.title})}</h3><button type="button" class="icon-button popover-close" data-popover-close aria-label="${t('{tool} 방식 닫기',{tool:definition.title})}">${icon('close',16)}</button></div><div class="annotation-tool-modes" role="menu" aria-label="${t('{tool} 방식',{tool:definition.title})}">${definition.modes.map(([id,name,label,hint,command])=>`<button type="button" class="menu-button${command?' danger':''}" role="${command?'menuitem':'menuitemradio'}" data-tool-mode="${id}" ${command?`data-tool-command${!r.metadata.annotations.length?' disabled':''}`:`aria-checked="${id===current}"`}>${icon(name,18)}<span><strong>${label}</strong><small>${hint}</small></span>${!command&&id===current?icon('check',14):''}</button>`).join('')}</div>`,()=>{
     const pop=$('#tool-popover'),trigger=$(`[data-action="${group}"]`,$('#toolbar'));
     trigger?.setAttribute('aria-expanded','true');
     $$('[data-tool-mode]',pop).forEach(button=>button.onclick=()=>toolAction(button.dataset.toolMode));
@@ -1643,7 +1644,7 @@ function showAnnotationToolModes(group, keyboard = false) {
 function renderToolbar() {
   const r=reader();if(!r||!r.doc)return;
   $('#toolbar').hidden=false;
-  $('#toolbar').innerHTML=`<button class="toolbar-grip" aria-label="툴바 이동">${icon('grip',14)}</button><span class="tool-group">${toolbarButton('select','select','선택 / 읽기 (V) · 주석을 드래그해 이동')}${toolbarButton('pen','pen','펜 (P)')}${toolbarButton('highlight','highlight','형광펜 (H)')}${toolbarButton('underline','underline','밑줄 (U)')}${toolbarButton('rect','rect','사각형 (R)')}${toolbarButton('eraser','eraser','지우개 (E)')}${toolbarButton('note','note','메모 (N)')}${penSettingsButton()}<span class="tool-group toolbar-history">${toolbarButton('undo','undo','실행 취소 (Ctrl/⌘ Z)')}${toolbarButton('redo','redo','다시 실행 (Ctrl/⌘ Shift Z)')}</span>${toolbarButton('more','more','더 많은 도구')}</span>`;
+  $('#toolbar').innerHTML=`<button class="toolbar-grip" aria-label="${t('툴바 이동')}">${icon('grip',14)}</button><span class="tool-group">${toolbarButton('select','select',t('선택 / 읽기 (V) · 주석을 드래그해 이동'))}${toolbarButton('pen','pen',t('펜 (P)'))}${toolbarButton('highlight','highlight',t('형광펜 (H)'))}${toolbarButton('underline','underline',t('밑줄 (U)'))}${toolbarButton('rect','rect',t('사각형 (R)'))}${toolbarButton('eraser','eraser',t('지우개 (E)'))}${toolbarButton('note','note',t('메모 (N)'))}${penSettingsButton()}<span class="tool-group toolbar-history">${toolbarButton('undo','undo',t('실행 취소 (Ctrl/⌘ Z)'))}${toolbarButton('redo','redo',t('다시 실행 (Ctrl/⌘ Shift Z)'))}</span>${toolbarButton('more','more',t('더 많은 도구'))}</span>`;
   $$('[data-action]',$('#toolbar')).forEach(button=>{
     const action=button.dataset.action,modes=annotationToolModes(action);
     button.onpointerdown=e=>{const selection=action==='note'?r.doc.getSelection?.():null;if(e.pointerType==='mouse'||(selection?.rangeCount&&!selection.isCollapsed))e.preventDefault();};
@@ -1673,7 +1674,7 @@ function updateToolbarState() {
     const definition=annotationToolModes(action);
     if(definition){
       const mode=definition.modes.find(([id])=>id===(selected?annotationToolMode(r):r.toolChoices?.[action]))||definition.modes[0];
-      button.innerHTML=icon(mode[1],18);button.title=`${definition.title}: ${mode[2]} (${definition.key}) · 다시 누르거나 ↓ 키로 방식 선택`;
+      button.innerHTML=icon(mode[1],18);button.title=t('{tool}: {mode} ({key}) · 다시 누르거나 ↓ 키로 방식 선택',{tool:definition.title,mode:mode[2],key:definition.key});
       button.setAttribute('aria-label',button.title);
     }
   });
@@ -1684,7 +1685,7 @@ function updateToolbarState() {
   if(palette){
     palette.style.setProperty('--tool-color',r.color);palette.style.setProperty('--tool-highlight-color',r.highlightColor);palette.style.setProperty('--tool-opacity',r.opacity);palette.style.setProperty('--tool-width-preview',(1+(Math.min(18,Math.max(1,r.width))-1)*5/17).toFixed(2)+'px');
     palette.style.setProperty('--tool-time-preview',({0:100,3:25,10:50,30:75}[r.penTTL]??100)+'%');
-    palette.title=`펜과 색상 · 펜 색상 ${r.color.toUpperCase()} · 굵기 ${r.width}px · 형광펜 색상 ${r.highlightColor.toUpperCase()} · 형광펜/채움 투명도 ${Math.round(r.opacity*100)}% · 펜 표시 시간 ${r.penTTL?r.penTTL+'초':'영구 저장'}`;
+    palette.title=t('펜과 색상 · 펜 색상 {color} · 굵기 {width}px · 형광펜 색상 {highlight} · 형광펜/채움 투명도 {opacity}% · 펜 표시 시간 {ttl}',{color:r.color.toUpperCase(),width:r.width,highlight:r.highlightColor.toUpperCase(),opacity:Math.round(r.opacity*100),ttl:r.penTTL?t('{n}초',{n:r.penTTL}):t('영구 저장')});
     palette.setAttribute('aria-label',palette.title);
   }
 }
@@ -1743,7 +1744,7 @@ function showPopover(name,html,bind=()=>{},readingAnchor=null) {
   $('#tool-popover').cancelPaletteDrag?.();
   $('#tool-popover').onkeydown=null;$$('.tool-has-modes',$('#toolbar')).forEach(button=>button.setAttribute('aria-expanded','false'));
   $('#tool-popover').removeAttribute('aria-label');$('#tool-popover').removeAttribute('role');
-  if(name==='zoom'){$('#tool-popover').setAttribute('role','dialog');$('#tool-popover').setAttribute('aria-label','확대 · 축소');}
+  if(name==='zoom'){$('#tool-popover').setAttribute('role','dialog');$('#tool-popover').setAttribute('aria-label',t('확대 · 축소'));}
   // A notice must not sit over the menu it just made room for; errors stay until they time out.
   if(!$('#toast').classList.contains('error'))$('#toast').hidden=true;
   popoverName=name;$('#tool-popover').readingAnchor=readingAnchor;$('#tool-popover').classList.toggle('selection',name==='selection');$('#tool-popover').classList.toggle('palette-popover',name==='palette');$('#tool-popover').innerHTML=html;$('#tool-popover').hidden=false;positionPopover();
@@ -1765,8 +1766,8 @@ function bindHighlightColorNames(pop, palette, names, reader) {
     form.innerHTML = palette.colors.map(color => `<label class="highlight-name-row">
       <span class="highlight-name-sample" style="--swatch:${color}" aria-hidden="true"></span>
       <span>${color.toUpperCase()}</span>
-      <input type="text" data-highlight-color-name="${color}" aria-label="${color.toUpperCase()} 형광펜 색 이름" autocomplete="off" maxlength="${HIGHLIGHT_NAME_LENGTH}" value="${esc(names.get(color) || '')}" placeholder="이름">
-    </label>`).join('') + '<button type="submit" class="palette-mini-btn primary" data-save-highlight-names>이름 저장</button>';
+      <input type="text" data-highlight-color-name="${color}" aria-label="${t('{color} 형광펜 색 이름',{color:color.toUpperCase()})}" autocomplete="off" maxlength="${HIGHLIGHT_NAME_LENGTH}" value="${esc(names.get(color) || '')}" placeholder="${t('이름')}">
+    </label>`).join('') + `<button type="submit" class="palette-mini-btn primary" data-save-highlight-names>${t('이름 저장')}</button>`;
     positionPopover();
   };
   form.onsubmit = safely(event => {
@@ -1774,7 +1775,7 @@ function bindHighlightColorNames(pop, palette, names, reader) {
     const current = getActivePalette();
     if (current.id !== palette.id) {
       renderPalettePopoverContent(reader);
-      throw Error('선택한 팔레트가 바뀌었습니다. 현재 팔레트를 확인해주세요.');
+      throw Error(t('선택한 팔레트가 바뀌었습니다. 현재 팔레트를 확인해주세요.'));
     }
     const saved = preferences.annotation.highlightColorNames;
     const next = {...saved[palette.id]};
@@ -1783,7 +1784,7 @@ function bindHighlightColorNames(pop, palette, names, reader) {
       const original = names.get(color) || '', latest = next[color] || '';
       if (name === original) continue;
       if (latest !== original && name !== latest) {
-        throw Error('다른 창에서 이 색 이름을 변경했습니다. 팔레트를 다시 열어 확인해주세요.');
+        throw Error(t('다른 창에서 이 색 이름을 변경했습니다. 팔레트를 다시 열어 확인해주세요.'));
       }
       if (name) next[color] = name;
       else delete next[color];
@@ -1791,7 +1792,7 @@ function bindHighlightColorNames(pop, palette, names, reader) {
     changePreferences({annotation:{highlightColorNames:{...saved,[palette.id]:next}}});
     renderPalettePopoverContent(reader);
     $('#highlight-color-names summary', pop).focus({preventScroll:true});
-    toast('형광펜 색 이름을 저장했습니다.');
+    toast(t('형광펜 색 이름을 저장했습니다.'));
   });
 }
 function renderPalettePopoverContent(r) {
@@ -1806,12 +1807,12 @@ function renderPalettePopoverContent(r) {
   const currentColor = annotationColor(r).toLowerCase();
   let pickerHsv = hexToHsv(currentColor);
   const rgb = hexToRgb(currentColor);
-  pop.innerHTML = `<div class="popover-heading" data-palette-drag tabindex="0" role="group" aria-label="펜과 색상 창 이동" title="드래그하여 이동 · 방향키로 이동 (Shift: 크게)"><h3>펜과 색상</h3><button type="button" class="icon-button popover-close" data-popover-close aria-label="펜과 색상 닫기" title="닫기">${icon('close',16)}</button></div>`
-    + `<label class="range-label">굵기 <output id="width-output">${r.width}px</output><input id="pen-width" type="range" min="1" max="18" value="${r.width}"></label><label class="range-label">형광펜/채움 투명도 <output id="opacity-output">${Math.round(r.opacity*100)}%</output><input id="pen-opacity" type="range" min="10" max="90" value="${Math.round(r.opacity*100)}"></label><label class="select-label">펜 표시 시간 <select id="pen-ttl"><option value="0">영구 저장</option><option value="3">3초</option><option value="10">10초</option><option value="30">30초</option></select></label><p class="popover-hint">시간을 정한 펜은 잠깐 표시되고 저장되지 않아요.</p>`
-    + `<div class="palette-section"><div class="palette-bar"><span class="palette-label">팔레트 프리셋</span><div class="palette-actions"><select id="palette-preset" aria-label="팔레트 프리셋"><optgroup label="프리셋 팔레트 (20개)">${PRESET_PALETTES.map((p, idx) => `<option value="${esc(p.id)}" ${p.id === activePalette.id ? 'selected' : ''}>${idx + 1}. ${esc(p.name)} (${p.colors.length})</option>`).join('')}</optgroup>${customPalettes.length ? `<optgroup label="사용자 팔레트 (${customPalettes.length}개)">${customPalettes.map(p => `<option value="${esc(p.id)}" ${p.id === activePalette.id ? 'selected' : ''}>★ ${esc(p.name)} (${p.colors.length})</option>`).join('')}</optgroup>` : ''}</select>${isCustomPalette ? `<button type="button" id="delete-custom-palette" class="palette-mini-btn danger" title="선택한 사용자 팔레트 삭제" aria-label="사용자 팔레트 삭제">삭제</button>` : ''}</div></div><div id="preset-swatches" class="swatches preset-swatches">${activePalette.colors.map(c => `<button type="button" data-color="${c}" style="--swatch:${c}" title="${esc(swatchLabel(c))}" aria-label="색상 ${esc(swatchLabel(c))}" class="swatch ${currentColor === c ? 'chosen' : ''}"></button>`).join('')}</div>
-      <details id="highlight-color-names" class="highlight-name-editor"><summary>형광펜 색 이름 <span data-active-highlight-name>${esc(highlightNames.get(currentColor) || '')}</span></summary><form aria-label="현재 팔레트의 형광펜 색 이름"></form></details></div>`
-    + `<div class="palette-section"><div class="palette-bar"><span class="palette-label">사용자 색상 (${customColors.length})</span><div class="palette-actions"><button type="button" id="add-custom-color" class="palette-mini-btn" title="현재 색상을 사용자 색상에 추가">+ 색상 추가</button><button type="button" id="remove-custom-color" class="palette-mini-btn" ${customColors.includes(currentColor) ? '' : 'disabled'} title="선택한 사용자 색상 삭제">− 삭제</button></div></div><div id="custom-swatches" class="swatches custom-swatches">${customColors.length ? customColors.map(c => `<button type="button" data-color="${c}" data-custom-swatch="${c}" style="--swatch:${c}" title="사용자 색상 ${c}" aria-label="사용자 색상 ${c}" class="swatch custom-swatch ${currentColor === c ? 'chosen' : ''}"></button>`).join('') : '<span class="palette-empty">색상을 고른 뒤 「+ 색상 추가」를 눌러 저장하세요.</span>'}</div><div class="custom-palette-creator"><input id="custom-palette-name" type="text" maxlength="40" placeholder="새 팔레트 이름 (예: 내 필기 세트)" aria-label="새 팔레트 이름"><button type="button" id="save-custom-palette" class="palette-mini-btn primary">+ 팔레트 저장</button></div></div>`
-    + `<div class="palette-section color-picker-section"><div class="palette-bar"><span class="palette-label">컬러 피커</span><span class="color-preview-badge"><i id="color-preview-chip" style="background:${currentColor}"></i><code id="color-preview-text">${currentColor.toUpperCase()}</code></span></div><div id="color-picker-sv" class="color-picker-sv" style="--picker-hue:${pickerHsv.h}" role="slider" tabindex="0" aria-label="채도 및 명도 선택"><span id="color-picker-sv-thumb" class="color-picker-sv-thumb" style="left:${pickerHsv.s}%;top:${100 - pickerHsv.v}%"></span></div><div class="color-picker-hue-row"><input id="color-picker-hue" class="color-picker-hue" type="range" min="0" max="360" value="${pickerHsv.h}" aria-label="색상 (Hue)"><input type="color" id="custom-color" value="${currentColor}" title="시스템 색상 선택기" aria-label="사용자 색상"></div><div class="color-picker-inputs"><label class="color-input-field hex-field"><span>HEX</span><input id="color-hex" type="text" maxlength="7" value="${currentColor.toUpperCase()}" aria-label="HEX 색상 코드"></label><label class="color-input-field"><span>R</span><input id="color-r" type="number" min="0" max="255" value="${rgb.r}" aria-label="R (빨강)"></label><label class="color-input-field"><span>G</span><input id="color-g" type="number" min="0" max="255" value="${rgb.g}" aria-label="G (초록)"></label><label class="color-input-field"><span>B</span><input id="color-b" type="number" min="0" max="255" value="${rgb.b}" aria-label="B (파랑)"></label></div></div>`
+  pop.innerHTML = `<div class="popover-heading" data-palette-drag tabindex="0" role="group" aria-label="${t('펜과 색상 창 이동')}" title="${t('드래그하여 이동 · 방향키로 이동 (Shift: 크게)')}"><h3>${t('펜과 색상')}</h3><button type="button" class="icon-button popover-close" data-popover-close aria-label="${t('펜과 색상 닫기')}" title="${t('닫기')}">${icon('close',16)}</button></div>`
+    + `<label class="range-label">${t('굵기')} <output id="width-output">${r.width}px</output><input id="pen-width" type="range" min="1" max="18" value="${r.width}"></label><label class="range-label">${t('형광펜/채움 투명도')} <output id="opacity-output">${Math.round(r.opacity*100)}%</output><input id="pen-opacity" type="range" min="10" max="90" value="${Math.round(r.opacity*100)}"></label><label class="select-label">${t('펜 표시 시간')} <select id="pen-ttl"><option value="0">${t('영구 저장')}</option><option value="3">${t('3초')}</option><option value="10">${t('10초')}</option><option value="30">${t('30초')}</option></select></label><p class="popover-hint">${t('시간을 정한 펜은 잠깐 표시되고 저장되지 않아요.')}</p>`
+    + `<div class="palette-section"><div class="palette-bar"><span class="palette-label">${t('팔레트 프리셋')}</span><div class="palette-actions"><select id="palette-preset" aria-label="${t('팔레트 프리셋')}"><optgroup label="${t('프리셋 팔레트 (20개)')}">${PRESET_PALETTES.map((p, idx) => `<option value="${esc(p.id)}" ${p.id === activePalette.id ? 'selected' : ''}>${idx + 1}. ${esc(p.name)} (${p.colors.length})</option>`).join('')}</optgroup>${customPalettes.length ? `<optgroup label="${t('사용자 팔레트 ({n}개)',{n:customPalettes.length})}">${customPalettes.map(p => `<option value="${esc(p.id)}" ${p.id === activePalette.id ? 'selected' : ''}>★ ${esc(p.name)} (${p.colors.length})</option>`).join('')}</optgroup>` : ''}</select>${isCustomPalette ? `<button type="button" id="delete-custom-palette" class="palette-mini-btn danger" title="${t('선택한 사용자 팔레트 삭제')}" aria-label="${t('사용자 팔레트 삭제')}">${t('삭제')}</button>` : ''}</div></div><div id="preset-swatches" class="swatches preset-swatches">${activePalette.colors.map(c => `<button type="button" data-color="${c}" style="--swatch:${c}" title="${esc(swatchLabel(c))}" aria-label="${t('색상 {name}',{name:esc(swatchLabel(c))})}" class="swatch ${currentColor === c ? 'chosen' : ''}"></button>`).join('')}</div>
+      <details id="highlight-color-names" class="highlight-name-editor"><summary>${t('형광펜 색 이름')} <span data-active-highlight-name>${esc(highlightNames.get(currentColor) || '')}</span></summary><form aria-label="${t('현재 팔레트의 형광펜 색 이름')}"></form></details></div>`
+    + `<div class="palette-section"><div class="palette-bar"><span class="palette-label">${t('사용자 색상 ({n})',{n:customColors.length})}</span><div class="palette-actions"><button type="button" id="add-custom-color" class="palette-mini-btn" title="${t('현재 색상을 사용자 색상에 추가')}">${t('+ 색상 추가')}</button><button type="button" id="remove-custom-color" class="palette-mini-btn" ${customColors.includes(currentColor) ? '' : 'disabled'} title="${t('선택한 사용자 색상 삭제')}">${t('− 삭제')}</button></div></div><div id="custom-swatches" class="swatches custom-swatches">${customColors.length ? customColors.map(c => `<button type="button" data-color="${c}" data-custom-swatch="${c}" style="--swatch:${c}" title="${t('사용자 색상 {color}',{color:c})}" aria-label="${t('사용자 색상 {color}',{color:c})}" class="swatch custom-swatch ${currentColor === c ? 'chosen' : ''}"></button>`).join('') : `<span class="palette-empty">${t('색상을 고른 뒤 「+ 색상 추가」를 눌러 저장하세요.')}</span>`}</div><div class="custom-palette-creator"><input id="custom-palette-name" type="text" maxlength="40" placeholder="${t('새 팔레트 이름 (예: 내 필기 세트)')}" aria-label="${t('새 팔레트 이름')}"><button type="button" id="save-custom-palette" class="palette-mini-btn primary">${t('+ 팔레트 저장')}</button></div></div>`
+    + `<div class="palette-section color-picker-section"><div class="palette-bar"><span class="palette-label">${t('컬러 피커')}</span><span class="color-preview-badge"><i id="color-preview-chip" style="background:${currentColor}"></i><code id="color-preview-text">${currentColor.toUpperCase()}</code></span></div><div id="color-picker-sv" class="color-picker-sv" style="--picker-hue:${pickerHsv.h}" role="slider" tabindex="0" aria-label="${t('채도 및 명도 선택')}"><span id="color-picker-sv-thumb" class="color-picker-sv-thumb" style="left:${pickerHsv.s}%;top:${100 - pickerHsv.v}%"></span></div><div class="color-picker-hue-row"><input id="color-picker-hue" class="color-picker-hue" type="range" min="0" max="360" value="${pickerHsv.h}" aria-label="${t('색상 (Hue)')}"><input type="color" id="custom-color" value="${currentColor}" title="${t('시스템 색상 선택기')}" aria-label="${t('사용자 색상')}"></div><div class="color-picker-inputs"><label class="color-input-field hex-field"><span>HEX</span><input id="color-hex" type="text" maxlength="7" value="${currentColor.toUpperCase()}" aria-label="${t('HEX 색상 코드')}"></label><label class="color-input-field"><span>R</span><input id="color-r" type="number" min="0" max="255" value="${rgb.r}" aria-label="${t('R (빨강)')}"></label><label class="color-input-field"><span>G</span><input id="color-g" type="number" min="0" max="255" value="${rgb.g}" aria-label="${t('G (초록)')}"></label><label class="color-input-field"><span>B</span><input id="color-b" type="number" min="0" max="255" value="${rgb.b}" aria-label="${t('B (파랑)')}"></label></div></div>`
     + textStyleSection(r);
   positionPopover();bindPaletteDrag(pop);
   $$('[data-popover-close]', pop).forEach(button => button.onclick = closePopover);
@@ -1867,20 +1868,20 @@ function renderPalettePopoverContent(r) {
   $('#save-custom-palette', pop).onclick = safely(() => {
     const existing = preferences.annotation.customPalettes || [];
     const nameInput = $('#custom-palette-name', pop);
-    const name = (nameInput?.value.trim() || `사용자 팔레트 ${existing.length + 1}`).slice(0, 40);
+    const name = (nameInput?.value.trim() || t('사용자 팔레트 {n}',{n:existing.length + 1})).slice(0, 40);
     const savedCustom = preferences.annotation.customColors || [];
     const baseColors = savedCustom.length ? [...new Set([...savedCustom, annotationColor(r).toLowerCase()])] : [...new Set([annotationColor(r).toLowerCase(), ...activePalette.colors])];
     const id = 'custom-' + uid();
     const nextPalettes = [...existing, {id, name, colors: baseColors.slice(0, 20)}].slice(-40);
     changePreferences({annotation: {customPalettes: nextPalettes, paletteId: id}});
-    toast(`「${name}」 팔레트를 저장했습니다.`);
+    toast(t('「{name}」 팔레트를 저장했습니다.',{name}));
     renderPalettePopoverContent(r);
   });
   if ($('#delete-custom-palette', pop)) {
     $('#delete-custom-palette', pop).onclick = safely(() => {
       const nextPalettes = (preferences.annotation.customPalettes || []).filter(p => p.id !== activePalette.id);
       changePreferences({annotation: {customPalettes: nextPalettes, paletteId: PRESET_PALETTES[0].id}});
-      toast('사용자 팔레트를 삭제했습니다.');
+      toast(t('사용자 팔레트를 삭제했습니다.'));
       renderPalettePopoverContent(r);
     });
   }
@@ -1952,15 +1953,15 @@ function renderPalettePopoverContent(r) {
 const sameTextStyle=(a,b)=>JSON.stringify(validTextStyle(a))===JSON.stringify(validTextStyle(b));
 function textStyleSection(r) {
   const current=validTextStyle(preferences.annotation.textStyle),own=preferences.annotation.textStyles||[],pen=r.color;
-  const chip=(key,name,style,removable=false)=>`<span class="text-style-chip${(style?sameTextStyle(style,current):!current)?' active':''}"><button type="button" data-text-style="${esc(key)}" title="${esc(name)}"><i style="${style?stylePreview(style,pen):'background:#fff9df;color:#544a30;border:1px solid '+pen}">가 Aa</i><span>${esc(name)}</span></button>${removable?`<button type="button" class="text-style-remove" data-text-style-remove="${esc(key)}" aria-label="${esc(name)} 지우기" title="지우기">${icon('close',11)}</button>`:''}</span>`;
+  const chip=(key,name,style,removable=false)=>`<span class="text-style-chip${(style?sameTextStyle(style,current):!current)?' active':''}"><button type="button" data-text-style="${esc(key)}" title="${esc(name)}"><i style="${style?stylePreview(style,pen):'background:#fff9df;color:#544a30;border:1px solid '+pen}">가 Aa</i><span>${esc(name)}</span></button>${removable?`<button type="button" class="text-style-remove" data-text-style-remove="${esc(key)}" aria-label="${t('{name} 지우기',{name:esc(name)})}" title="${t('지우기')}">${icon('close',11)}</button>`:''}</span>`;
   const s=current||TEXT_STYLE_PRESETS[0].style,mode=v=>v===null?'none':v==='pen'?'pen':'custom',hex=v=>v&&v!=='pen'?v:pen;
-  return `<div class="palette-section text-style-section"><div class="palette-bar"><span class="palette-label">텍스트 상자 스타일</span><div class="palette-actions"><button type="button" id="text-style-save" class="palette-mini-btn" title="지금 스타일을 이름을 붙여 저장">+ 내 스타일로 저장</button></div></div>
-    <div class="text-style-grid">${chip('auto','종류별 기본',null)}${TEXT_STYLE_PRESETS.map(p=>chip('preset:'+p.id,p.name,p.style)).join('')}${own.map(o=>chip('own:'+o.id,o.name,o.style,true)).join('')}</div>
+  return `<div class="palette-section text-style-section"><div class="palette-bar"><span class="palette-label">${t('텍스트 상자 스타일')}</span><div class="palette-actions"><button type="button" id="text-style-save" class="palette-mini-btn" title="${t('지금 스타일을 이름을 붙여 저장')}">${t('+ 내 스타일로 저장')}</button></div></div>
+    <div class="text-style-grid">${chip('auto',t('종류별 기본'),null)}${TEXT_STYLE_PRESETS.map(p=>chip('preset:'+p.id,p.name,p.style)).join('')}${own.map(o=>chip('own:'+o.id,o.name,o.style,true)).join('')}</div>
     <div class="text-style-controls">
-      <label class="range-label">글자 크기 <output id="ts-size-out">${s.size}px</output><input id="ts-size" type="range" min="${TEXT_SIZE_MIN}" max="${TEXT_SIZE_MAX}" value="${s.size}"></label>
-      <label class="text-style-row"><input type="checkbox" id="ts-bold" ${s.bold?'checked':''}> 굵게</label>
-      ${[['color','글자색',s.color,false],['background','배경',s.background,true],['border','테두리',s.border,true]].map(([key,label,value,canNone])=>`<label class="text-style-row">${label}<select id="ts-${key}-mode">${canNone?`<option value="none" ${mode(value)==='none'?'selected':''}>없음</option>`:''}<option value="pen" ${mode(value)==='pen'?'selected':''}>펜 색</option><option value="custom" ${mode(value)==='custom'?'selected':''}>직접 고르기</option></select><input type="color" id="ts-${key}" value="${hex(value)}" ${mode(value)==='custom'?'':'hidden'} aria-label="${label} 색"></label>`).join('')}
-    </div><p class="text-style-note">새로 쓰는 메모 상자·자유 텍스트에 쓰입니다. 선택 도구로 고른 메모가 있으면 그 메모도 바로 바뀝니다.</p></div>`;
+      <label class="range-label">${t('글자 크기')} <output id="ts-size-out">${s.size}px</output><input id="ts-size" type="range" min="${TEXT_SIZE_MIN}" max="${TEXT_SIZE_MAX}" value="${s.size}"></label>
+      <label class="text-style-row"><input type="checkbox" id="ts-bold" ${s.bold?'checked':''}> ${t('굵게')}</label>
+      ${[['color',t('글자색'),s.color,false],['background',t('배경'),s.background,true],['border',t('테두리'),s.border,true]].map(([key,label,value,canNone])=>`<label class="text-style-row">${label}<select id="ts-${key}-mode">${canNone?`<option value="none" ${mode(value)==='none'?'selected':''}>${t('없음')}</option>`:''}<option value="pen" ${mode(value)==='pen'?'selected':''}>${t('펜 색')}</option><option value="custom" ${mode(value)==='custom'?'selected':''}>${t('직접 고르기')}</option></select><input type="color" id="ts-${key}" value="${hex(value)}" ${mode(value)==='custom'?'':'hidden'} aria-label="${t('{label} 색',{label})}"></label>`).join('')}
+    </div><p class="text-style-note">${t('새로 쓰는 메모 상자·자유 텍스트에 쓰입니다. 선택 도구로 고른 메모가 있으면 그 메모도 바로 바뀝니다.')}</p></div>`;
 }
 function bindTextStyleSection(r, pop) {
   const own=()=>preferences.annotation.textStyles||[];
@@ -1968,7 +1969,7 @@ function bindTextStyleSection(r, pop) {
     const valid=style?validTextStyle(style):null;
     changePreferences({annotation:{textStyle:valid}});
     for(const tab of tabs)if(tab.reader)tab.reader.textStyle=valid;
-    if(valid&&reader()?.applyTextStyle(valid))toast('선택한 메모에 스타일을 적용했습니다.');
+    if(valid&&reader()?.applyTextStyle(valid))toast(t('선택한 메모에 스타일을 적용했습니다.'));
   };
   const rerender=()=>{const top=pop.scrollTop;renderPalettePopoverContent(r);pop.scrollTop=top;};
   $$('[data-text-style]',pop).forEach(button=>button.onclick=safely(()=>{
@@ -1993,17 +1994,17 @@ function bindTextStyleSection(r, pop) {
   for(const key of ['color','background','border']){$('#ts-'+key+'-mode',pop).onchange=safely(changed);$('#ts-'+key,pop).oninput=safely(changed);}
   $('#text-style-save',pop).onclick=safely(async()=>{
     const style=validTextStyle(fromControls());if(!style)return;
-    if(own().length>=30)throw Error('내 스타일은 30개까지 저장할 수 있습니다. 쓰지 않는 스타일을 지운 뒤 저장해주세요.');
-    const name=(await promptText('text','내 스타일 '+(own().length+1)))?.trim().slice(0,30);if(!name)return;
+    if(own().length>=30)throw Error(t('내 스타일은 30개까지 저장할 수 있습니다. 쓰지 않는 스타일을 지운 뒤 저장해주세요.'));
+    const name=(await promptText('text',t('내 스타일 {n}',{n:own().length+1})))?.trim().slice(0,30);if(!name)return;
     changePreferences({annotation:{textStyles:[...own(),{id:uid(),name,style}],textStyle:style}});
-    toast(`「${name}」 스타일을 저장했습니다. 펜과 색상의 텍스트 상자 스타일에서 고를 수 있습니다.`);
+    toast(t('「{name}」 스타일을 저장했습니다. 펜과 색상의 텍스트 상자 스타일에서 고를 수 있습니다.',{name}));
   });
 }
 function showSelectionMenu(r) {
   const anchor=r.selection;if(!anchor)return;
   if(popoverName==='selection')closePopover();
-  showPopover('selection',`${[['speak','읽어주기'],['aiSearch','AI 검색'],['webSearch','웹 검색']].map(([a,l]) => `<button data-selection="${a}">${l}</button>`).join('')}`,()=>{
-    const pop=$('#tool-popover');pop.setAttribute('role','dialog');pop.setAttribute('aria-label','선택한 텍스트');
+  showPopover('selection',`${[['speak',t('읽어주기')],['aiSearch',t('AI 검색')],['webSearch',t('웹 검색')]].map(([a,l]) => `<button data-selection="${a}">${l}</button>`).join('')}`,()=>{
+    const pop=$('#tool-popover');pop.setAttribute('role','dialog');pop.setAttribute('aria-label',t('선택한 텍스트'));
     $$('[data-selection]',pop).forEach(button=>{
       button.onpointerdown=e=>e.preventDefault();
       button.onclick=safely(async()=>{
@@ -2019,9 +2020,9 @@ function showSelectionMenu(r) {
 // One enabled LLM runs at once; several become the menu in the same place.
 async function chooseAiSearch(text) {
   const engines=preferences.aiSearch.filter(engine=>engine.enabled);
-  if(!engines.length){closePopover();toast('사용할 LLM이 없습니다. 설정 → AI 검색에서 하나 이상 체크해주세요.',true);return false;}
+  if(!engines.length){closePopover();toast(t('사용할 LLM이 없습니다. 설정 → AI 검색에서 하나 이상 체크해주세요.'),true);return false;}
   if(engines.length===1){await runAiSearch(engines[0],text);return true;}
-  const pop=$('#tool-popover');pop.setAttribute('aria-label','AI 검색에 사용할 LLM');
+  const pop=$('#tool-popover');pop.setAttribute('aria-label',t('AI 검색에 사용할 LLM'));
   pop.innerHTML=engines.map(engine=>`<button data-ai-engine="${esc(engine.id)}">${esc(engine.name)}</button>`).join('');
   $$('[data-ai-engine]',pop).forEach(button=>{
     button.onpointerdown=e=>e.preventDefault();
@@ -2035,18 +2036,18 @@ async function runAiSearch(engine,text) {
   // Copy inside the click: the browser refuses clipboard writes without one.
   if(request.copy)try{await navigator.clipboard.writeText(text);copied=true;}catch{/* Reported below. */}
   await openBrowser(request.url);
-  if(request.truncated)toast(copied?`앞 ${AI_TEXT_LIMIT.toLocaleString()}자만 보냈습니다. 전체 글은 복사해 두었습니다.`:`앞 ${AI_TEXT_LIMIT.toLocaleString()}자만 보냈습니다.`);
-  else if(request.copy)toast(copied?`선택한 글을 복사했습니다. ${engine.name}에 붙여넣어 주세요.`:`${engine.name}이(가) 글을 직접 받지 못하고 복사도 차단되었습니다. 글을 직접 복사해주세요.`,!copied);
+  if(request.truncated)toast(copied?t('앞 {n}자만 보냈습니다. 전체 글은 복사해 두었습니다.',{n:AI_TEXT_LIMIT.toLocaleString()}):t('앞 {n}자만 보냈습니다.',{n:AI_TEXT_LIMIT.toLocaleString()}));
+  else if(request.copy)toast(copied?t('선택한 글을 복사했습니다. {name}에 붙여넣어 주세요.',{name:engine.name}):t('{name}이(가) 글을 직접 받지 못하고 복사도 차단되었습니다. 글을 직접 복사해주세요.',{name:engine.name}),!copied);
 }
 function aiSearchDialog() {
-  const row=engine=>`<li class="ai-search-row" data-engine="${esc(engine.id)}"><label class="ai-search-use"><input type="checkbox" data-field="enabled" aria-label="${esc(engine.name)} 사용"${engine.enabled?' checked':''}> 사용</label><input data-field="name" aria-label="이름" maxlength="40" value="${esc(engine.name)}"><input data-field="url" aria-label="주소" type="url" value="${esc(engine.url)}"><button class="icon-button" data-remove aria-label="${esc(engine.name)} 삭제">${icon('close',14)}</button></li>`;
-  modal(`<div class="dialog-heading"><h2>AI 검색</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p>선택한 글을 체크한 LLM의 웹페이지로 보냅니다. 브라우저에 로그인한 계정을 그대로 쓰며 API 키는 필요 없습니다. 주소의 <code>{text}</code> 자리에 글이 들어갑니다(앞 2,000자까지). 더 긴 글이나 <code>{text}</code>가 없는 주소는 전체 글의 복사를 시도하므로 열린 페이지에 붙여넣으세요. 복사가 차단되면 직접 복사합니다. 주소로 보내거나 붙여넣은 글은 선택한 서비스에서 처리하며, 답변이 LibreMemo에 자동 저장되지는 않습니다.</p><ul id="ai-search-list" class="ai-search-list">${preferences.aiSearch.map(row).join('')}</ul><form id="ai-search-add" class="ai-search-add"><input id="ai-search-name" aria-label="새 LLM 이름" placeholder="이름" maxlength="40" required><input id="ai-search-url" aria-label="새 LLM 주소" placeholder="https://example.com/?q={text}" required><button class="secondary-button" type="submit">등록</button></form><div class="dialog-actions"><button id="ai-search-back" class="secondary-button" type="button">설정으로</button></div>`,()=>{
+  const row=engine=>`<li class="ai-search-row" data-engine="${esc(engine.id)}"><label class="ai-search-use"><input type="checkbox" data-field="enabled" aria-label="${t('{name} 사용',{name:esc(engine.name)})}"${engine.enabled?' checked':''}> ${t('사용')}</label><input data-field="name" aria-label="${t('이름')}" maxlength="40" value="${esc(engine.name)}"><input data-field="url" aria-label="${t('주소')}" type="url" value="${esc(engine.url)}"><button class="icon-button" data-remove aria-label="${t('{name} 삭제',{name:esc(engine.name)})}">${icon('close',14)}</button></li>`;
+  modal(`<div class="dialog-heading"><h2>${t('AI 검색')}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div><p>${t('선택한 글을 체크한 LLM의 웹페이지로 보냅니다. 브라우저에 로그인한 계정을 그대로 쓰며 API 키는 필요 없습니다. 주소의 <code>{text}</code> 자리에 글이 들어갑니다(앞 2,000자까지). 더 긴 글이나 <code>{text}</code>가 없는 주소는 전체 글의 복사를 시도하므로 열린 페이지에 붙여넣으세요. 복사가 차단되면 직접 복사합니다. 주소로 보내거나 붙여넣은 글은 선택한 서비스에서 처리하며, 답변이 LibreMemo에 자동 저장되지는 않습니다.')}</p><ul id="ai-search-list" class="ai-search-list">${preferences.aiSearch.map(row).join('')}</ul><form id="ai-search-add" class="ai-search-add"><input id="ai-search-name" aria-label="${t('새 LLM 이름')}" placeholder="${t('이름')}" maxlength="40" required><input id="ai-search-url" aria-label="${t('새 LLM 주소')}" placeholder="https://example.com/?q={text}" required><button class="secondary-button" type="submit">${t('등록')}</button></form><div class="dialog-actions"><button id="ai-search-back" class="secondary-button" type="button">${t('설정으로')}</button></div>`,()=>{
     const save=entries=>changePreferences({aiSearch:entries});
     $('#ai-search-list').addEventListener('change',event=>{
       const item=event.target.closest('[data-engine]'),field=event.target.dataset.field;if(!item||!field)return;
       const value=field==='enabled'?event.target.checked:event.target.value.trim();
-      if(field==='url'&&!aiSearchURL(value)){toast('주소는 http 또는 https로 시작해야 합니다. 로그인 정보는 넣을 수 없습니다.',true);aiSearchDialog();return;}
-      if(field==='name'&&!value){toast('이름을 입력해주세요.',true);aiSearchDialog();return;}
+      if(field==='url'&&!aiSearchURL(value)){toast(t('주소는 http 또는 https로 시작해야 합니다. 로그인 정보는 넣을 수 없습니다.'),true);aiSearchDialog();return;}
+      if(field==='name'&&!value){toast(t('이름을 입력해주세요.'),true);aiSearchDialog();return;}
       save(preferences.aiSearch.map(engine=>engine.id===item.dataset.engine?{...engine,[field]:value}:engine));
     });
     $('#ai-search-list').addEventListener('click',event=>{
@@ -2056,8 +2057,8 @@ function aiSearchDialog() {
     $('#ai-search-add').onsubmit=event=>{
       event.preventDefault();
       const name=$('#ai-search-name').value.trim(),url=aiSearchURL($('#ai-search-url').value);
-      if(!name||!url){toast('이름과 http 또는 https 주소를 입력해주세요. 로그인 정보는 넣을 수 없습니다.',true);return;}
-      if(preferences.aiSearch.length>=20){toast('LLM은 20개까지 등록할 수 있습니다.',true);return;}
+      if(!name||!url){toast(t('이름과 http 또는 https 주소를 입력해주세요. 로그인 정보는 넣을 수 없습니다.'),true);return;}
+      if(preferences.aiSearch.length>=20){toast(t('LLM은 20개까지 등록할 수 있습니다.'),true);return;}
       save([...preferences.aiSearch,{id:uid(),name,url,enabled:true}]);aiSearchDialog();
     };
     $('#ai-search-back').onclick=settingsDialog;
@@ -2078,7 +2079,7 @@ function toolAction(action,button=null) {
     showPopover('palette', '', () => renderPalettePopoverContent(r));
     return;
   }
-  if(action==='zoom') {showPopover('zoom',`<div class="popover-heading"><h3>확대 · 축소</h3><button type="button" class="icon-button popover-close" data-popover-close aria-label="확대 · 축소 닫기" title="닫기">${icon('close',16)}</button></div><div class="zoom-controls"><button class="secondary-button" id="zoom-out">${icon('minus')}</button><input id="zoom-value" type="number" min="20" max="800" value="${Math.round(r.zoom*100)}" aria-label="확대 비율"><span>%</span><button class="secondary-button" id="zoom-in">${icon('plus')}</button></div><button id="zoom-fit" class="menu-button">화면 너비에 맞추기</button><button id="zoom-reset" class="menu-button">100% 원래 크기</button>`,()=>{
+  if(action==='zoom') {showPopover('zoom',`<div class="popover-heading"><h3>${t('확대 · 축소')}</h3><button type="button" class="icon-button popover-close" data-popover-close aria-label="${t('확대 · 축소 닫기')}" title="${t('닫기')}">${icon('close',16)}</button></div><div class="zoom-controls"><button class="secondary-button" id="zoom-out">${icon('minus')}</button><input id="zoom-value" type="number" min="20" max="800" value="${Math.round(r.zoom*100)}" aria-label="${t('확대 비율')}"><span>%</span><button class="secondary-button" id="zoom-in">${icon('plus')}</button></div><button id="zoom-fit" class="menu-button">${t('화면 너비에 맞추기')}</button><button id="zoom-reset" class="menu-button">${t('100% 원래 크기')}</button>`,()=>{
     const input=$('#zoom-value');
     const setZoom=value=>{if(Number.isFinite(value))r.setZoom(value);input.value=String(Math.round(r.zoom*100));};
     $('#zoom-out').onclick=()=>setZoom(r.zoom/1.2);$('#zoom-in').onclick=()=>setZoom(r.zoom*1.2);
@@ -2086,11 +2087,11 @@ function toolAction(action,button=null) {
     $('#zoom-fit').onclick=()=>{r.setZoom(1,true);closePopover();};$('#zoom-reset').onclick=()=>{r.setZoom(1);closePopover();};
   },button||r.zoomControl);return;}
   if(action==='more') {
-    const items=[['circle','circle','원'],['ellipse','ellipse','타원'],['arrow','arrow','화살표'],['strike','strike','취소선'],['history','history','주석 저장 이력'],['migrate','file-transfer','새 판으로 주석/북마크 옮기기'],['info','info','문서 정보']];
+    const items=[['circle','circle',t('원')],['ellipse','ellipse',t('타원')],['arrow','arrow',t('화살표')],['strike','strike',t('취소선')],['history','history',t('주석 저장 이력')],['migrate','file-transfer',t('새 판으로 주석/북마크 옮기기')],['info','info',t('문서 정보')]];
     // Books already expose their three sidebar views. Plain HTML needs only a
     // way to reopen its closed panel, not a second copy of every sidebar tab.
-    if((!r.documentSidebarUI?.isConnected && $('#sidebar').hidden)||r.tocStrip||(r.documentSidebarUI?.isConnected&&r.documentSidebarUI.getClientRects?.().length===0))items.unshift(['sidebar','list','사이드바 열기']);
-    showPopover('more',`<div class="popover-heading"><h3>문서 도구</h3><button class="icon-button popover-close" data-popover-close aria-label="문서 도구 닫기" title="닫기">${icon('close',16)}</button></div><div class="more-grid">${items.map(([id,name,label])=>`<button class="menu-button" data-more="${id}">${icon(name,16)}<span>${label}</span></button>`).join('')}</div>`,()=>{
+    if((!r.documentSidebarUI?.isConnected && $('#sidebar').hidden)||r.tocStrip||(r.documentSidebarUI?.isConnected&&r.documentSidebarUI.getClientRects?.().length===0))items.unshift(['sidebar','list',t('사이드바 열기')]);
+    showPopover('more',`<div class="popover-heading"><h3>${t('문서 도구')}</h3><button class="icon-button popover-close" data-popover-close aria-label="${t('문서 도구 닫기')}" title="${t('닫기')}">${icon('close',16)}</button></div><div class="more-grid">${items.map(([id,name,label])=>`<button class="menu-button" data-more="${id}">${icon(name,16)}<span>${label}</span></button>`).join('')}</div>`,()=>{
       $('[data-popover-close]',$('#tool-popover')).onclick=closePopover;
       $$('[data-more]',$('#tool-popover')).forEach(button=>button.onclick=safely(()=>{const id=button.dataset.more;closePopover();return toolAction(id);}));
     });return;
@@ -2101,8 +2102,8 @@ function toolAction(action,button=null) {
   if(action==='history')return safely(()=>annotationHistory(active()))();
   if(action==='migrate')return safely(()=>migrateEdition(active()))();
   if(action==='info')return documentInfo(active());
-  if(action==='bookmark')return safely(async()=>{const title=await promptText('text','읽던 위치');if(title){r.addBookmark(title);if(reader()===r){if(r.documentSidebarUI?.isConnected&&r.documentSidebarMode==='bookmarks')r.showDocumentSidebarView('bookmarks');else if(sidebarMode==='bookmarks')renderSidebar('bookmarks');}toast('북마크를 저장했습니다.');}})();
-  if(action==='clear')return safely(async()=>{if(await confirmDialog('주석을 모두 지울까요?',`${r.metadata.annotations.length}개의 주석을 지웁니다. 실행 취소로 복원할 수 있어요.`,'모두 지우기'))r.commit([]);})();
+  if(action==='bookmark')return safely(async()=>{const title=await promptText('text',t('읽던 위치'));if(title){r.addBookmark(title);if(reader()===r){if(r.documentSidebarUI?.isConnected&&r.documentSidebarMode==='bookmarks')r.showDocumentSidebarView('bookmarks');else if(sidebarMode==='bookmarks')renderSidebar('bookmarks');}toast(t('북마크를 저장했습니다.'));}})();
+  if(action==='clear')return safely(async()=>{if(await confirmDialog(t('주석을 모두 지울까요?'),t('{n}개의 주석을 지웁니다. 실행 취소로 복원할 수 있어요.',{n:r.metadata.annotations.length}),t('모두 지우기')))r.commit([]);})();
 }
 function bindToolbarDrag() {
   const bar=$('#toolbar');const grip=$('.toolbar-grip');if(!grip)return;
@@ -2127,7 +2128,7 @@ function applyAppSidebarWidth(value=preferences.sidebarWidth) {
   const panel=$('#sidebar');panel?.toggleAttribute('data-app-sidebar-strip',width===8);
   if(width===8)panel?.cancelOutlineRename?.();
   if(width>=48)$('#sidebar').sidebarExpandedWidth=width;
-  if(handle)for(const [name,value] of Object.entries({'aria-valuemin':8,'aria-valuemax':appSidebarMaxWidth(),'aria-valuenow':width,'aria-valuetext':width+'픽셀'}))handle.setAttribute(name,String(value));
+  if(handle)for(const [name,value] of Object.entries({'aria-valuemin':8,'aria-valuemax':appSidebarMaxWidth(),'aria-valuenow':width,'aria-valuetext':t('{n}픽셀',{n:width})}))handle.setAttribute(name,String(value));
   return width;
 }
 function saveAppSidebarWidth(width) {
@@ -2142,7 +2143,7 @@ function stopAppSidebarResize({cancel=true}={}) {
 }
 function bindAppSidebarResize(panel) {
   let handle=$('#sidebar-resizer',panel);
-  if(!handle){handle=document.createElement('div');handle.id='sidebar-resizer';handle.className='sidebar-resizer';handle.setAttribute('role','separator');handle.setAttribute('aria-orientation','vertical');handle.setAttribute('aria-controls','sidebar');handle.setAttribute('aria-label','사이드바 폭 조절');handle.setAttribute('tabindex','0');handle.title='드래그하거나 ←/→ 키로 폭 조절 · 두 번 클릭하면 기본 폭';panel.append(handle);}
+  if(!handle){handle=document.createElement('div');handle.id='sidebar-resizer';handle.className='sidebar-resizer';handle.setAttribute('role','separator');handle.setAttribute('aria-orientation','vertical');handle.setAttribute('aria-controls','sidebar');handle.setAttribute('aria-label',t('사이드바 폭 조절'));handle.setAttribute('tabindex','0');handle.title=t('드래그하거나 ←/→ 키로 폭 조절 · 두 번 클릭하면 기본 폭');panel.append(handle);}
   applyAppSidebarWidth();
   handle.onpointerdown=event=>{
     if(event.button!==0)return;if(panel.sidebarResize){stopAppSidebarResize();return;}
@@ -2197,16 +2198,16 @@ function updateSearchNavigation(r) {
     if(!panel?.isConnected||panel.annotationReader!==r||panel.sidebarMode!=='search')continue;
     const prefix=panel.hasAttribute('data-htmlmemo-doc-sidebar-ui')?'htmlmemo-native-':'',q=name=>$('#'+prefix+name,panel),total=r.searchResults?.length||0,position=r.searchPosition??-1;
     const count=q('search-count');if(!count||q('document-search')?.value!==r.searchQuery)continue;
-    count.textContent=!r.searchQuery?.trim()?'검색어를 입력하세요.':total?`${position>=0?`${position+1} / `:''}${total}${total===3000?'+':''}개 결과`:'검색 결과가 없습니다.';
+    count.textContent=!r.searchQuery?.trim()?t('검색어를 입력하세요.'):total?t('{position}{total}개 결과',{position:position>=0?`${position+1} / `:'',total:`${total}${total===3000?'+':''}`}):t('검색 결과가 없습니다.');
     q('search-prev').disabled=!total||position<=0;q('search-next').disabled=total<=1||position>=total-1;
   }
 }
 function updateSidebarCounts(panel,r) {
   if(!panel||!r||panel.annotationReader!==r)return;
   for(const view of ['annotations','bookmarks']){
-    const button=$(`[data-sidebar-view="${view}"]`,panel),count=$(`[data-sidebar-count="${view}"]`,panel),label=view==='annotations'?'주석':'북마크';
+    const button=$(`[data-sidebar-view="${view}"]`,panel),count=$(`[data-sidebar-count="${view}"]`,panel),label=view==='annotations'?t('주석'):t('북마크');
     const total=r.metadata[view].length;if(count)count.textContent=String(total);
-    if(button){button.title=`${label} · 전체 ${total}개`;button.setAttribute('aria-label',button.title);}
+    if(button){button.title=t('{label} · 전체 {n}개',{label,n:total});button.setAttribute('aria-label',button.title);}
   }
 }
 function styleNativeSidebar(panel) {
@@ -2291,12 +2292,12 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
   clearTimeout(panel.sidebarSearchTimer);panel.sidebarMode=mode;if(!embedded){sidebarMode=mode;r.appSidebarMode=mode;r.appSidebarClosed=false;$('#workspace')?.setAttribute('data-app-sidebar','');closePopover();}else styleNativeSidebar(panel);panel.hidden=false;
   if(!embedded)r.plainReadingButtons?.menu?.setAttribute('aria-expanded','true');
   const id=name=>(embedded?'htmlmemo-native-':'')+name,q=name=>$('#'+id(name),panel);
-  const title={search:'검색',outline:'목차',annotations:'주석',bookmarks:'북마크'}[mode];
+  const title={search:t('검색'),outline:t('목차'),annotations:t('주석'),bookmarks:t('북마크')}[mode];
   if(!$('.sidebar-views',panel)){
-    const views=[['outline','list','목차'],['search','search','검색'],['annotations','note','주석'],['bookmarks','bookmark','북마크']];
-    const renameControl=`<button type="button" data-outline-rename title="목차 이름 편집" aria-label="목차 이름 편집" aria-pressed="false" hidden>${icon('pen',14)}</button>`;
-    const renameHint='<p data-outline-rename-hint role="status" hidden>이름을 바꿀 목차 항목을 선택하세요.</p>';
-    panel.innerHTML=`<h2 id="${id('sidebar-title')}" hidden></h2><div class="sidebar-views" role="group" aria-label="사이드바 보기">${views.map(([view,name,label])=>`<button type="button" data-sidebar-view="${view}" title="${label}" aria-label="${label}" aria-pressed="false" aria-controls="${id('sidebar-content')}">${icon(name,14)}${['annotations','bookmarks'].includes(view)?`<span class="sidebar-nav-count" data-sidebar-count="${view}" aria-hidden="true"></span>`:''}</button>`).join('')}${renameControl}<button type="button" class="icon-button" id="${id('close-sidebar')}" data-sidebar-close title="패널 닫기" aria-label="패널 닫기">${icon('close',14)}</button></div>${renameHint}<div id="${id('sidebar-content')}" class="sidebar-content" role="region" aria-labelledby="${id('sidebar-title')}"></div>`;
+    const views=[['outline','list',t('목차')],['search','search',t('검색')],['annotations','note',t('주석')],['bookmarks','bookmark',t('북마크')]];
+    const renameControl=`<button type="button" data-outline-rename title="${t('목차 이름 편집')}" aria-label="${t('목차 이름 편집')}" aria-pressed="false" hidden>${icon('pen',14)}</button>`;
+    const renameHint=`<p data-outline-rename-hint role="status" hidden>${t('이름을 바꿀 목차 항목을 선택하세요.')}</p>`;
+    panel.innerHTML=`<h2 id="${id('sidebar-title')}" hidden></h2><div class="sidebar-views" role="group" aria-label="${t('사이드바 보기')}">${views.map(([view,name,label])=>`<button type="button" data-sidebar-view="${view}" title="${label}" aria-label="${label}" aria-pressed="false" aria-controls="${id('sidebar-content')}">${icon(name,14)}${['annotations','bookmarks'].includes(view)?`<span class="sidebar-nav-count" data-sidebar-count="${view}" aria-hidden="true"></span>`:''}</button>`).join('')}${renameControl}<button type="button" class="icon-button" id="${id('close-sidebar')}" data-sidebar-close title="${t('패널 닫기')}" aria-label="${t('패널 닫기')}">${icon('close',14)}</button></div>${renameHint}<div id="${id('sidebar-content')}" class="sidebar-content" role="region" aria-labelledby="${id('sidebar-title')}"></div>`;
     $('[data-outline-rename]',panel).onclick=()=>toggleOutlineRename(panel,panel.annotationReader,embedded);
     q('close-sidebar').onclick=()=>embedded?r.toggleDocumentSidebar(false):closeSidebar();
     $$('[data-sidebar-view]',panel).forEach(button=>button.onclick=()=>{
@@ -2323,7 +2324,7 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
     });
   }
   if(!embedded)bindAppSidebarResize(panel);
-  q('sidebar-title').textContent=embedded&&mode==='outline'?'목차':title;panel.setAttribute('aria-labelledby',id('sidebar-title'));
+  q('sidebar-title').textContent=embedded&&mode==='outline'?t('목차'):title;panel.setAttribute('aria-labelledby',id('sidebar-title'));
   $('[data-sidebar-view="outline"]',panel).hidden=false;
   const renameButton=$('[data-outline-rename]',panel);
   renameButton.hidden=mode!=='outline';
@@ -2332,13 +2333,13 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
   updateSidebarCounts(panel,r);
   const content=$('.sidebar-content',panel);content.dataset.uiFontView=mode;content.hidden=false;
   if(mode==='search'){
-    content.innerHTML=`<div class="search-field loaded-search-field"><input id="${id('document-search')}" aria-label="불러온 부분 검색어" placeholder="불러온 부분에서 찾기" autocomplete="off"><button type="button" id="${id('search-clear')}" class="icon-button loaded-search-clear" aria-label="불러온 부분 검색어 지우기" title="검색어 지우기" hidden>${icon('close',14)}</button></div><div class="search-navigation loaded-search-navigation"><span id="${id('search-count')}" role="status" aria-live="polite">검색어를 입력하세요.</span><button id="${id('search-prev')}" class="icon-button" aria-label="이전 검색 결과" disabled>${icon('back')}</button><button id="${id('search-next')}" class="icon-button" aria-label="다음 검색 결과" disabled>${icon('forward')}</button></div><div id="${id('search-results')}"></div>`;
+    content.innerHTML=`<div class="search-field loaded-search-field"><input id="${id('document-search')}" aria-label="${t('불러온 부분 검색어')}" placeholder="${t('불러온 부분에서 찾기')}" autocomplete="off"><button type="button" id="${id('search-clear')}" class="icon-button loaded-search-clear" aria-label="${t('불러온 부분 검색어 지우기')}" title="${t('검색어 지우기')}" hidden>${icon('close',14)}</button></div><div class="search-navigation loaded-search-navigation"><span id="${id('search-count')}" role="status" aria-live="polite">${t('검색어를 입력하세요.')}</span><button id="${id('search-prev')}" class="icon-button" aria-label="${t('이전 검색 결과')}" disabled>${icon('back')}</button><button id="${id('search-next')}" class="icon-button" aria-label="${t('다음 검색 결과')}" disabled>${icon('forward')}</button></div><div id="${id('search-results')}"></div>`;
     const input=q('document-search'),clear=q('search-clear');input.value=r.sidebarSearchQuery??r.searchQuery??'';clear.hidden=!input.value;
     const run=(resume=false)=>{
       const query=input.value,current=()=>panel.sidebarMode==='search'&&panel.annotationReader===r&&reader()===r&&input.isConnected&&input.value===query;if(!current())return;
       const show=results=>{if(!current()||!results)return;updateSearchNavigation(r);q('search-results').innerHTML=results.slice(0,150).map((result,index)=>`<button class="search-result" data-search-index="${index}">${esc(result.quote)}</button>`).join('');$$('[data-search-index]',panel).forEach(button=>button.onclick=()=>{r.searchPosition=Number(button.dataset.searchIndex)-1;r.nextSearch(1);updateSearchNavigation(r);});};
       const results=resume&&r.searchQuery===query?r.searchResults:r.searchAsync?r.searchAsync(query,!resume,current):r.search(query,!resume);
-      if(results?.then){q('search-count').textContent='검색 준비 중…';q('search-prev').disabled=true;q('search-next').disabled=true;q('search-results').replaceChildren();results.then(show).catch(error=>{if(current()){q('search-count').textContent='검색을 준비하지 못했습니다. 다시 검색해 주세요.';r.callbacks?.onError?.(error);}});}else show(results);
+      if(results?.then){q('search-count').textContent=t('검색 준비 중…');q('search-prev').disabled=true;q('search-next').disabled=true;q('search-results').replaceChildren();results.then(show).catch(error=>{if(current()){q('search-count').textContent=t('검색을 준비하지 못했습니다. 다시 검색해 주세요.');r.callbacks?.onError?.(error);}});}else show(results);
     };
     const advance=direction=>{clearTimeout(panel.sidebarSearchTimer);if(r.searchQuery!==input.value){run();return;}r.nextSearch(direction);updateSearchNavigation(r);};
     input.oninput=()=>{r.sidebarSearchQuery=input.value;clear.hidden=!input.value;clearTimeout(panel.sidebarSearchTimer);panel.sidebarSearchTimer=setTimeout(run,120);};input.onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();advance(e.shiftKey?-1:1);}};
@@ -2348,7 +2349,7 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
   }else if(mode==='outline'){
     // Native books keep their original TOC nodes below this editor-owned panel.
     panel.sidebarOutline=outline;panel.currentOutlineItem=null;
-    content.innerHTML=embedded?'':outline.length?renderOutlineTree(outline,r):'<p class="panel-empty">이 문서에 제목 목차가 없습니다.</p>';
+    content.innerHTML=embedded?'':outline.length?renderOutlineTree(outline,r):`<p class="panel-empty">${t('이 문서에 제목 목차가 없습니다.')}</p>`;
     $$('[data-outline-group]',panel).forEach(group=>group.ontoggle=()=>r.outlineTreeOpen.set(group.dataset.outlineGroup,!!group.open));
     $$('[data-heading]',panel).forEach(button=>{
       button.onclick=event=>{
@@ -2365,10 +2366,10 @@ function renderSidebar(mode,{panel=$('#sidebar'),embedded=false,documentReader=r
     });
     updateOutlineLocation(panel,r);
   }else if(mode==='bookmarks'){
-    const row=mark=>`<div class="bookmark-row"><button class="outline-item" data-bookmark="${esc(mark.id)}" title="${esc(mark.title)}">${icon('bookmark',14)} ${esc(mark.title)}</button><button class="icon-button" data-delete-bookmark="${esc(mark.id)}" aria-label="북마크 삭제">${icon('close',13)}</button></div>`;
-    const tree=r.bookmarkTree?.()||[{id:'document',title:'문서 전체',count:r.metadata.bookmarks.length,bookmarks:r.metadata.bookmarks,children:[]}];
-    const branch=group=>`<details class="annotation-group" data-bookmark-group="${esc(group.id)}"${r.bookmarkTreeOpen.get(group.id)?' open':''}><summary><span class="annotation-group-title">${formatOutlineTitle(group.title)}</span><span class="annotation-group-count" aria-label="${group.count}개 북마크">${group.count}</span></summary><div class="annotation-group-body">${group.children.map(branch).join('')}${group.bookmarks.map(row).join('')}</div></details>`;
-    content.innerHTML=`<div class="sidebar-bookmark-list">${r.metadata.bookmarks.length?`<div class="annotation-tree bookmark-tree" aria-label="목차별 북마크">${tree.map(branch).join('')}</div>`:'<p class="panel-empty">저장한 북마크가 없습니다.</p>'}<button id="${id('add-bookmark')}" type="button" class="bookmark-add-button">${icon('plus',14)}<span>현재 위치 저장</span></button></div>`;
+    const row=mark=>`<div class="bookmark-row"><button class="outline-item" data-bookmark="${esc(mark.id)}" title="${esc(mark.title)}">${icon('bookmark',14)} ${esc(mark.title)}</button><button class="icon-button" data-delete-bookmark="${esc(mark.id)}" aria-label="${t('북마크 삭제')}">${icon('close',13)}</button></div>`;
+    const tree=r.bookmarkTree?.()||[{id:'document',title:t('문서 전체'),count:r.metadata.bookmarks.length,bookmarks:r.metadata.bookmarks,children:[]}];
+    const branch=group=>`<details class="annotation-group" data-bookmark-group="${esc(group.id)}"${r.bookmarkTreeOpen.get(group.id)?' open':''}><summary><span class="annotation-group-title">${formatOutlineTitle(group.title)}</span><span class="annotation-group-count" aria-label="${t('{n}개 북마크',{n:group.count})}">${group.count}</span></summary><div class="annotation-group-body">${group.children.map(branch).join('')}${group.bookmarks.map(row).join('')}</div></details>`;
+    content.innerHTML=`<div class="sidebar-bookmark-list">${r.metadata.bookmarks.length?`<div class="annotation-tree bookmark-tree" aria-label="${t('목차별 북마크')}">${tree.map(branch).join('')}</div>`:`<p class="panel-empty">${t('저장한 북마크가 없습니다.')}</p>`}<button id="${id('add-bookmark')}" type="button" class="bookmark-add-button">${icon('plus',14)}<span>${t('현재 위치 저장')}</span></button></div>`;
     $$('[data-bookmark-group]',panel).forEach(group=>group.ontoggle=()=>{if(group.isConnected)r.bookmarkTreeOpen.set(group.dataset.bookmarkGroup,!!(group.open||group.hasAttribute('open')));});
     $$('[data-bookmark]',panel).forEach(button=>button.onclick=()=>r.jumpBookmark(button.dataset.bookmark));
     $$('[data-delete-bookmark]',panel).forEach(button=>button.onclick=()=>{r.metadata.bookmarks=r.metadata.bookmarks.filter(m=>m.id!==button.dataset.deleteBookmark);active().queue.schedule();if(embedded)r.showDocumentSidebarView('bookmarks');else renderSidebar('bookmarks');});q('add-bookmark').onclick=()=>toolAction('bookmark');
@@ -2400,7 +2401,7 @@ async function startSidebarOutlineEdit(button,item,r,panel){
   const input=document.createElement('input');
   input.type='text';input.className='outline-edit-input';
   input.setAttribute('data-outline-edit-input','');
-  input.setAttribute('aria-label','목차 제목 수정');
+  input.setAttribute('aria-label',t('목차 제목 수정'));
   input.value=currentTitle;
   button.replaceChildren(input);
   let done=false;
@@ -2426,13 +2427,13 @@ async function startSidebarOutlineEdit(button,item,r,panel){
   return true;
 }
 function renderWholeSearch(panel,r,content){
-  const group=document.createElement('section');group.className='sidebar-book-search';group.setAttribute('aria-label','책 전체 검색');group.innerHTML=`<div class="search-field loaded-search-field"><input id="book-search" aria-label="책 전체 검색어" placeholder="책 전체 검색" autocomplete="off"><button id="book-search-clear" type="button" class="icon-button loaded-search-clear" aria-label="책 전체 검색어 지우기" title="검색어 지우기" hidden>${icon('close',14)}</button></div><div class="search-navigation"><span id="book-search-count" role="status" aria-live="polite">검색어를 입력하세요.</span><button id="book-search-prev" type="button" class="icon-button" aria-label="책 전체 이전 검색 결과" disabled>${icon('back')}</button><button id="book-search-next" type="button" class="icon-button" aria-label="책 전체 다음 검색 결과" disabled>${icon('forward')}</button></div><div id="book-search-results"></div>`;content.prepend(group);
+  const group=document.createElement('section');group.className='sidebar-book-search';group.setAttribute('aria-label',t('책 전체 검색'));group.innerHTML=`<div class="search-field loaded-search-field"><input id="book-search" aria-label="${t('책 전체 검색어')}" placeholder="${t('책 전체 검색')}" autocomplete="off"><button id="book-search-clear" type="button" class="icon-button loaded-search-clear" aria-label="${t('책 전체 검색어 지우기')}" title="${t('검색어 지우기')}" hidden>${icon('close',14)}</button></div><div class="search-navigation"><span id="book-search-count" role="status" aria-live="polite">${t('검색어를 입력하세요.')}</span><button id="book-search-prev" type="button" class="icon-button" aria-label="${t('책 전체 이전 검색 결과')}" disabled>${icon('back')}</button><button id="book-search-next" type="button" class="icon-button" aria-label="${t('책 전체 다음 검색 결과')}" disabled>${icon('forward')}</button></div><div id="book-search-results"></div>`;content.prepend(group);
   const input=$('#book-search',group),clear=$('#book-search-clear',group),count=$('#book-search-count',group),previous=$('#book-search-prev',group),next=$('#book-search-next',group),results=$('#book-search-results',group);
   r.wholeSearchState||={query:'',results:[],position:-1};input.value=r.wholeSearchDraft??r.wholeSearchState.query;clear.hidden=!input.value;
   const valid=()=>panel.sidebarMode==='search'&&panel.annotationReader===r&&group.isConnected;
-  const draw=()=>{const state=r.wholeSearchState;count.textContent=state.query.trim()?state.results.length?`${state.position+1} / ${state.results.length}개 결과`:'검색 결과가 없습니다.':'검색어를 입력하세요.';previous.disabled=state.position<=0;next.disabled=state.position>=state.results.length-1;results.innerHTML=state.results.slice(0,150).map((hit,index)=>`<button class="search-result" data-whole-search-index="${index}">${esc(hit.quote)}</button>`).join('');for(const button of $$('[data-whole-search-index]',results))button.onclick=()=>move(Number(button.dataset.wholeSearchIndex));};
+  const draw=()=>{const state=r.wholeSearchState;count.textContent=state.query.trim()?state.results.length?t('{position} / {n}개 결과',{position:state.position+1,n:state.results.length}):t('검색 결과가 없습니다.'):t('검색어를 입력하세요.');previous.disabled=state.position<=0;next.disabled=state.position>=state.results.length-1;results.innerHTML=state.results.slice(0,150).map((hit,index)=>`<button class="search-result" data-whole-search-index="${index}">${esc(hit.quote)}</button>`).join('');for(const button of $$('[data-whole-search-index]',results))button.onclick=()=>move(Number(button.dataset.wholeSearchIndex));};
   const move=position=>{const state=r.wholeSearchState;if(position<0||position>=state.results.length)return;state.position=position;void r.jumpWholeSearch(state.results[position]);draw();};
-  const run=async()=>{const query=input.value,version=r.wholeSearchVersion=(r.wholeSearchVersion||0)+1,isCurrent=()=>valid()&&input.value===query&&r.wholeSearchVersion===version;count.textContent='검색 준비 중…';previous.disabled=true;next.disabled=true;results.replaceChildren();const hits=await r.searchWhole(query,isCurrent,progress=>{if(isCurrent())count.textContent=`검색 중… ${progress.scanned}/${progress.total}쪽 · ${progress.matches.length}개`;});if(!hits||!isCurrent())return;r.wholeSearchState={query,results:hits,position:-1};if(hits.length)move(0);else draw();};
+  const run=async()=>{const query=input.value,version=r.wholeSearchVersion=(r.wholeSearchVersion||0)+1,isCurrent=()=>valid()&&input.value===query&&r.wholeSearchVersion===version;count.textContent=t('검색 준비 중…');previous.disabled=true;next.disabled=true;results.replaceChildren();const hits=await r.searchWhole(query,isCurrent,progress=>{if(isCurrent())count.textContent=t('검색 중… {scanned}/{total}쪽 · {n}개',{scanned:progress.scanned,total:progress.total,n:progress.matches.length});});if(!hits||!isCurrent())return;r.wholeSearchState={query,results:hits,position:-1};if(hits.length)move(0);else draw();};
   input.oninput=()=>{r.wholeSearchDraft=input.value;clear.hidden=!input.value;clearTimeout(group.searchTimer);group.searchTimer=setTimeout(()=>{if(valid())void run().catch(showError);},160);};input.onkeydown=event=>{if(event.key==='Enter'&&!event.isComposing){event.preventDefault();if(r.wholeSearchState.query!==input.value)void run().catch(showError);else move(r.wholeSearchState.position+(event.shiftKey?-1:1));}};
   clear.onclick=()=>{clearTimeout(group.searchTimer);r.wholeSearchVersion=(r.wholeSearchVersion||0)+1;r.pdf?.wholeAbort?.abort();input.value='';r.wholeSearchDraft='';clear.hidden=true;r.wholeSearchState={query:'',results:[],position:-1};for(const node of r.doc.querySelectorAll('[data-htmlmemo-pdf-book-search]'))node.remove();for(const mark of r.wholeSearchMarks||[])if(mark.isConnected)mark.replaceWith(...mark.childNodes);draw();input.focus();};
   previous.onclick=()=>move(r.wholeSearchState.position-1);next.onclick=()=>move(r.wholeSearchState.position+1);draw();
@@ -2441,7 +2442,7 @@ function annotationDialog(tab,id) {
   const a=tab.reader.metadata.annotations.find(a=>a.id===id);if(!a)return;
   if(isVideoNote(a)){tab.youtube?.addSceneNote(a);return;}
   const dialogColors=[...new Set([...PRESET_COLORS,...(preferences.annotation.customColors||[])])];
-  modal(`<div class="dialog-heading"><h2>주석 편집</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p class="annotation-quote">${esc(a.text||a.textAnchor?.quote||'선택한 주석')}</p><div class="swatches preset-swatches">${dialogColors.map(c=>`<button type="button" data-dialog-color="${c}" style="--swatch:${c}" aria-label="색상 ${c}" class="swatch ${a.color.toLowerCase()===c?'chosen':''}"></button>`).join('')}</div><label class="select-label">색상 직접 선택 <span class="palette-actions"><input id="annotation-color-hex" class="annotation-hex-input" type="text" maxlength="7" value="${a.color.toUpperCase()}" aria-label="주석 HEX 색상 코드"><input type="color" id="annotation-color" value="${a.color}"></span></label><div class="dialog-actions">${['note','text'].includes(a.type)?'<button id="edit-note" class="secondary-button">내용 편집</button>':''}<button id="delete-selected" class="secondary-button">${icon('trash',15)} 삭제</button><button class="primary-button" data-dialog-close>완료</button></div>`,()=>{
+  modal(`<div class="dialog-heading"><h2>${t('주석 편집')}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div><p class="annotation-quote">${esc(a.text||a.textAnchor?.quote||t('선택한 주석'))}</p><div class="swatches preset-swatches">${dialogColors.map(c=>`<button type="button" data-dialog-color="${c}" style="--swatch:${c}" aria-label="${t('색상 {name}',{name:c})}" class="swatch ${a.color.toLowerCase()===c?'chosen':''}"></button>`).join('')}</div><label class="select-label">${t('색상 직접 선택')} <span class="palette-actions"><input id="annotation-color-hex" class="annotation-hex-input" type="text" maxlength="7" value="${a.color.toUpperCase()}" aria-label="${t('주석 HEX 색상 코드')}"><input type="color" id="annotation-color" value="${a.color}"></span></label><div class="dialog-actions">${['note','text'].includes(a.type)?`<button id="edit-note" class="secondary-button">${t('내용 편집')}</button>`:''}<button id="delete-selected" class="secondary-button">${icon('trash',15)} ${t('삭제')}</button><button class="primary-button" data-dialog-close>${t('완료')}</button></div>`,()=>{
     const setAnnotationColor=raw=>{
       const norm=normalizeHexColor(raw);if(!norm)return;
       tab.reader.commit(tab.reader.metadata.annotations.map(item=>item.id===id?{...item,color:norm}:item));
@@ -2471,14 +2472,14 @@ async function annotationHistory(tab, selection = {}, valid = () => true) {
   const state={...selection,year,month,day,pages:selection.pages||[]};
   const [{rows:versions,next},previousDay,nextDay]=year===undefined?[{rows:[],next:null},null,null]:await Promise.all([listRevisionDay(id,state,state.before),adjacentRevisionDay(id,state,'previous'),adjacentRevisionDay(id,state,'next')]);
   if(!canShow())return;
-  const title=tab.record.title||tab.record.name||'제목 없는 문서';
+  const title=tab.record.title||tab.record.name||t('제목 없는 문서');
   const documentHeading=`<p class="dialog-description small" data-history-document="${esc(id)}"><strong>${esc(title)}</strong>${tab.record.name&&tab.record.name!==title?` · ${esc(tab.record.name)}`:''}</p>`;
   const total=years.reduce((sum,row)=>sum+row.count,0),count=year==='unknown'?years.find(row=>row.value==='unknown')?.count||0:days.find(row=>row.value===day)?.count||0;
   const latest=year===years[0]?.value&&month===months[0]?.value&&day===days[0]?.value&&!state.before;
-  const dateLabel=year==='unknown'?'날짜 미확인':`${year}년 ${month}월 ${day}일`;
-  const options=(rows,unit)=>rows.map(row=>`<option value="${row.value}">${row.value==='unknown'?'날짜 미확인':row.value+unit} (${row.count.toLocaleString('ko-KR')}개)</option>`).join('');
-  const stamp=value=>value===null||!Number.isFinite(new Date(value).getTime())?'날짜 미확인':new Date(value).toLocaleString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
-  modal(`<div class="revision-browser"><div class="dialog-heading"><h2>주석 저장 이력</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>${documentHeading}<p class="dialog-description">선택한 시점의 주석·북마크와 직접 수정한 목차 이름을 복원합니다. 복원 직전 상태도 이 문서의 이력에 남습니다.</p><div class="revision-calendar" aria-label="이력 날짜 선택"><label>연도<select id="history-year"${years.length?'':' disabled'}>${options(years,'년')}</select></label><label>월<select id="history-month"${months.length?'':' disabled'}>${options(months,'월')}</select></label><label>일<select id="history-day"${days.length?'':' disabled'}>${options(days,'일')}</select></label></div><div class="revision-date-nav"><button id="history-prev-day" class="secondary-button"${previousDay?'':' disabled'}>이전 날짜</button><button id="history-latest" class="secondary-button"${latest||!total?' disabled':''}>최근 이력</button><button id="history-next-day" class="secondary-button"${nextDay?'':' disabled'}>다음 날짜</button></div><p id="history-summary" class="dialog-description small" role="status">이 문서의 이력 ${total.toLocaleString('ko-KR')}개${total?` · ${dateLabel} · ${count.toLocaleString('ko-KR')}개 중 ${state.pages.length*50+1}–${state.pages.length*50+versions.length}개`:''}</p><div class="revision-list" aria-label="선택한 날짜의 저장 이력">${versions.map((version,index)=>`<button class="menu-button" data-revision="${version.id}"><span>${esc(stamp(version.created))}<br><small>${version.kind==='restore'?'복원 저장':version.kind==='baseline'?'최초 보관':'주석 변경'} · 주석 ${version.annotationCount}개 · 북마크 ${version.bookmarkCount}개${index===0&&latest?' · 최근 저장':''}</small></span></button>`).join('') || '<p>이 문서에는 아직 저장된 이력이 없습니다.</p>'}</div>${state.pages.length||next?`<div class="revision-page-nav"><button class="secondary-button" id="history-newer"${state.pages.length?'':' disabled'}>앞 50개</button><button class="secondary-button" id="history-older"${next?'':' disabled'}>이전 이력 50개</button></div>`:''}<details class="revision-help"><summary>자동 저장·이력 보관 안내</summary><p id="history-save-policy" class="dialog-description small">작업은 빠르게 자동 저장합니다. 이력은 변경이 있을 때 5분마다 또는 주석 입력을 멈춘 뒤 1분이 지났을 때 중 먼저 해당하는 시점에 묶어 보관합니다. 문서를 닫을 때도 남기며, 같은 내용은 중복 보관하지 않습니다.</p><p class="dialog-description small">이력이 있는 연·월·일만 표시합니다. 날짜는 이 기기의 시간대를 따르며, 선택한 날짜의 이력을 50개씩 불러옵니다. 이력은 이 기기에 보관하며 데이터 폴더를 연결하면 함께 자동 저장합니다. 문서 내보내기에는 현재 주석·북마크가 포함되며 전체 저장 이력은 포함되지 않습니다.</p></details></div>`,dialog=>{
+  const dateLabel=year==='unknown'?t('날짜 미확인'):t('{year}년 {month}월 {day}일',{year,month,day});
+  const options=(rows,unit)=>rows.map(row=>`<option value="${row.value}">${row.value==='unknown'?t('날짜 미확인'):unit(row.value)} ${t('({n}개)',{n:row.count.toLocaleString(locale())})}</option>`).join('');
+  const stamp=value=>value===null||!Number.isFinite(new Date(value).getTime())?t('날짜 미확인'):new Date(value).toLocaleString(locale(),{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+  modal(`<div class="revision-browser"><div class="dialog-heading"><h2>${t('주석 저장 이력')}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div>${documentHeading}<p class="dialog-description">${t('선택한 시점의 주석·북마크와 직접 수정한 목차 이름을 복원합니다. 복원 직전 상태도 이 문서의 이력에 남습니다.')}</p><div class="revision-calendar" aria-label="${t('이력 날짜 선택')}"><label>${t('연도')}<select id="history-year"${years.length?'':' disabled'}>${options(years,n=>t('{n}년',{n}))}</select></label><label>${t('월')}<select id="history-month"${months.length?'':' disabled'}>${options(months,n=>t('{n}월',{n}))}</select></label><label>${t('일')}<select id="history-day"${days.length?'':' disabled'}>${options(days,n=>t('{n}일',{n}))}</select></label></div><div class="revision-date-nav"><button id="history-prev-day" class="secondary-button"${previousDay?'':' disabled'}>${t('이전 날짜')}</button><button id="history-latest" class="secondary-button"${latest||!total?' disabled':''}>${t('최근 이력')}</button><button id="history-next-day" class="secondary-button"${nextDay?'':' disabled'}>${t('다음 날짜')}</button></div><p id="history-summary" class="dialog-description small" role="status">${t('이 문서의 이력 {n}개',{n:total.toLocaleString(locale())})}${total?` · ${dateLabel} · ${t('{count}개 중 {from}–{to}개',{count:count.toLocaleString(locale()),from:state.pages.length*50+1,to:state.pages.length*50+versions.length})}`:''}</p><div class="revision-list" aria-label="${t('선택한 날짜의 저장 이력')}">${versions.map((version,index)=>`<button class="menu-button" data-revision="${version.id}"><span>${esc(stamp(version.created))}<br><small>${version.kind==='restore'?t('복원 저장'):version.kind==='baseline'?t('최초 보관'):t('주석 변경')} · ${t('주석 {n}개',{n:version.annotationCount})} · ${t('북마크 {n}개',{n:version.bookmarkCount})}${index===0&&latest?t(' · 최근 저장'):''}</small></span></button>`).join('') || `<p>${t('이 문서에는 아직 저장된 이력이 없습니다.')}</p>`}</div>${state.pages.length||next?`<div class="revision-page-nav"><button class="secondary-button" id="history-newer"${state.pages.length?'':' disabled'}>${t('앞 50개')}</button><button class="secondary-button" id="history-older"${next?'':' disabled'}>${t('이전 이력 50개')}</button></div>`:''}<details class="revision-help"><summary>${t('자동 저장·이력 보관 안내')}</summary><p id="history-save-policy" class="dialog-description small">${t('작업은 빠르게 자동 저장합니다. 이력은 변경이 있을 때 5분마다 또는 주석 입력을 멈춘 뒤 1분이 지났을 때 중 먼저 해당하는 시점에 묶어 보관합니다. 문서를 닫을 때도 남기며, 같은 내용은 중복 보관하지 않습니다.')}</p><p class="dialog-description small">${t('이력이 있는 연·월·일만 표시합니다. 날짜는 이 기기의 시간대를 따르며, 선택한 날짜의 이력을 50개씩 불러옵니다. 이력은 이 기기에 보관하며 데이터 폴더를 연결하면 함께 자동 저장합니다. 문서 내보내기에는 현재 주석·북마크가 포함되며 전체 저장 이력은 포함되지 않습니다.')}</p></details></div>`,dialog=>{
     const root=$('.revision-browser',dialog),list=$('.revision-list',root);list.scrollTop=state.scroll||0;
     $('#history-year').value=year??'';$('#history-month').value=month??'';$('#history-day').value=day??'';
     let busy=false;
@@ -2500,9 +2501,9 @@ async function annotationHistory(tab, selection = {}, valid = () => true) {
       if(busy||!current())return;
       const version=await getRevision(Number(button.dataset.revision));
       if(!current()||!dialog.open||!dialog.contains(root))return;
-      if(!version || version.documentId!==tab.record.id)throw Error('저장 이력을 찾지 못했습니다.');
+      if(!version || version.documentId!==tab.record.id)throw Error(t('저장 이력을 찾지 못했습니다.'));
       const back={...state,scroll:list.scrollTop};
-      modal(`<div class="dialog-heading"><h2>주석 이력 확인</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>${documentHeading}<p>${esc(stamp(version.created))}</p><p>주석 ${version.annotations.length}개 · 북마크 ${version.bookmarks.length}개</p><div class="revision-preview">${version.annotations.slice(0,100).map(a=>`<p>${esc(a.type)} · ${esc((a.text || a.textAnchor?.quote || '그림 주석').slice(0,500))}</p>`).join('') || '<p>주석 없음</p>'}${version.annotations.length>100?'<p>미리보기는 100개까지 표시합니다. 복원은 모든 주석에 적용됩니다.</p>':''}</div><div class="dialog-actions"><button class="secondary-button" id="history-back">이력 목록</button><button class="primary-button" id="restore-revision">이 시점으로 복원</button></div>`,()=>{
+      modal(`<div class="dialog-heading"><h2>${t('주석 이력 확인')}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div>${documentHeading}<p>${esc(stamp(version.created))}</p><p>${t('주석 {n}개',{n:version.annotations.length})} · ${t('북마크 {n}개',{n:version.bookmarks.length})}</p><div class="revision-preview">${version.annotations.slice(0,100).map(a=>`<p>${esc(a.type)} · ${esc((a.text || a.textAnchor?.quote || t('그림 주석')).slice(0,500))}</p>`).join('') || `<p>${t('주석 없음')}</p>`}${version.annotations.length>100?`<p>${t('미리보기는 100개까지 표시합니다. 복원은 모든 주석에 적용됩니다.')}</p>`:''}</div><div class="dialog-actions"><button class="secondary-button" id="history-back">${t('이력 목록')}</button><button class="primary-button" id="restore-revision">${t('이 시점으로 복원')}</button></div>`,()=>{
         const preview=$('.revision-preview',dialog);
         $('#history-back').onclick=safely(async()=>{await annotationHistory(tab,back,()=>dialog.open&&dialog.contains(preview));if(dialog.open)$(`[data-revision="${version.id}"]`,dialog)?.focus({preventScroll:true});});
         $('#restore-revision').onclick=safely(async()=>{
@@ -2518,7 +2519,7 @@ async function annotationHistory(tab, selection = {}, valid = () => true) {
           tab.reader.commit(structuredClone(version.annotations));
           await tab.queue.flush();await tab.checkpoints.flush();if(dialog.contains(preview))dialog.close();
           if(active()===tab&&sidebarMode)renderSidebar(sidebarMode);
-          toast('HTML 본문은 유지하고 주석과 북마크를 복원했습니다.');
+          toast(t('HTML 본문은 유지하고 주석과 북마크를 복원했습니다.'));
         });
       });
     }));
@@ -2526,7 +2527,7 @@ async function annotationHistory(tab, selection = {}, valid = () => true) {
 }
 function documentInfo(tab) {
   const m=tab.reader.metadata;
-  modal(`<div class="dialog-heading"><h2>문서 정보</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><dl class="document-info"><dt>제목</dt><dd>${esc(m.title)}</dd><dt>파일</dt><dd>${esc(tab.record.name)}</dd><dt>원본</dt><dd>${safeWebURL(m.source)?`<a href="${esc(safeWebURL(m.source))}" target="_blank" rel="noopener noreferrer">${esc(m.source)}</a>`:m.source?esc(String(m.source)):'로컬 문서 파일'}</dd><dt>저장 위치</dt><dd>앱 보관함 (원본 파일은 변경하지 않음)</dd><dt>주석</dt><dd>${m.annotations.length}개</dd></dl>${m.warnings.length?`<details class="capture-warnings"><summary>보관하지 못한 리소스 ${m.warnings.length}개</summary><ul>${m.warnings.map(w=>`<li${isSecurityWarning(w)?' class="security-warning" role="alert"':''}>${esc(w)}</li>`).join('')}</ul></details>`:''}<p class="dialog-description small">작업은 이 기기의 서재에 자동 저장됩니다. 다른 사람에게 주석을 보내려면 내보내기에서 보관 파일·HTML·PDF 중 알맞은 형식을 선택하세요.</p>${annotationExportGuide()}`);
+  modal(`<div class="dialog-heading"><h2>${t('문서 정보')}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div><dl class="document-info"><dt>${t('제목')}</dt><dd>${esc(m.title)}</dd><dt>${t('파일')}</dt><dd>${esc(tab.record.name)}</dd><dt>${t('원본')}</dt><dd>${safeWebURL(m.source)?`<a href="${esc(safeWebURL(m.source))}" target="_blank" rel="noopener noreferrer">${esc(m.source)}</a>`:m.source?esc(String(m.source)):t('로컬 문서 파일')}</dd><dt>${t('저장 위치')}</dt><dd>${t('앱 보관함 (원본 파일은 변경하지 않음)')}</dd><dt>${t('주석')}</dt><dd>${t('{n}개',{n:m.annotations.length})}</dd></dl>${m.warnings.length?`<details class="capture-warnings"><summary>${t('보관하지 못한 리소스 {n}개',{n:m.warnings.length})}</summary><ul>${m.warnings.map(w=>`<li${isSecurityWarning(w)?' class="security-warning" role="alert"':''}>${esc(w)}</li>`).join('')}</ul></details>`:''}<p class="dialog-description small">${t('작업은 이 기기의 서재에 자동 저장됩니다. 다른 사람에게 주석을 보내려면 내보내기에서 보관 파일·HTML·PDF 중 알맞은 형식을 선택하세요.')}</p>${annotationExportGuide()}`);
 }
 function pickHTMLFile() {
   if(openPicker())return window.showOpenFilePicker({types:importTypes}).then(([handle])=>handle,error=>{if(['SecurityError','NotSupportedError'].includes(error.name))return inputFile();throw error;});
@@ -2539,16 +2540,16 @@ async function migrateEdition(tab) {
   if(!tab?.reader)return;
   await tab.reader.ready;await tab.queue.flush();
   const annotations=structuredClone(tab.reader.metadata.annotations),bookmarks=tab.reader.bookmarksForEdition(),outlineEdits=tab.reader.outlineEditsForEdition?.()||structuredClone(tab.reader.metadata.outlineEdits||[]);
-  if(!annotations.length&&!bookmarks.length&&!outlineEdits.length){toast('옮길 주석·북마크·수정한 목차가 없습니다.');return;}
+  if(!annotations.length&&!bookmarks.length&&!outlineEdits.length){toast(t('옮길 주석·북마크·수정한 목차가 없습니다.'));return;}
   let input;
   try{input=await pickHTMLFile();}catch(error){if(error?.name==='AbortError')return;throw error;}
   if(!input)return;
   const local=await readLocalHTML(input,{native:true,allowScripts:true});
-  modal(`<div class="dialog-heading"><h2>새 판으로 주석/북마크 옮기기</h2></div><p class="dialog-description" id="migrate-status" role="status">새 판을 여는 중…</p>`);
+  modal(`<div class="dialog-heading"><h2>${t('새 판으로 주석/북마크 옮기기')}</h2></div><p class="dialog-description" id="migrate-status" role="status">${t('새 판을 여는 중…')}</p>`);
   const status=()=>$('#migrate-status');
   let result,probe;
   try{
-    const onProgress=(done,total,phase)=>{if(status())status().textContent=`${phase==='search'?'다른 부분에서 찾는 중':'새 판에서 자리를 찾는 중'}… ${done}/${total}`;};
+    const onProgress=(done,total,phase)=>{if(status())status().textContent=`${phase==='search'?t('다른 부분에서 찾는 중'):t('새 판에서 자리를 찾는 중')}… ${done}/${total}`;};
     if(local.snapshot.pdf){
       const host=document.createElement('div');host.className='document-host';host.style.cssText='position:fixed;left:-10000px;top:0;width:1100px;height:800px;visibility:hidden';document.body.append(host);
       const pdfReader=new Reader(host,preparePDF(local.snapshot.pdf,{title:local.snapshot.title,metadata:local.snapshot.metadata}),{});probe={dispose:()=>pdfReader.dispose()};await pdfReader.ready;
@@ -2563,17 +2564,17 @@ async function migrateEdition(tab) {
   const {report,bookmarkReport,outlineReport={same:0,changed:0,deleted:[],unplaceable:[],unchecked:[]}}=result,movedOutline=result.outlineEdits||[];
   const lost=[...report.deleted,...report.unplaceable,...report.unchecked],lostBookmarks=[...bookmarkReport.deleted,...bookmarkReport.unplaceable,...bookmarkReport.unchecked],lostOutline=[...(outlineReport.deleted||[]),...(outlineReport.unplaceable||[]),...(outlineReport.unchecked||[])];
   const where=a=>{const key=a.section||a.textAnchor?.section||a.anchorTarget?.section;return key?result.oldSections.get(key)?.title||'':'';};
-  const row=a=>`<li><strong>${esc((isVideoNote(a)?'시점 메모':ANNOTATION_LABELS[a.type])||'주석')}</strong> ${esc((a.text||a.textAnchor?.quote||a.anchorTarget?.quote||'').slice(0,80))}${where(a)?` <span class="migrate-where">— ${esc(where(a))}</span>`:''}</li>`;
-  modal(`<form method="dialog"><div class="dialog-heading"><h2>새 판으로 주석/북마크 옮기기</h2><button type="button" class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>
-    <p class="dialog-description">주석 ${annotations.length}개 가운데 <strong>${result.annotations.length}개</strong>를 새 판에서 찾았습니다.</p>
-    <ul class="migrate-summary"><li>그대로 있는 자리: ${report.same}개</li><li>문장이 고쳐졌거나 옮겨진 자리: ${report.changed}개</li><li>새 판에서 지워진 내용: ${report.deleted.length}개 — 옮기지 않습니다</li>${report.unplaceable.length?`<li>위치 정보가 없는 예전 메모: ${report.unplaceable.length}개 — 옮기지 않습니다</li>`:''}${report.unchecked.length?`<li>새 판의 장을 열지 못해 확인하지 못한 주석: ${report.unchecked.length}개 — 옮기지 않습니다 (${esc(report.failedSections.slice(0,3).join(' '))})</li>`:''}</ul>
-    ${lost.length?`<details class="migrate-lost"><summary>옮기지 않는 주석 ${lost.length}개 보기</summary><ul>${lost.slice(0,200).map(row).join('')}</ul></details>`:''}
-    <p class="dialog-description" data-migrate-bookmarks>북마크 ${bookmarks.length}개 가운데 <strong>${result.bookmarks.length}개</strong>를 새 판으로 옮길 수 있습니다.</p>
-    <ul class="migrate-summary"><li>본문 위치를 찾은 북마크: ${bookmarkReport.same+bookmarkReport.changed}개</li><li>정확한 위치 대신 해당 장 시작으로 옮기는 북마크: ${bookmarkReport.approximate}개</li><li>위치를 확인하지 못해 옮기지 않는 북마크: ${lostBookmarks.length}개</li>${bookmarkReport.unchecked.length?`<li>장을 열지 못해 확인하지 못한 북마크: ${bookmarkReport.unchecked.length}개</li>`:''}</ul>
-    ${lostBookmarks.length?`<details class="migrate-lost"><summary>옮기지 않는 북마크 ${lostBookmarks.length}개 보기</summary><ul>${lostBookmarks.slice(0,200).map(mark=>`<li>${esc(mark.title)}${where(mark)?` <span class="migrate-where">— ${esc(where(mark))}</span>`:''}</li>`).join('')}</ul></details>`:''}
-    ${outlineEdits.length?`<p class="dialog-description" data-migrate-outline>수정한 목차 ${outlineEdits.length}개 가운데 <strong>${movedOutline.length}개</strong>를 새 판으로 옮길 수 있습니다.</p>`:''}
-    <p class="dialog-description small">새 판은 새 문서로 열리고, 지금 문서와 그 주석·북마크는 서재에 그대로 남습니다. 새 판에 이미 들어 있는 주석·북마크도 유지합니다.</p>
-    <div class="dialog-actions"><button class="secondary-button" value="cancel">취소</button><button class="primary-button" value="confirm"${result.annotations.length||result.bookmarks.length||movedOutline.length?'':' disabled'}>새 판 열기</button></div></form>`,dialog=>{
+  const row=a=>`<li><strong>${esc((isVideoNote(a)?t('시점 메모'):ANNOTATION_LABELS[a.type])||t('주석'))}</strong> ${esc((a.text||a.textAnchor?.quote||a.anchorTarget?.quote||'').slice(0,80))}${where(a)?` <span class="migrate-where">— ${esc(where(a))}</span>`:''}</li>`;
+  modal(`<form method="dialog"><div class="dialog-heading"><h2>${t('새 판으로 주석/북마크 옮기기')}</h2><button type="button" class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div>
+    <p class="dialog-description">${t('주석 {total}개 가운데 <strong>{n}개</strong>를 새 판에서 찾았습니다.',{total:annotations.length,n:result.annotations.length})}</p>
+    <ul class="migrate-summary"><li>${t('그대로 있는 자리: {n}개',{n:report.same})}</li><li>${t('문장이 고쳐졌거나 옮겨진 자리: {n}개',{n:report.changed})}</li><li>${t('새 판에서 지워진 내용: {n}개 — 옮기지 않습니다',{n:report.deleted.length})}</li>${report.unplaceable.length?`<li>${t('위치 정보가 없는 예전 메모: {n}개 — 옮기지 않습니다',{n:report.unplaceable.length})}</li>`:''}${report.unchecked.length?`<li>${t('새 판의 장을 열지 못해 확인하지 못한 주석: {n}개 — 옮기지 않습니다 ({sections})',{n:report.unchecked.length,sections:esc(report.failedSections.slice(0,3).join(' '))})}</li>`:''}</ul>
+    ${lost.length?`<details class="migrate-lost"><summary>${t('옮기지 않는 주석 {n}개 보기',{n:lost.length})}</summary><ul>${lost.slice(0,200).map(row).join('')}</ul></details>`:''}
+    <p class="dialog-description" data-migrate-bookmarks>${t('북마크 {total}개 가운데 <strong>{n}개</strong>를 새 판으로 옮길 수 있습니다.',{total:bookmarks.length,n:result.bookmarks.length})}</p>
+    <ul class="migrate-summary"><li>${t('본문 위치를 찾은 북마크: {n}개',{n:bookmarkReport.same+bookmarkReport.changed})}</li><li>${t('정확한 위치 대신 해당 장 시작으로 옮기는 북마크: {n}개',{n:bookmarkReport.approximate})}</li><li>${t('위치를 확인하지 못해 옮기지 않는 북마크: {n}개',{n:lostBookmarks.length})}</li>${bookmarkReport.unchecked.length?`<li>${t('장을 열지 못해 확인하지 못한 북마크: {n}개',{n:bookmarkReport.unchecked.length})}</li>`:''}</ul>
+    ${lostBookmarks.length?`<details class="migrate-lost"><summary>${t('옮기지 않는 북마크 {n}개 보기',{n:lostBookmarks.length})}</summary><ul>${lostBookmarks.slice(0,200).map(mark=>`<li>${esc(mark.title)}${where(mark)?` <span class="migrate-where">— ${esc(where(mark))}</span>`:''}</li>`).join('')}</ul></details>`:''}
+    ${outlineEdits.length?`<p class="dialog-description" data-migrate-outline>${t('수정한 목차 {total}개 가운데 <strong>{n}개</strong>를 새 판으로 옮길 수 있습니다.',{total:outlineEdits.length,n:movedOutline.length})}</p>`:''}
+    <p class="dialog-description small">${t('새 판은 새 문서로 열리고, 지금 문서와 그 주석·북마크는 서재에 그대로 남습니다. 새 판에 이미 들어 있는 주석·북마크도 유지합니다.')}</p>
+    <div class="dialog-actions"><button class="secondary-button" value="cancel">${t('취소')}</button><button class="primary-button" value="confirm"${result.annotations.length||result.bookmarks.length||movedOutline.length?'':' disabled'}>${t('새 판 열기')}</button></div></form>`,dialog=>{
     const done=safely(async()=>{dialog.removeEventListener('close',done);if(dialog.returnValue!=='confirm')return;
       const next=await createDocument(local.snapshot,local.handle,local.name,local);await next.reader.ready;
       const ids=new Set(next.reader.metadata.annotations.map(a=>a.id));
@@ -2586,7 +2587,7 @@ async function migrateEdition(tab) {
       }
       next.reader.commit([...next.reader.metadata.annotations,...unique(result.annotations,ids)]);
       await next.queue.flush();
-      toast(`새 판에 주석 ${result.annotations.length}개 · 북마크 ${result.bookmarks.length}개${movedOutline.length?` · 수정한 목차 ${movedOutline.length}개`:''}를 옮겼습니다.${lost.length||lostBookmarks.length||lostOutline.length?` 위치를 확인하지 못한 주석 ${lost.length}개 · 북마크 ${lostBookmarks.length}개${lostOutline.length?` · 목차 ${lostOutline.length}개`:''}는 옮기지 않았습니다.`:''}`);
+      toast(t('새 판에 주석 {annotations}개 · 북마크 {bookmarks}개{outline}를 옮겼습니다.',{annotations:result.annotations.length,bookmarks:result.bookmarks.length,outline:movedOutline.length?t(' · 수정한 목차 {n}개',{n:movedOutline.length}):''})+(lost.length||lostBookmarks.length||lostOutline.length?t(' 위치를 확인하지 못한 주석 {annotations}개 · 북마크 {bookmarks}개{outline}는 옮기지 않았습니다.',{annotations:lost.length,bookmarks:lostBookmarks.length,outline:lostOutline.length?t(' · 목차 {n}개',{n:lostOutline.length}):''}):''));
     });
     dialog.addEventListener('close',done);
   });
@@ -2595,58 +2596,58 @@ async function finishTrashChange(message, restoredId) {
   await refreshLibrary();
   if(restoredId){
     const restored=records.find(record=>record.id===restoredId);
-    if(!restored)throw Error('복원한 문서가 다른 창에서 변경되었습니다. 서재를 다시 확인해주세요.');
+    if(!restored)throw Error(t('복원한 문서가 다른 창에서 변경되었습니다. 서재를 다시 확인해주세요.'));
     const destination=libraryFolderById.has(restored.folderId)?restored.folderId:'';
     navigateLibraryFolder(destination);
     const button=$$('[data-open]',$('#document-grid')).find(item=>item.dataset.open===restoredId);
     button?.focus({preventScroll:true});button?.scrollIntoView({block:'nearest',inline:'nearest'});
-    message='복원했습니다. 위치: '+libraryPathLabel(destination);
+    message=t('복원했습니다. 위치: {path}',{path:libraryPathLabel(destination)});
   }
   try{await dataFolder?.flush();}catch(error){showError(error);return;}
   toast(message);
 }
 async function moveLibraryDocumentToTrash(record) {
   if(trashBusy||!record)return;
-  if(!await confirmDialog('휴지통으로 옮길까요?','본문·주석·북마크·저장 이력을 보관합니다. 내 서재의 휴지통에서 복원할 수 있습니다.','휴지통으로 이동'))return;
+  if(!await confirmDialog(t('휴지통으로 옮길까요?'),t('본문·주석·북마크·저장 이력을 보관합니다. 내 서재의 휴지통에서 복원할 수 있습니다.'),t('휴지통으로 이동')))return;
   if(trashBusy)return;trashBusy=true;
   try{
     const tab=tabs.find(tab=>tab.record?.id===record.id);if(tab)await closeTab(tab.id);
-    await trashDocument(record.id);await finishTrashChange('휴지통으로 옮겼습니다. 내 서재의 휴지통에서 복원할 수 있습니다.');
+    await trashDocument(record.id);await finishTrashChange(t('휴지통으로 옮겼습니다. 내 서재의 휴지통에서 복원할 수 있습니다.'));
   }finally{trashBusy=false;}
 }
 function trashDocumentMenu(record) {
   if(!record)return;
-  modal(`<div class="dialog-heading"><h2>${esc(record.title)}</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><p class="dialog-description small">${esc(record.name)}<br>복원 위치: ${esc(libraryPathLabel(record.folderId||''))}<br>삭제일: ${esc(formatDate(record.trashedAt,true))}</p><p class="dialog-description">본문·주석·북마크·저장 이력을 함께 복원합니다.</p><div class="document-actions"><button id="trash-restore" class="menu-button">${icon('undo')} 복원</button><button id="trash-delete" class="menu-button danger">${icon('trash')} 영구 삭제</button></div>`,dialog=>{
+  modal(`<div class="dialog-heading"><h2>${esc(record.title)}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div><p class="dialog-description small">${esc(record.name)}<br>${t('복원 위치: {path}',{path:esc(libraryPathLabel(record.folderId||''))})}<br>${t('삭제일: {date}',{date:esc(formatDate(record.trashedAt,true))})}</p><p class="dialog-description">${t('본문·주석·북마크·저장 이력을 함께 복원합니다.')}</p><div class="document-actions"><button id="trash-restore" class="menu-button">${icon('undo')} ${t('복원')}</button><button id="trash-delete" class="menu-button danger">${icon('trash')} ${t('영구 삭제')}</button></div>`,dialog=>{
     $('#trash-restore').onclick=safely(async()=>{
       if(trashBusy)return;trashBusy=true;
       try{const restored=await restoreDocument(record.id);dialog.close();await finishTrashChange('',restored.id);}finally{trashBusy=false;}
     });
     $('#trash-delete').onclick=safely(async()=>{
       if(trashBusy)return;
-      if(!await confirmDialog('영구 삭제할까요?',record.title+' · 문서·주석·북마크·저장 이력을 앱에서 복원할 수 없게 됩니다. 가져오기 전의 원본 파일은 삭제하지 않습니다.','영구 삭제'))return;
+      if(!await confirmDialog(t('영구 삭제할까요?'),t('{title} · 문서·주석·북마크·저장 이력을 앱에서 복원할 수 없게 됩니다. 가져오기 전의 원본 파일은 삭제하지 않습니다.',{title:record.title}),t('영구 삭제')))return;
       if(trashBusy)return;trashBusy=true;
-      try{await deleteDocument(record.id);await finishTrashChange('휴지통에서 영구 삭제했습니다.');}finally{trashBusy=false;}
+      try{await deleteDocument(record.id);await finishTrashChange(t('휴지통에서 영구 삭제했습니다.'));}finally{trashBusy=false;}
     });
   });
 }
 async function emptyLibraryTrash() {
   if(trashBusy||!trashRecords.length)return;
   const ids=trashRecords.map(record=>record.id);
-  if(!await confirmDialog('휴지통을 비울까요?',ids.length+'개 문서와 주석·북마크·저장 이력을 영구 삭제합니다. 앱에서 복원할 수 없습니다. 가져오기 전의 원본 파일은 삭제하지 않습니다.','휴지통 비우기'))return;
+  if(!await confirmDialog(t('휴지통을 비울까요?'),t('{n}개 문서와 주석·북마크·저장 이력을 영구 삭제합니다. 앱에서 복원할 수 없습니다. 가져오기 전의 원본 파일은 삭제하지 않습니다.',{n:ids.length}),t('휴지통 비우기')))return;
   if(trashBusy)return;trashBusy=true;
-  try{await deleteTrashedDocuments(ids);await finishTrashChange('휴지통을 비웠습니다.');}finally{trashBusy=false;}
+  try{await deleteTrashedDocuments(ids);await finishTrashChange(t('휴지통을 비웠습니다.'));}finally{trashBusy=false;}
 }
 function documentMenu(record) {
-  modal(`<div class="dialog-heading"><h2>${esc(record.title)}</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div><div class="document-actions"><button class="menu-button" id="menu-open">${icon('file')} 열기</button><button class="menu-button" id="menu-export">${icon('download')} 내보내기</button><button class="menu-button" id="menu-history">${icon('undo')} 주석 저장 이력</button><button class="menu-button" id="menu-migrate">${icon('file')} 새 판으로 주석/북마크 옮기기</button><button class="menu-button danger" id="menu-remove">${icon('trash')} 휴지통으로 이동</button></div><p class="dialog-description small">내보내기에서 원본 포함 보관 파일·읽기용 HTML·주석 포함 PDF를 선택합니다.</p>${annotationExportGuide()}`,()=>{
+  modal(`<div class="dialog-heading"><h2>${esc(record.title)}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div><div class="document-actions"><button class="menu-button" id="menu-open">${icon('file')} ${t('열기')}</button><button class="menu-button" id="menu-export">${icon('download')} ${t('내보내기')}</button><button class="menu-button" id="menu-history">${icon('undo')} ${t('주석 저장 이력')}</button><button class="menu-button" id="menu-migrate">${icon('file')} ${t('새 판으로 주석/북마크 옮기기')}</button><button class="menu-button danger" id="menu-remove">${icon('trash')} ${t('휴지통으로 이동')}</button></div><p class="dialog-description small">${t('내보내기에서 원본 포함 보관 파일·읽기용 HTML·주석 포함 PDF를 선택합니다.')}</p>${annotationExportGuide()}`,()=>{
     $('#menu-open').onclick=safely(async()=>{$('#dialog').close();await openRecord(record);});$('#menu-export').onclick=safely(async()=>{$('#dialog').close();const tab=await openRecord(record);await exportDocument(tab);});
     $('#menu-history').onclick=safely(async()=>{$('#dialog').close();await annotationHistory(await openRecord(record));});
     $('#menu-migrate').onclick=safely(async()=>{$('#dialog').close();await migrateEdition(await openRecord(record));});
     $('#menu-remove').onclick=safely(()=>moveLibraryDocumentToTrash(record));
   });
   const actions=$('#dialog .document-actions'),starred=!!record.starredAt;
-  const starButton=document.createElement('button');starButton.className='menu-button'+(starred?' starred':'');starButton.id='menu-star';starButton.innerHTML=icon(starred?'star-filled':'star')+(starred?' 별표 해제':' 별표 추가');actions.insertBefore(starButton,$('#menu-export'));starButton.onclick=safely(async()=>{$('#dialog').close();await toggleDocumentStar(record.id);});
-  const button=document.createElement('button');button.className='menu-button';button.id='menu-folder-move';button.innerHTML=icon('folder')+' 폴더로 이동';actions.insertBefore(button,$('#menu-remove'));button.onclick=()=>libraryMoveDialog('document',record);
-  const location=document.createElement('p');location.className='dialog-description small';location.textContent='위치: '+libraryPathLabel(record.folderId||'');actions.before(location);
+  const starButton=document.createElement('button');starButton.className='menu-button'+(starred?' starred':'');starButton.id='menu-star';starButton.innerHTML=icon(starred?'star-filled':'star')+' '+(starred?t('별표 해제'):t('별표 추가'));actions.insertBefore(starButton,$('#menu-export'));starButton.onclick=safely(async()=>{$('#dialog').close();await toggleDocumentStar(record.id);});
+  const button=document.createElement('button');button.className='menu-button';button.id='menu-folder-move';button.innerHTML=icon('folder')+' '+t('폴더로 이동');actions.insertBefore(button,$('#menu-remove'));button.onclick=()=>libraryMoveDialog('document',record);
+  const location=document.createElement('p');location.className='dialog-description small';location.textContent=t('위치: {path}',{path:libraryPathLabel(record.folderId||'')});actions.before(location);
 }
 function handleKey(event) {
   if(startupPending||$('#app-update-dialog').open)return;
@@ -2697,18 +2698,18 @@ async function copyAppURL(){
   try{
     if(typeof navigator.clipboard?.writeText!=='function')throw new Error('Clipboard unavailable');
     await navigator.clipboard.writeText(PUBLIC_APP_URL);
-    $('#share-status').textContent='앱 주소를 복사했습니다. 이 주소만 보내주세요.';
+    $('#share-status').textContent=t('앱 주소를 복사했습니다. 이 주소만 보내주세요.');
   }catch{
     $('#share-url').focus();$('#share-url').select?.();
-    $('#share-status').textContent='자동 복사를 사용할 수 없습니다. 위 주소를 선택해 직접 복사해 보내주세요.';
-  }finally{sharingApp=false;$('#share-app').disabled=false;updateChrome();if(activeId==='execution'){$('#status-left').textContent='앱 설치 · URL 공유 · 모든 데이터는 이 기기에 저장';if(typeof syncStatusbarVisibility==='function')syncStatusbarVisibility();}}
+    $('#share-status').textContent=t('자동 복사를 사용할 수 없습니다. 위 주소를 선택해 직접 복사해 보내주세요.');
+  }finally{sharingApp=false;$('#share-app').disabled=false;updateChrome();if(activeId==='execution'){$('#status-left').textContent=t('앱 설치 · URL 공유 · 모든 데이터는 이 기기에 저장');if(typeof syncStatusbarVisibility==='function')syncStatusbarVisibility();}}
 }
 function bindUI() {
   document.addEventListener('fullscreenchange',()=>{if(document.fullscreenElement===$('#app') && readerFocused)nativeReaderFullscreen=true;else if(nativeReaderFullscreen){nativeReaderFullscreen=false;setReaderFocus(false);}});
-  [['#web-help-button','info','웹페이지 가져오기 안내'],['#address-open','external'],['#save-page','save'],['#library-search-icon','search'],['#empty-icon','file'],['#library-card-view','grid','카드'],['#library-list-view','list','목록']].forEach(([id,name,label])=>setButton(id,name,label));
-  setIconButton('#library-tab','library','내 서재');
-  setIconButton('#settings-button','settings','설정');bindTabs();
-  setIconButton('#app-update-close','close','업데이트 취소');
+  [['#web-help-button','info',t('웹페이지 가져오기 안내')],['#address-open','external'],['#save-page','save'],['#library-search-icon','search'],['#empty-icon','file'],['#library-card-view','grid',t('카드')],['#library-list-view','list',t('목록')]].forEach(([id,name,label])=>setButton(id,name,label));
+  setIconButton('#library-tab','library',t('내 서재'));
+  setIconButton('#settings-button','settings',t('설정'));bindTabs();
+  setIconButton('#app-update-close','close',t('업데이트 취소'));
   $('#execution-export-guide').innerHTML=annotationExportGuide();
   const statusbar=$('.statusbar');
   if(statusbar){
@@ -2728,7 +2729,7 @@ function bindUI() {
   $('#share-url').value=PUBLIC_APP_URL;$('#shared-app-link').href=PUBLIC_APP_URL;
   $('#share-app').onclick=safely(copyAppURL);
   installController=new InstallController({window,navigator,location,matchMedia,onChange:updateInstall,onGuide:installGuide});
-  $('#execution-install').onclick=safely(async()=>{const result=await installController.install();if(result==='dismissed')toast('설치를 취소했습니다. 앱 설치 버튼에서 다시 안내를 볼 수 있어요.');});
+  $('#execution-install').onclick=safely(async()=>{const result=await installController.install();if(result==='dismissed')toast(t('설치를 취소했습니다. 앱 설치 버튼에서 다시 안내를 볼 수 있어요.'));});
   const addressForm=$('#address-form');
   addressForm.addEventListener('focusin',()=>$('.chrome').classList.add('address-editing'));
   addressForm.addEventListener('focusout',event=>{if(!addressForm.contains(event.relatedTarget)){$('.chrome').classList.remove('address-editing');updateChrome();requestAnimationFrame(revealActiveTab);}});
@@ -2740,8 +2741,8 @@ function bindUI() {
   $('#file-input').onchange=safely(async event=>{const files=[...event.target.files],parentId=libraryFolderId;event.target.value='';for(const file of files)await openLocalFile(file,parentId);});
   $('#settings-file-input').onchange=safely(async event=>{const file=event.target.files[0];event.target.value='';if(file){await restoreSettings(file);settingsDialog();}});
   $('#library-filter').oninput=renderLibrary;$('#library-sort').onchange=safely(e=>{if(libraryTrash){trashSort=e.target.value;renderLibrary();return;}const [librarySort,librarySortDirection]=e.target.value.split(':');changePreferences({librarySort,librarySortDirection});});$$('[data-library-view]').forEach(button=>button.onclick=safely(()=>changePreferences({libraryView:button.dataset.libraryView})));$('#settings-button').onclick=settingsDialog;$('#web-help-button').onclick=()=>webHelpDialog();$('#paste-button').onclick=()=>pasteTextDialog();
-  $('#library-trash').onclick=toggleLibraryTrash;$('#library-empty-trash').onclick=safely(emptyLibraryTrash);$('#library-new-folder').onclick=()=>libraryFolderNameDialog();$('#library-folder-up').onclick=()=>libraryTrash?toggleLibraryTrash():navigateLibraryFolder(libraryFolderById.get(libraryFolderId)?.parentId||'');$('#library-folder-help').onclick=()=>modal(`<div class="dialog-heading"><h2>서재 폴더 사용 안내</h2><button class="icon-button" data-dialog-close aria-label="닫기">${icon('close')}</button></div>${$('#library-folder-help-content').innerHTML}<div class="dialog-actions"><button class="primary-button" data-dialog-close>확인</button></div>`);bindLibraryFolderDrag();
-  $('#open-example').onclick=safely(async()=>{let html=await bundledExample();if(html===null){const response=await fetch('./example.html');if(!response.ok)throw new Error('예제 문서를 불러오지 못했습니다.');html=await response.text();}await createDocument({html,title:'천천히 읽는다는 것',viewport:{width:960,height:800}});});
+  $('#library-trash').onclick=toggleLibraryTrash;$('#library-empty-trash').onclick=safely(emptyLibraryTrash);$('#library-new-folder').onclick=()=>libraryFolderNameDialog();$('#library-folder-up').onclick=()=>libraryTrash?toggleLibraryTrash():navigateLibraryFolder(libraryFolderById.get(libraryFolderId)?.parentId||'');$('#library-folder-help').onclick=()=>modal(`<div class="dialog-heading"><h2>${t('서재 폴더 사용 안내')}</h2><button class="icon-button" data-dialog-close aria-label="${t('닫기')}">${icon('close')}</button></div>${$('#library-folder-help-content').innerHTML}<div class="dialog-actions"><button class="primary-button" data-dialog-close>${t('확인')}</button></div>`);bindLibraryFolderDrag();
+  $('#open-example').onclick=safely(async()=>{const lang=language();let html=await bundledExample(lang);if(html===null){const response=await fetch('./'+exampleFile(lang));if(!response.ok)throw new Error(t('예제 문서를 불러오지 못했습니다.'));html=await response.text();}await createDocument({html,title:lang==='en'?'On Reading Slowly':'천천히 읽는다는 것',viewport:{width:960,height:800}});});
   const dismissWorkspaceMobileSidebar=event=>{
     const target=event.touches?.[0]?.target||event.target;
     if(!target?.closest?.('#workspaces')||target.closest('#sidebar,#toolbar,#tool-popover,[data-htmlmemo-reading-controls],[data-htmlmemo-ui],.mstts-player,.mstts-panel,.mstts-select-menu'))return;
@@ -2772,7 +2773,7 @@ function bindUI() {
   window.addEventListener('paste',handleImagePaste);
   window.addEventListener('dragover',event=>{if([...event.dataTransfer.types].includes('Files'))event.preventDefault();});window.addEventListener('drop',handleFileDrop);
 }
-function network() {$('#network-status').textContent=navigator.onLine?'온라인':'오프라인';$('#network-status').classList.toggle('offline',!navigator.onLine);syncStatusbarVisibility();}
+function network() {$('#network-status').textContent=navigator.onLine?t('온라인'):t('오프라인');$('#network-status').classList.toggle('offline',!navigator.onLine);syncStatusbarVisibility();}
 function fitHeader() {
   const header=$('.chrome');
   if(!header || typeof ResizeObserver==='undefined')return;
@@ -2795,20 +2796,20 @@ async function initialize() {
   applyTheme(preferences.theme,preferences.designTheme);
   const iosStorage=usingIOSAppStorage();
   if(!supportsDataFolder(window,navigator)&&!iosStorage){chromeRequiredDialog();return;}
-  document.documentElement.dataset.storageSetup='checking';updateAppInteraction();setStatusLeft('새 버전을 확인하는 중…');
-  try{preferences=loadPreferences(localStorage);}catch(error){toast('설정 일부를 읽지 못했습니다. 연결한 데이터 폴더로 복원할 수 있습니다.',true);}
-  dataFolder=new DataFolder({storage:localStorage,report:state=>{if(state.handle)folder=state.handle;renderFolderState();},onRestored:async result=>{reloadStoredPreferences();applyTheme(preferences.theme,preferences.designTheme);$('#library-sort').value=preferences.librarySort+':'+preferences.librarySortDirection;for(const tab of tabs)if(tab.reader)Object.assign(tab.reader,preferences.annotation);applyToolbarPosition();await refreshLibrary();if(result.recovered)toast('이전의 온전한 폴더 저장본에서 복원했습니다. 최신 변경 일부가 빠졌을 수 있습니다.',true);}});
+  document.documentElement.dataset.storageSetup='checking';updateAppInteraction();setStatusLeft(t('새 버전을 확인하는 중…'));
+  try{preferences=loadPreferences(localStorage);}catch(error){toast(t('설정 일부를 읽지 못했습니다. 연결한 데이터 폴더로 복원할 수 있습니다.'),true);}
+  dataFolder=new DataFolder({storage:localStorage,report:state=>{if(state.handle)folder=state.handle;renderFolderState();},onRestored:async result=>{reloadStoredPreferences();applyTheme(preferences.theme,preferences.designTheme);$('#library-sort').value=preferences.librarySort+':'+preferences.librarySortDirection;for(const tab of tabs)if(tab.reader)Object.assign(tab.reader,preferences.annotation);applyToolbarPosition();await refreshLibrary();if(result.recovered)toast(t('이전의 온전한 폴더 저장본에서 복원했습니다. 최신 변경 일부가 빠졌을 수 있습니다.'),true);}});
   applyTheme(preferences.theme,preferences.designTheme);bindUI();setupSelectLabels();fitHeader();$('#library-sort').value=preferences.librarySort+':'+preferences.librarySortDirection;network();
   // The old app must be able to update before requesting access to its folder.
   // Data already committed to this device survives the version change.
-  updateController=new UpdateController({navigator,location,onOffer:offerAppUpdate,onState:appUpdateState,beforeUpdate:async()=>{if(folderSetupController)throw Error('진행 중인 폴더 연결을 마친 뒤 다시 시도해주세요.');await flushInternalDocuments();await dataFolder.flush();},reload:()=>location.reload()});
+  updateController=new UpdateController({navigator,location,onOffer:offerAppUpdate,onState:appUpdateState,beforeUpdate:async()=>{if(folderSetupController)throw Error(t('진행 중인 폴더 연결을 마친 뒤 다시 시도해주세요.'));await flushInternalDocuments();await dataFolder.flush();},reload:()=>location.reload()});
   await updateController.start();
   if(document.documentElement.dataset.appUpdate==='reloading')return;
   // An installation failure leaves retry/cancel available in the update dialog.
   // Folder setup follows only after the user closes that dialog.
   if($('#app-update-dialog').open)await new Promise(resolve=>$('#app-update-dialog').addEventListener('close',resolve,{once:true}));
   if(document.documentElement.dataset.appUpdate==='reloading')return;
-  setStatusLeft('서재 준비 중…');
+  setStatusLeft(t('서재 준비 중…'));
   const savedFolder=await getSetting('folder');settingsFileHandle=await getSetting('settings-file');settingsFolderHint=await getSetting('settings-folder-hint')||'';
   folder=iosStorage?await openIOSAppStorage(navigator):savedFolder;
   onStorageChange(()=>{if(activeId==='library'){clearTimeout(libraryReloadTimer);libraryReloadTimer=setTimeout(()=>{if(activeId==='library')refreshLibrary().catch(showError);},30);}});
@@ -2821,4 +2822,4 @@ async function initialize() {
   if(!$('#folder-reconnect').hidden)$('#resume-data-folder',$('#folder-reconnect'))?.focus();
   if(typeof window.launchQueue?.setConsumer==='function')window.launchQueue.setConsumer(safely(async params=>{if(folderSetupPending&&(document.documentElement.dataset.storageSetup==='paused'||!await new Promise(resolve=>folderSetupWaiters.push(resolve))))return;const parentId=libraryFolderId;for(const handle of params.files||[])await openLocalFile(handle,parentId);}));
 }
-initialize().catch(error=>{startupPending=false;updateAppInteraction();setStatusLeft('서재를 준비하지 못했습니다.');showError(error);});
+initialize().catch(error=>{startupPending=false;updateAppInteraction();setStatusLeft(t('서재를 준비하지 못했습니다.'));showError(error);});

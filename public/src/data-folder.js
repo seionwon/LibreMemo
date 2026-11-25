@@ -1,3 +1,4 @@
+import {t} from './i18n.js';
 import {publicAppURL,isIOS} from './install.js';
 import { listDocuments, getDocument, listRevisions, restoreFolderDocuments, getSetting, setSetting, onStorageChange, permission, readLibrary } from './storage.js';
 import { localFileIdentity } from './local-files.js';
@@ -12,7 +13,7 @@ export const FOLDER_MANIFEST = 'HTMLMemo-library.json';
 export const FOLDER_PREVIOUS = 'HTMLMemo-library.previous.json';
 export const FOLDER_DATA = 'HTMLMemo-data';
 export const FOLDER_GUIDE = '새 기기로 옮기는 방법.txt';
-export const CHROME_REQUIRED_MESSAGE = '이 앱은 구글 크롬에서만 정상적으로 작동합니다. 크롬에서 실행해주세요.';
+export const CHROME_REQUIRED_MESSAGE = t('이 앱은 구글 크롬에서만 정상적으로 작동합니다. 크롬에서 실행해주세요.');
 const iosHandles = new WeakSet();
 let opfsWriterWorker = null, opfsWriteSeq = 0;
 const opfsPending = new Map();
@@ -107,7 +108,7 @@ export async function openIOSAppStorage(navigator) {
 }
 export function storageFolderName(value) {
   const name=typeof value==='string'?value.trim().normalize('NFC'):'';
-  if(!name||name==='.'||name==='..'||/[\u0000-\u001f\u007f/\\<>:"|?*]/.test(name)||/[. ]$/.test(name)||new TextEncoder().encode(name).length>240||/^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(name))throw Error('폴더 이름에는 경로나 특수문자 없이 짧은 이름을 입력해주세요.');
+  if(!name||name==='.'||name==='..'||/[\u0000-\u001f\u007f/\\<>:"|?*]/.test(name)||/[. ]$/.test(name)||new TextEncoder().encode(name).length>240||/^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(name))throw Error(t('폴더 이름에는 경로나 특수문자 없이 짧은 이름을 입력해주세요.'));
   return name;
 }
 /** Only inspect the user-granted directory; never search outside that permission. */
@@ -127,7 +128,7 @@ export async function createStorageSubfolder(parent,value,previousAttempt=null) 
     try{await child.getFileHandle(marker);return child;}
     catch(error){if(error.name!=='NotFoundError')throw error;}
   }
-  for await(const [entry] of child.entries())if(!['.DS_Store','desktop.ini','Thumbs.db'].includes(entry))throw Error('같은 이름의 폴더에 다른 파일이 있습니다. 다른 이름을 입력하거나 기존 LibreMemo 저장 폴더를 연결해주세요.');
+  for await(const [entry] of child.entries())if(!['.DS_Store','desktop.ini','Thumbs.db'].includes(entry))throw Error(t('같은 이름의 폴더에 다른 파일이 있습니다. 다른 이름을 입력하거나 기존 LibreMemo 저장 폴더를 연결해주세요.'));
   return child;
 }
 const FORMAT = 'HTMLMemo.library';
@@ -139,8 +140,8 @@ const portableKey = key => [PREFERENCES_KEY,'htmlmemo-theme','htmlmemo-doc-toc-w
 const jsonBlob = value => new Blob([JSON.stringify(value)], {type:'application/json'});
 const uid = () => crypto.randomUUID();
 const message = error => ['NotAllowedError','SecurityError'].includes(error?.name)
-  ? '폴더 쓰기 권한이 필요합니다. 다시 연결을 눌러 허용해주세요. 앱 내부의 변경은 유지됩니다.'
-  : '폴더에 저장하지 못했습니다. 앱 내부의 변경은 유지됩니다. '+(error?.message || String(error));
+  ? t('폴더 쓰기 권한이 필요합니다. 다시 연결을 눌러 허용해주세요. 앱 내부의 변경은 유지됩니다.')
+  : t('폴더에 저장하지 못했습니다. 앱 내부의 변경은 유지됩니다. ')+(error?.message || String(error));
 
 /** Only LibreMemo's own settings are portable, never other same-origin apps or handles. */
 export function folderSettings(storage) {
@@ -150,12 +151,12 @@ export function folderSettings(storage) {
   return validateSettings({entries});
 }
 export function validateSettings(value) {
-  if(!object(value?.entries) || Object.keys(value.entries).length>50000)throw Error('폴더의 설정 형식이 올바르지 않습니다.');
+  if(!object(value?.entries) || Object.keys(value.entries).length>50000)throw Error(t('폴더의 설정 형식이 올바르지 않습니다.'));
   const entries={};
   for(const [key,item] of Object.entries(value.entries)){
-    if(!portableKey(key)||typeof item!=='string'||item.length>131072)throw Error('지원하지 않는 폴더 설정입니다.');
+    if(!portableKey(key)||typeof item!=='string'||item.length>131072)throw Error(t('지원하지 않는 폴더 설정입니다.'));
     if(key===PREFERENCES_KEY)normalizePreferences(JSON.parse(item));
-    if(key==='htmlmemo-theme'&&!['light','dark','system'].includes(item))throw Error('폴더의 테마 설정이 손상되었습니다.');
+    if(key==='htmlmemo-theme'&&!['light','dark','system'].includes(item))throw Error(t('폴더의 테마 설정이 손상되었습니다.'));
     entries[key]=item;
   }
   return {entries};
@@ -171,20 +172,20 @@ export function portableRecord(record) {
 }
 export function validateState(value, id) {
   const record=value?.record;
-  if(!object(record)||record.id!==id||!validId(id)||typeof record.title!=='string'||record.title.length>1000||typeof record.name!=='string'||record.name.length>1000||!Number.isFinite(record.created)||!Number.isFinite(record.modified)||!object(record.metadata)||record.metadata.version!==1||!object(record.metadata.view)||!object(record.metadata.viewport)||!Array.isArray(value.revisions))throw Error('폴더의 문서 정보가 손상되었습니다.');
+  if(!object(record)||record.id!==id||!validId(id)||typeof record.title!=='string'||record.title.length>1000||typeof record.name!=='string'||record.name.length>1000||!Number.isFinite(record.created)||!Number.isFinite(record.modified)||!object(record.metadata)||record.metadata.version!==1||!object(record.metadata.view)||!object(record.metadata.viewport)||!Array.isArray(value.revisions))throw Error(t('폴더의 문서 정보가 손상되었습니다.'));
   const validateMarks = metadata => {
     validateAnnotations(metadata.annotations);
     if(metadata.outlineEdits!==undefined)validateOutlineEdits(metadata.outlineEdits);
-    if(metadata.bookmarks?.some(mark=>mark.pdfPosition!=null&&!validPDFPosition(mark.pdfPosition)))throw Error('PDF 북마크 위치가 손상되었습니다.');
-    if(metadata.bookmarks?.some(mark=>mark.pdfQuoteOffset!=null&&(!Number.isFinite(mark.pdfQuoteOffset)||Math.abs(mark.pdfQuoteOffset)>1)))throw Error('PDF 북마크의 본문 위치가 손상되었습니다.');
-    if(metadata.view?.pdfPosition!=null&&!validPDFPosition(metadata.view.pdfPosition))throw Error('PDF 읽기 위치가 손상되었습니다.');
-    if(!Array.isArray(metadata.bookmarks)||metadata.bookmarks.length>10000||metadata.bookmarks.some(b=>typeof b?.id!=='string'||typeof b.title!=='string'||!Number.isFinite(b.top)||!Number.isFinite(b.left)))throw Error('폴더의 북마크가 손상되었습니다.');
+    if(metadata.bookmarks?.some(mark=>mark.pdfPosition!=null&&!validPDFPosition(mark.pdfPosition)))throw Error(t('PDF 북마크 위치가 손상되었습니다.'));
+    if(metadata.bookmarks?.some(mark=>mark.pdfQuoteOffset!=null&&(!Number.isFinite(mark.pdfQuoteOffset)||Math.abs(mark.pdfQuoteOffset)>1)))throw Error(t('PDF 북마크의 본문 위치가 손상되었습니다.'));
+    if(metadata.view?.pdfPosition!=null&&!validPDFPosition(metadata.view.pdfPosition))throw Error(t('PDF 읽기 위치가 손상되었습니다.'));
+    if(!Array.isArray(metadata.bookmarks)||metadata.bookmarks.length>10000||metadata.bookmarks.some(b=>typeof b?.id!=='string'||typeof b.title!=='string'||!Number.isFinite(b.top)||!Number.isFinite(b.left)))throw Error(t('폴더의 북마크가 손상되었습니다.'));
   };
   validateMarks(record.metadata);
-  if(record.folderId!==undefined&&record.folderId!==''&&!validId(record.folderId))throw Error('문서의 서재 폴더 위치가 손상되었습니다.');
-  if(record.trashedAt!==undefined&&(!Number.isFinite(record.trashedAt)||record.trashedAt<=0||record.trashedAt>8640000000000000))throw Error('문서의 휴지통 삭제일이 손상되었습니다.');
-  if(record.starredAt!==undefined&&(!Number.isFinite(record.starredAt)||record.starredAt<=0||record.starredAt>8640000000000000))throw Error('문서의 별표 시각이 손상되었습니다.');
-  for(const revision of value.revisions){if(!object(revision)||!Number.isFinite(revision.created))throw Error('폴더의 주석 이력이 손상되었습니다.');validateMarks(revision);}
+  if(record.folderId!==undefined&&record.folderId!==''&&!validId(record.folderId))throw Error(t('문서의 서재 폴더 위치가 손상되었습니다.'));
+  if(record.trashedAt!==undefined&&(!Number.isFinite(record.trashedAt)||record.trashedAt<=0||record.trashedAt>8640000000000000))throw Error(t('문서의 휴지통 삭제일이 손상되었습니다.'));
+  if(record.starredAt!==undefined&&(!Number.isFinite(record.starredAt)||record.starredAt<=0||record.starredAt>8640000000000000))throw Error(t('문서의 별표 시각이 손상되었습니다.'));
+  for(const revision of value.revisions){if(!object(revision)||!Number.isFinite(revision.created))throw Error(t('폴더의 주석 이력이 손상되었습니다.'));validateMarks(revision);}
   return {record:safeLinkedFields(portableRecord(record)),revisions:value.revisions.map(({id:oldId,documentId,...revision})=>revision)};
 }
 /**
@@ -206,19 +207,19 @@ export function safeLinkedFields(record){
   return result;
 }
 function validateManifest(value) {
-  if(!object(value)||value.format!==FORMAT||![1,2].includes(value.version)||!validId(value.id)||!validId(value.revision)||!Array.isArray(value.documents)||value.documents.length>100000)throw Error('지원하지 않거나 손상된 LibreMemo 데이터 폴더입니다.');
+  if(!object(value)||value.format!==FORMAT||![1,2].includes(value.version)||!validId(value.id)||!validId(value.revision)||!Array.isArray(value.documents)||value.documents.length>100000)throw Error(t('지원하지 않거나 손상된 LibreMemo 데이터 폴더입니다.'));
   const folders=validateFolders(value.folders||(value.version===1?[]:null)),folderIds=new Set(['',...folders.map(f=>f.id)]);
   const seen=new Set();
   for(const entry of value.documents){
-    if(!validId(entry?.id)||seen.has(entry.id)||!['html','file'].includes(entry.sourceType)||!/^[a-f0-9]{64}$/.test(entry.stamp)||!/^[a-f0-9]{64}$/.test(entry.annotationStamp))throw Error('폴더의 문서 목록이 손상되었습니다.');
+    if(!validId(entry?.id)||seen.has(entry.id)||!['html','file'].includes(entry.sourceType)||!/^[a-f0-9]{64}$/.test(entry.stamp)||!/^[a-f0-9]{64}$/.test(entry.annotationStamp))throw Error(t('폴더의 문서 목록이 손상되었습니다.'));
     seen.add(entry.id);checkRef(entry.source);checkRef(entry.state);checkRef(entry.history);if(entry.original)checkRef(entry.original);
-    if(value.version===2||entry.copy){const copy=entry.copy,suffix=(entry.original||entry.source).name.slice(64);if(!object(copy)||!folderIds.has(copy.folderId)||typeof copy.name!=='string'||copy.name.length>220||/[\u0000-\u001f\u007f/\\<>:"|?*]/.test(copy.name)||/^[. ]/.test(copy.name)||!copy.name.endsWith(`[${entry.id}]${suffix}`))throw Error('원본 복사본의 폴더 경로가 올바르지 않습니다.');}
+    if(value.version===2||entry.copy){const copy=entry.copy,suffix=(entry.original||entry.source).name.slice(64);if(!object(copy)||!folderIds.has(copy.folderId)||typeof copy.name!=='string'||copy.name.length>220||/[\u0000-\u001f\u007f/\\<>:"|?*]/.test(copy.name)||/^[. ]/.test(copy.name)||!copy.name.endsWith(`[${entry.id}]${suffix}`))throw Error(t('원본 복사본의 폴더 경로가 올바르지 않습니다.'));}
   }
   checkRef(value.settings);return value;
 }
-function checkRef(ref) { if(!object(ref)||!refName.test(ref.name)||!Number.isSafeInteger(ref.size)||ref.size<0)throw Error('폴더 파일 경로 또는 크기가 올바르지 않습니다.'); }
+function checkRef(ref) { if(!object(ref)||!refName.test(ref.name)||!Number.isSafeInteger(ref.size)||ref.size<0)throw Error(t('폴더 파일 경로 또는 크기가 올바르지 않습니다.')); }
 async function optionalText(folder,name) {
-  try{const file=await (await folder.getFileHandle(name)).getFile();if(file.size>64*1024*1024)throw Error('폴더 목록 파일이 너무 큽니다.');return await file.text();}
+  try{const file=await (await folder.getFileHandle(name)).getFile();if(file.size>64*1024*1024)throw Error(t('폴더 목록 파일이 너무 큽니다.'));return await file.text();}
   catch(error){if(error.name==='NotFoundError')return null;throw error;}
 }
 async function atomicWrite(folder,name,contents) {
@@ -234,7 +235,7 @@ async function atomicWrite(folder,name,contents) {
 }
 async function objectFile(data,ref,verify=false) {
   checkRef(ref);const file=await (await data.getFileHandle(ref.name)).getFile();
-  if(file.size!==ref.size || verify && (await localFileIdentity(file)).digest!==ref.name.slice(0,64)){const error=Error('폴더의 파일이 누락되거나 손상되었습니다: '+ref.name);error.name='DataIntegrityError';throw error;}
+  if(file.size!==ref.size || verify && (await localFileIdentity(file)).digest!==ref.name.slice(0,64)){const error=Error(t('폴더의 파일이 누락되거나 손상되었습니다: ')+ref.name);error.name='DataIntegrityError';throw error;}
   return file;
 }
 async function storeObject(data,blob,suffix) {
@@ -248,15 +249,15 @@ async function manifestAt(folder,name=FOLDER_MANIFEST) {
 async function loadSnapshot(folder,head) {
   const data=await folder.getDirectoryHandle(FOLDER_DATA),documents=[];
   const settingsFile=await objectFile(data,head.manifest.settings,true);
-  if(settingsFile.size>16*1024*1024)throw Error('폴더의 설정 파일이 너무 큽니다.');
+  if(settingsFile.size>16*1024*1024)throw Error(t('폴더의 설정 파일이 너무 큽니다.'));
   const settings=validateSettings(JSON.parse(await settingsFile.text()));
   const folders=validateFolders(head.manifest.folders||[]),folderIds=new Set(['',...folders.map(f=>f.id)]);
   for(const entry of head.manifest.documents){
     const stateFile=await objectFile(data,entry.state,true);
-    if(stateFile.size>128*1024*1024)throw Error('폴더의 주석 이력 파일이 너무 큽니다.');
-    const historyFile=await objectFile(data,entry.history,true);if(historyFile.size>128*1024*1024)throw Error('폴더의 주석 이력 파일이 너무 큽니다.');
+    if(stateFile.size>128*1024*1024)throw Error(t('폴더의 주석 이력 파일이 너무 큽니다.'));
+    const historyFile=await objectFile(data,entry.history,true);if(historyFile.size>128*1024*1024)throw Error(t('폴더의 주석 이력 파일이 너무 큽니다.'));
     const state=validateState({...JSON.parse(await stateFile.text()),revisions:JSON.parse(await historyFile.text()).revisions},entry.id);
-    if(!folderIds.has(state.record.folderId||'')||entry.copy&&(state.record.folderId||'')!==entry.copy.folderId)throw Error('문서의 서재 폴더 위치가 목록과 일치하지 않습니다.');
+    if(!folderIds.has(state.record.folderId||'')||entry.copy&&(state.record.folderId||'')!==entry.copy.folderId)throw Error(t('문서의 서재 폴더 위치가 목록과 일치하지 않습니다.'));
     const source=await objectFile(data,entry.source,true),original=entry.original?await objectFile(data,entry.original,true):null;
     documents.push({...state,source,original,sourceType:entry.sourceType});
   }
@@ -312,7 +313,7 @@ export class DataFolder {
     clearTimeout(this.timer);if(this.running)await this.running.catch(()=>{});
     const granted=await connectionPermission(handle,signal);
     signal?.throwIfAborted();
-    if(!granted){this.handle=resume?handle:this.handle;const error=new DOMException('폴더 쓰기 권한이 필요합니다.','NotAllowedError');if(resume)this.publish('error',error);throw error;}
+    if(!granted){this.handle=resume?handle:this.handle;const error=new DOMException(t('폴더 쓰기 권한이 필요합니다.'),'NotAllowedError');if(resume)this.publish('error',error);throw error;}
     const oldHandle=this.handle,oldHead=this.head,oldState=this.state,oldError=this.error;
     this.historyVersions.clear();this.restoring=true;this.publish('saving');
     try{
@@ -321,7 +322,7 @@ export class DataFolder {
         let current;try{current=await manifestAt(handle);}catch{/* A verified previous snapshot may recover an interrupted/corrupt manifest. */}
         const reuse=current&&sameHead(checkpoint,current.manifest);
         const snapshot=reuse?null:await recoverSnapshot(handle);
-        if(!current&&!snapshot&&resume&&checkpoint)throw Error('이전에 저장한 폴더 목록이 없습니다. 다른 폴더인지 확인해주세요. 빈 목록으로 덮어쓰지 않습니다.');
+        if(!current&&!snapshot&&resume&&checkpoint)throw Error(t('이전에 저장한 폴더 목록이 없습니다. 다른 폴더인지 확인해주세요. 빈 목록으로 덮어쓰지 않습니다.'));
         const target=snapshot?.head||current;
         // Persist the new handle before touching the library; a denied IDB write keeps the old connection.
         await this.ops.setSetting('folder',isIOSAppStorageHandle(handle)?{iosAppStorage:true,name:handle.name}:handle);
@@ -337,7 +338,7 @@ export class DataFolder {
               const history=(await this.ops.listRevisions(record.id)).map(({id,documentId,...revision})=>revision);
               if((await localFileIdentity(body)).digest===(await localFileIdentity(item.source)).digest&&JSON.stringify(history)===JSON.stringify(item.revisions))continue;
             }
-            if(found){record.id=uid();record.title=(record.title+' (폴더에서 복원)').slice(0,1000);}
+            if(found){record.id=uid();record.title=(record.title+t(' (폴더에서 복원)')).slice(0,1000);}
             const content=item.sourceType==='file'?{file:item.source}:{html:await item.source.text()};if(item.original)content.originalFile=item.original;
             entries.push({record,content,revisions:item.revisions});existing.set(record.id,record);
           }
@@ -370,14 +371,14 @@ export class DataFolder {
     try{await this.running;}finally{this.running=null;this.report(this);}
   }
   async writeSnapshot({recovered=false}={}) {
-    if(!await permission(this.handle))throw new DOMException('폴더 쓰기 권한이 필요합니다.','NotAllowedError');
+    if(!await permission(this.handle))throw new DOMException(t('폴더 쓰기 권한이 필요합니다.'),'NotAllowedError');
     let before=null;if(!recovered)before=await manifestAt(this.handle);
     const checkpoint=await this.ops.getSetting(CHECKPOINT);
-    if(!recovered&&before&&!sameHead(before.manifest,this.head?.manifest)&&!sameHead(before.manifest,checkpoint))throw Error('다른 창이나 기기에서 폴더가 변경됐습니다. 다시 연결하면 양쪽 문서를 보존해 합칩니다.');
-    if(!before&&this.head&&!recovered)throw Error('폴더 목록이 사라졌습니다. 기존 데이터를 덮어쓰지 않습니다. 다시 연결해주세요.');
+    if(!recovered&&before&&!sameHead(before.manifest,this.head?.manifest)&&!sameHead(before.manifest,checkpoint))throw Error(t('다른 창이나 기기에서 폴더가 변경됐습니다. 다시 연결하면 양쪽 문서를 보존해 합칩니다.'));
+    if(!before&&this.head&&!recovered)throw Error(t('폴더 목록이 사라졌습니다. 기존 데이터를 덮어쓰지 않습니다. 다시 연결해주세요.'));
     const base=recovered?this.head:before,data=await this.handle.getDirectoryHandle(FOLDER_DATA,{create:true});
     const library=await this.ops.readLibrary(),folders=validateFolders(library.folders),folderIds=new Set(['',...folders.map(f=>f.id)]);
-    const place=(entry,record)=>{const folderId=record.folderId||'';if(!folderIds.has(folderId))throw Error('문서의 서재 폴더를 찾지 못했습니다. 폴더를 다시 연결해주세요.');return {...entry,copy:{folderId,name:documentCopyName(record,entry.original||entry.source)}};};
+    const place=(entry,record)=>{const folderId=record.folderId||'';if(!folderIds.has(folderId))throw Error(t('문서의 서재 폴더를 찾지 못했습니다. 폴더를 다시 연결해주세요.'));return {...entry,copy:{folderId,name:documentCopyName(record,entry.original||entry.source)}};};
     const checkAll=this.allDirty||!sameHead(base?.manifest,this.head?.manifest);
     const previous=new Map((base?.manifest.documents||[]).map(e=>[e.id,e])),documents=[],checked=new Set(),historyVersions=new Map(this.historyVersions);
     for(const summary of library.documents){
@@ -406,15 +407,15 @@ export class DataFolder {
       if(!history||!historyUnchanged&&old.annotationStamp!==annotationStamp){
         const revisions=(await this.ops.listRevisions(record.id)).map(({id,documentId,...revision})=>revision);
         validateState({record,revisions},record.id);
-        const historyBlob=jsonBlob({revisions});if(historyBlob.size>128*1024*1024)throw Error('한 문서의 주석 이력이 폴더 저장 한도(128MB)를 넘었습니다. 기존 폴더 저장본은 유지됩니다.');
+        const historyBlob=jsonBlob({revisions});if(historyBlob.size>128*1024*1024)throw Error(t('한 문서의 주석 이력이 폴더 저장 한도(128MB)를 넘었습니다. 기존 폴더 저장본은 유지됩니다.'));
         history=await storeObject(data,historyBlob,'json');
       }else validateState({record,revisions:[]},record.id);
       if(versioned)historyVersions.set(record.id,{version:historyVersion,name:history.name});else historyVersions.delete(record.id);
-      const stateBlob=jsonBlob({record});if(stateBlob.size>128*1024*1024)throw Error('한 문서의 현재 주석이 폴더 저장 한도(128MB)를 넘었습니다.');
+      const stateBlob=jsonBlob({record});if(stateBlob.size>128*1024*1024)throw Error(t('한 문서의 현재 주석이 폴더 저장 한도(128MB)를 넘었습니다.'));
       const state=await storeObject(data,stateBlob,'json');
       documents.push(place({id:record.id,source,original,sourceType,state,history,stamp,annotationStamp,...(record.bodyVersion?{bodyVersion:record.bodyVersion}:{})},record));
     }
-    const settingsBlob=jsonBlob(folderSettings(this.storage));if(settingsBlob.size>16*1024*1024)throw Error('설정의 크기가 폴더 저장 한도(16MB)를 넘었습니다.');
+    const settingsBlob=jsonBlob(folderSettings(this.storage));if(settingsBlob.size>16*1024*1024)throw Error(t('설정의 크기가 폴더 저장 한도(16MB)를 넘었습니다.'));
     const settings=await storeObject(data,settingsBlob,'json');
     const manifest={format:FORMAT,version:2,id:base?.manifest.id||uid(),revision:uid(),savedAt:new Date().toISOString(),settings,folders,documents};
     // Check every referenced file exists, without rereading large immutable sources on edits.
@@ -425,8 +426,8 @@ export class DataFolder {
       this.head=base;await this.ops.setSetting(CHECKPOINT,{id:base.manifest.id,revision:base.manifest.revision});return;
     }
     const latest=await optionalText(this.handle,FOLDER_MANIFEST);
-    if(!recovered&&latest!==(before?.raw??null))throw Error('저장 중 다른 프로그램에서 폴더를 변경했습니다. 다시 연결해주세요.');
-    await atomicWrite(this.handle,FOLDER_GUIDE,`LibreMemo 데이터 폴더: ${this.handle.name}\n\n문서 원본 복사본·본문·주석·북마크·주석 이력·읽기 위치·설정을 자동 보관합니다. 평소에는 원본 HTML에 주석을 합치지 않습니다. 휴지통으로 옮긴 문서도 모두 보관하며 내 서재 → 휴지통에서 복원할 수 있습니다. 휴지통의 영구 삭제·비우기는 앱에서 복원할 수 없습니다.\n\n새 기기로 옮길 때\n1. LibreMemo의 폴더 상태가 “폴더 자동 저장 완료”인지 확인하고 앱을 닫습니다.\n2. 이 폴더 전체를 하위 폴더·파일 빠짐없이 새 기기의 Documents(문서) 폴더로 복사합니다. 일부 HTML 파일만 옮기면 주석·설정이 빠집니다.\n3. ${publicAppURL()} 에서 설정 → 데이터 폴더 연결을 누르고 옮긴 폴더를 선택해 읽기·쓰기를 허용합니다. 문서·주석·설정은 자동 복원됩니다. 별도의 설정 파일 저장·불러오기는 필요 없습니다.\n\n다른 사람에게 문서 하나와 주석을 보낼 때\nLibreMemo에서 문서를 열어 상단의 “내보내기”를 누르세요. 기본 “원본 포함 보관 파일”(.librememo)은 원본·현재 주석·북마크·읽던 위치를 함께 담고, 받는 분은 LibreMemo의 “파일 가져오기”로 이어서 편집합니다. “읽기용 HTML 사본”은 읽기 화면과 주석을 한 .html 파일에 담습니다. PDF 원본 문서는 “주석 포함 PDF”로 다른 PDF 뷰어에도 전달합니다. 원본 복사본만 보내면 앱에서 추가한 주석은 전달되지 않습니다. 내보내기는 현재 문서만 포함하며 전체 이력·앱 설정을 백업하지 않습니다.\n\n주의\n관리 파일 이름과 내용을 개별적으로 바꾸거나 일부만 삭제하지 마세요. 브라우저 데이터 삭제는 이 폴더의 파일을 지우지 않지만 다시 폴더를 선택해야 합니다. 권한 회수·이동·디스크 부족·앱 강제 종료 중 미완료 저장은 자동 보호할 수 없습니다. 폴더 자체 삭제나 기기 고장에도 대비하려면 폴더 전체를 다른 저장장치에 복사하세요. 다른 기기에서 동시에 편집하는 실시간 동기화 기능은 아닙니다.\n`);
+    if(!recovered&&latest!==(before?.raw??null))throw Error(t('저장 중 다른 프로그램에서 폴더를 변경했습니다. 다시 연결해주세요.'));
+    await atomicWrite(this.handle,FOLDER_GUIDE,t('LibreMemo 데이터 폴더: {name}\n\n문서 원본 복사본·본문·주석·북마크·주석 이력·읽기 위치·설정을 자동 보관합니다. 평소에는 원본 HTML에 주석을 합치지 않습니다. 휴지통으로 옮긴 문서도 모두 보관하며 내 서재 → 휴지통에서 복원할 수 있습니다. 휴지통의 영구 삭제·비우기는 앱에서 복원할 수 없습니다.\n\n새 기기로 옮길 때\n1. LibreMemo의 폴더 상태가 “폴더 자동 저장 완료”인지 확인하고 앱을 닫습니다.\n2. 이 폴더 전체를 하위 폴더·파일 빠짐없이 새 기기의 Documents(문서) 폴더로 복사합니다. 일부 HTML 파일만 옮기면 주석·설정이 빠집니다.\n3. {url} 에서 설정 → 데이터 폴더 연결을 누르고 옮긴 폴더를 선택해 읽기·쓰기를 허용합니다. 문서·주석·설정은 자동 복원됩니다. 별도의 설정 파일 저장·불러오기는 필요 없습니다.\n\n다른 사람에게 문서 하나와 주석을 보낼 때\nLibreMemo에서 문서를 열어 상단의 “내보내기”를 누르세요. 기본 “원본 포함 보관 파일”(.librememo)은 원본·현재 주석·북마크·읽던 위치를 함께 담고, 받는 분은 LibreMemo의 “파일 가져오기”로 이어서 편집합니다. “읽기용 HTML 사본”은 읽기 화면과 주석을 한 .html 파일에 담습니다. PDF 원본 문서는 “주석 포함 PDF”로 다른 PDF 뷰어에도 전달합니다. 원본 복사본만 보내면 앱에서 추가한 주석은 전달되지 않습니다. 내보내기는 현재 문서만 포함하며 전체 이력·앱 설정을 백업하지 않습니다.\n\n주의\n관리 파일 이름과 내용을 개별적으로 바꾸거나 일부만 삭제하지 마세요. 브라우저 데이터 삭제는 이 폴더의 파일을 지우지 않지만 다시 폴더를 선택해야 합니다. 권한 회수·이동·디스크 부족·앱 강제 종료 중 미완료 저장은 자동 보호할 수 없습니다. 폴더 자체 삭제나 기기 고장에도 대비하려면 폴더 전체를 다른 저장장치에 복사하세요. 다른 기기에서 동시에 편집하는 실시간 동기화 기능은 아닙니다.\n',{name:this.handle.name,url:publicAppURL()}));
     if(base)await atomicWrite(this.handle,FOLDER_PREVIOUS,base.raw);
     const raw=JSON.stringify(manifest,null,2)+'\n';await atomicWrite(this.handle,FOLDER_MANIFEST,raw);
     this.head={raw,manifest};await this.ops.setSetting(CHECKPOINT,{id:manifest.id,revision:manifest.revision});

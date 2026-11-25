@@ -1,3 +1,4 @@
+import {t} from './i18n.js';
 // Ported from MemoSuite MemoReadAloud.tsx (UI) and readAloudRuntime.ts (browser engine).
 // See docs/tts-source.md for provenance and the iframe/lifecycle adapters.
 import {currentSection,textIndex,resolveTextAnchor,rangeFromOffsets} from './document.js';
@@ -78,7 +79,7 @@ export function createReadAloud(reader) {
   if (!('speechSynthesis' in W)) return;                       // no engine → no button at all
   var ROOT = readAloudRoot(D);
   if (!ROOT) return;
-  var T = {play:'소리내어 읽기',pause:'일시정지',prev:'이전 문장',next:'다음 문장',speed:'읽는 속도',settings:'낭독 설정',stop:'정지',close:'플레이어 닫기',lang:'언어',voice:'음성',voice_auto:'자동 (UI 언어)',voice_none:'이 언어의 설치된 음성이 없어 브라우저 기본 음성으로 읽습니다.',hint:'선택한 언어의 음성 하나로 끝까지 읽습니다 — 본문 속 다른 언어 단어도 포함해서요.'};
+  var T = {play:t('소리내어 읽기'),pause:t('일시정지'),prev:t('이전 문장'),next:t('다음 문장'),speed:t('읽는 속도'),settings:t('낭독 설정'),stop:t('정지'),close:t('플레이어 닫기'),lang:t('언어'),voice:t('음성'),voice_auto:t('자동 (UI 언어)'),voice_none:t('이 언어의 설치된 음성이 없어 브라우저 기본 음성으로 읽습니다.'),hint:t('선택한 언어의 음성 하나로 끝까지 읽습니다 — 본문 속 다른 언어 단어도 포함해서요.')};
   var lb = function (k, d) { return T[k] || d; };
   var BOOK_LANG = String(U.documentElement.lang || 'ko').split('-')[0];
 
@@ -619,7 +620,7 @@ export function createReadAloud(reader) {
   }
   function buildBar() {
     bar = U.createElement('div');
-    bar.className = 'mstts-player';bar.setAttribute('data-memo-readaloud','');bar.setAttribute('role','toolbar');bar.setAttribute('aria-label','낭독');
+    bar.className = 'mstts-player';bar.setAttribute('data-memo-readaloud','');bar.setAttribute('role','toolbar');bar.setAttribute('aria-label',t('낭독'));
     bar.style.left = '12px'; bar.style.bottom = '12px';
     if(savedPosition){bar.style.left=savedPosition.x+'px';bar.style.top=savedPosition.y+'px';bar.style.bottom='auto';}
     var grip = U.createElement('span'); grip.className = 'mstts-grip'; grip.textContent = '⠿'; grip.setAttribute('aria-hidden', 'true');
@@ -706,7 +707,7 @@ export function createReadAloud(reader) {
     var rowL = U.createElement('div'); rowL.className = 'mstts-row';
     var lblL = U.createElement('span'); lblL.textContent = lb('lang', 'Language'); rowL.appendChild(lblL);
     var selL = U.createElement('select');
-    var autoLanguage=U.createElement('option');autoLanguage.value='auto';autoLanguage.textContent='UI 언어 ('+(LANG_LABEL[BOOK_LANG]||BOOK_LANG)+')';autoLanguage.selected=languageChoice==='auto';selL.append(autoLanguage);
+    var autoLanguage=U.createElement('option');autoLanguage.value='auto';autoLanguage.textContent=t('UI 언어 ({name})',{name:LANG_LABEL[BOOK_LANG]||BOOK_LANG});autoLanguage.selected=languageChoice==='auto';selL.append(autoLanguage);
     Object.keys(UTTER_TAG).forEach(function (k) {
       if (!voicesForLang(voices, k).length && k !== lang) return;      // only languages this browser can speak
       var o = U.createElement('option'); o.value = k; o.textContent = LANG_LABEL[k] || k;
@@ -760,7 +761,7 @@ export function createReadAloud(reader) {
   function render() {
     if (!bar) return;
     bar.dataset.ttsScope = selectionScope ? 'selection' : 'document';
-    bar.setAttribute('aria-label',selectionScope ? '선택한 텍스트 낭독' : '낭독');
+    bar.setAttribute('aria-label',selectionScope ? t('선택한 텍스트 낭독') : t('낭독'));
     btnPlay.textContent = state === 'playing' ? '⏸' : '▶';
     btnPlay.title = state === 'playing' ? lb('pause', 'Pause') : lb('play', 'Read aloud');btnPlay.setAttribute('aria-label',btnPlay.title);
     btnPlay.setAttribute('aria-pressed',String(state === 'playing'));
@@ -790,7 +791,7 @@ export function createReadAloud(reader) {
   function failSpeech(message) {
     if (run && idx && run.sents.length) pauseReading();
     else {cancelSpeech();state = 'ready';clearPaint();render();}
-    reader.callbacks?.onNotice?.(message || '음성을 재생하지 못했습니다. ▶를 눌러 같은 문장에서 다시 시도하세요.');
+    reader.callbacks?.onNotice?.(message || t('음성을 재생하지 못했습니다. ▶를 눌러 같은 문장에서 다시 시도하세요.'));
   }
   function cycleRate() {
     closePanel();
@@ -891,7 +892,7 @@ export function createReadAloud(reader) {
   }
   function invalidateSelection() {
     stop();run=idx=null;
-    reader.callbacks?.onNotice?.('선택한 글이 바뀌었거나 다른 장으로 이동했습니다. 글을 다시 선택해 읽어주세요.');
+    reader.callbacks?.onNotice?.(t('선택한 글이 바뀌었거나 다른 장으로 이동했습니다. 글을 다시 선택해 읽어주세요.'));
   }
   function readingIndex() {
     ROOT=selectionScope?.root||readAloudRoot(D);
@@ -906,14 +907,14 @@ export function createReadAloud(reader) {
       var root=range && proseRoot.contains(range.startContainer) && proseRoot.contains(range.endContainer) ? proseRoot : D.body;
       if ((anchor.section||'')!==section || !range || !root.contains(range.startContainer) || !root.contains(range.endContainer)) throw new Error('Missing selection');
       if (!splitSentences(buildIndex(root,range).text,true).length) {
-        reader.callbacks?.onNotice?.('선택한 부분에 읽을 수 있는 본문이 없습니다.');return false;
+        reader.callbacks?.onNotice?.(t('선택한 부분에 읽을 수 있는 본문이 없습니다.'));return false;
       }
       stop();run=idx=null;
       ROOT=root;selectionScope={root,proseRoot,section,range,first:range.startContainer,last:range.endContainer,raw:range.toString()};
       if (!bar) buildBar();
       state='ready';render();pauseResume();return true;
     } catch (e) {
-      reader.callbacks?.onNotice?.('선택한 글의 위치를 찾지 못했습니다. 글을 다시 선택해 주세요.');return false;
+      reader.callbacks?.onNotice?.(t('선택한 글의 위치를 찾지 못했습니다. 글을 다시 선택해 주세요.'));return false;
     }
   }
   function beginReading(index, sents, at, fromView) {
@@ -1073,7 +1074,7 @@ export function createReadAloud(reader) {
       // A silent/failed native start must not leave a permanently misleading Pause.
       // Never retry automatically: the next explicit Play retries this sentence.
       startTimer = W.setTimeout(function () {
-        if(current())failSpeech('음성 시작 응답이 없습니다. 브라우저·기기의 음성 설정을 확인한 뒤 ▶를 눌러 다시 시도하세요.');
+        if(current())failSpeech(t('음성 시작 응답이 없습니다. 브라우저·기기의 음성 설정을 확인한 뒤 ▶를 눌러 다시 시도하세요.'));
       },8000);
       resumeEngine();W.speechSynthesis.speak(u);
     } catch (err3) {if(!u || activeUtterance === u)failSpeech();}
@@ -1106,7 +1107,7 @@ export function createReadAloud(reader) {
     if(reader.pdf&&!selectionScope&&state==='paused'&&samePosition(pausedAt,readingPosition())){resumeReading();return;}
     if(reader.pdf&&!selectionScope&&state!=='playing'){
       const generation=++pdfPlayGeneration,expected=state;
-      reader.pdf.prepareSpeech().then(hasText=>{if(generation!==pdfPlayGeneration||state!==expected||reader.disposed)return;if(!hasText){reader.callbacks?.onNotice?.('이 쪽에는 읽을 수 있는 텍스트가 없습니다.');return;}if(state==='ready')startReading();else if(state==='paused')resumeReading();}).catch(()=>failSpeech());return;
+      reader.pdf.prepareSpeech().then(hasText=>{if(generation!==pdfPlayGeneration||state!==expected||reader.disposed)return;if(!hasText){reader.callbacks?.onNotice?.(t('이 쪽에는 읽을 수 있는 텍스트가 없습니다.'));return;}if(state==='ready')startReading();else if(state==='paused')resumeReading();}).catch(()=>failSpeech());return;
     }
     try {
       if (state === 'ready') startReading();

@@ -1,3 +1,4 @@
+import {t} from './i18n.js';
 import {PdfTextSearch,indexPdfSearchPage,findPdfPageMatches} from './pdf/text-search.js';
 import {createSearchTextCache} from './pdf/search-cache.js';
 import {PdfPageImage,renderPdfPageImage,PDF_PREVIEW_PIXELS,PDF_DETAIL_PIXELS,pdfVisibleRasterRegion,pdfRasterDensity,pdfRasterCovers} from './pdf/page-rendering.js';
@@ -8,6 +9,9 @@ import {clamp} from './utils.js';
 import {PDF_SCROLL_WINDOW_HEIGHT,pdfWindowBase} from './pdf/viewport-window.js';
 import {localFileIdentity} from './local-files.js';
 
+// Outline titles such as '12쪽' identify saved outline edits, so they stay as
+// they are in every language; only labels and search quotes are translated.
+const pageTitle=page=>t('{n}쪽',{n:page});
 const SCALE=4/3,WINDOW_HEIGHT=PDF_SCROLL_WINDOW_HEIGHT,NS='http://www.w3.org/2000/svg';
 const svg=(doc,tag,attrs)=>{const node=doc.createElementNS(NS,tag);for(const [key,value]of Object.entries(attrs))node.setAttribute(key,String(value));return node;};
 let library;
@@ -21,7 +25,7 @@ export function blobRangeSource(pdfjs,source,onError){
   class LocalRange extends pdfjs.PDFDataRangeTransport{
     constructor(){super(source.size,new Uint8Array(),true);this.stopped=false;this.tail=Promise.resolve();}
     requestDataRange(begin,end){
-      this.tail=this.tail.then(async()=>{if(this.stopped)return;if(!Number.isSafeInteger(begin)||!Number.isSafeInteger(end)||begin<0||end>source.size||begin>=end)throw Error('잘못된 PDF 읽기 범위입니다.');const bytes=new Uint8Array(await source.slice(begin,end).arrayBuffer());if(!this.stopped)this.onDataRange(begin,bytes);}).catch(error=>{if(!this.stopped){this.abort();onError(error);}});
+      this.tail=this.tail.then(async()=>{if(this.stopped)return;if(!Number.isSafeInteger(begin)||!Number.isSafeInteger(end)||begin<0||end>source.size||begin>=end)throw Error(t('잘못된 PDF 읽기 범위입니다.'));const bytes=new Uint8Array(await source.slice(begin,end).arrayBuffer());if(!this.stopped)this.onDataRange(begin,bytes);}).catch(error=>{if(!this.stopped){this.abort();onError(error);}});
     }
     abort(){this.stopped=true;}
   }
@@ -36,11 +40,11 @@ export class PdfReader{
     const ranges=blobRangeSource(this.pdfjs,this.source,error=>{this.reader.callbacks.onError?.(error);void this.loading?.destroy();});
     this.loading=this.pdfjs.getDocument({...ranges,ownerDocument:this.doc,cMapUrl:assets+'cmaps/',cMapPacked:true,standardFontDataUrl:assets+'standard_fonts/',wasmUrl:assets+'wasm/',isEvalSupported:false,enableScripting:false,enableXfa:false,useWasm:true,verbosity:0});
     this.loading.onPassword=()=>{void this.loading.destroy();};
-    try{this.pdf=await this.loading.promise;}catch(error){if(error?.name==='PasswordException'||/password|destroyed/i.test(error?.message||''))throw Error('암호가 설정된 PDF입니다. 암호를 해제한 사본을 가져와주세요.');throw Error('PDF를 열지 못했습니다. 파일이 손상되었거나 지원하지 않는 형식입니다.');}
+    try{this.pdf=await this.loading.promise;}catch(error){if(error?.name==='PasswordException'||/password|destroyed/i.test(error?.message||''))throw Error(t('암호가 설정된 PDF입니다. 암호를 해제한 사본을 가져와주세요.'));throw Error(t('PDF를 열지 못했습니다. 파일이 손상되었거나 지원하지 않는 형식입니다.'));}
     if(this.disposed){await this.loading.destroy();return;}
-    if(!Number.isInteger(this.pdf.numPages)||this.pdf.numPages<1||this.pdf.numPages>100000)throw Error('지원하는 PDF 페이지 수를 벗어났습니다.');
+    if(!Number.isInteger(this.pdf.numPages)||this.pdf.numPages<1||this.pdf.numPages>100000)throw Error(t('지원하는 PDF 페이지 수를 벗어났습니다.'));
     this.count=this.pdf.numPages;
-    if(this.reader.metadata.annotations.some(a=>a.pdfPage>this.count||a.pdfRects?.some(rect=>rect.page>this.count))||this.reader.metadata.bookmarks.some(mark=>mark.pdfPosition?.page>this.count))throw Error('PDF 주석 또는 북마크의 쪽 정보가 원본과 맞지 않습니다. 원본 파일과 주석이 함께 있는 보관 파일을 확인해주세요.');
+    if(this.reader.metadata.annotations.some(a=>a.pdfPage>this.count||a.pdfRects?.some(rect=>rect.page>this.count))||this.reader.metadata.bookmarks.some(mark=>mark.pdfPosition?.page>this.count))throw Error(t('PDF 주석 또는 북마크의 쪽 정보가 원본과 맞지 않습니다. 원본 파일과 주석이 함께 있는 보관 파일을 확인해주세요.'));
     const first=await this.pdf.getPage(1),viewport=first.getViewport({scale:SCALE});this.defaultSize={width:viewport.width,height:viewport.height};this.sizes.set(1,this.defaultSize);
     this.tops=new Float64Array(this.count+1);this.relayout();
     this.reader.metadata.viewport.width=this.width*this.scale;this.reader.metadata.pdf={version:1,pages:this.count};
@@ -113,7 +117,7 @@ export class PdfReader{
   async ensure(page){
     if(this.disposed||page<1||page>this.count)return null;
     let slot=this.slots.get(page);if(slot)return slot.ready;
-    const node=this.doc.createElement('section');node.id='pdf-page-'+page;node.className='htmlmemo-pdf-page';node.dataset.pdfPage=page;node.dataset.htmlmemoAnchor='n'+page;node.setAttribute('aria-label',page+'쪽');
+    const node=this.doc.createElement('section');node.id='pdf-page-'+page;node.className='htmlmemo-pdf-page';node.dataset.pdfPage=page;node.dataset.htmlmemoAnchor='n'+page;node.setAttribute('aria-label',pageTitle(page));
     const inner=this.doc.createElement('div');inner.className='htmlmemo-pdf-page-inner';node.append(inner);this.root.append(node);
     slot={page,node,inner,controller:new AbortController(),used:performance.now()};slot.image=new PdfPageImage(inner,{publishImage:false});this.slots.set(page,slot);this.place(slot);
     slot.ready=(async()=>{
@@ -134,7 +138,7 @@ export class PdfReader{
     for(const item of annotations){if(item.subtype!=='Link'||!Array.isArray(item.rect))continue;const [x1,y1]=viewport.convertToViewportPoint(item.rect[0],item.rect[1]),[x2,y2]=viewport.convertToViewportPoint(item.rect[2],item.rect[3]);const a=this.doc.createElement('a');
       if(item.dest){a.href='#pdf-destination';a.addEventListener('click',event=>{event.preventDefault();event.stopImmediatePropagation();void this.navigateDestination(item.dest,true).catch(error=>this.reader.callbacks.onError?.(error));},true);}
       else{try{const url=new URL(item.url);if(!['https:','http:','mailto:','tel:'].includes(url.protocol)||url.username||url.password)continue;a.href=url.href;}catch{continue;}}
-      a.className='htmlmemo-pdf-link';a.setAttribute('aria-label',item.title||'문서 링크');Object.assign(a.style,{left:Math.min(x1,x2)+'px',top:Math.min(y1,y2)+'px',width:Math.abs(x2-x1)+'px',height:Math.abs(y2-y1)+'px'});slot.inner.append(a);
+      a.className='htmlmemo-pdf-link';a.setAttribute('aria-label',item.title||t('문서 링크'));Object.assign(a.style,{left:Math.min(x1,x2)+'px',top:Math.min(y1,y2)+'px',width:Math.abs(x2-x1)+'px',height:Math.abs(y2-y1)+'px'});slot.inner.append(a);
     }
   }
   pixelRatio(){return this.reader.host.ownerDocument.defaultView.devicePixelRatio||1;}
@@ -310,7 +314,7 @@ export class PdfReader{
     const result={annotations:[],bookmarks:[],outlineEdits:[],oldSections:new Map(),report:{same:0,changed:0,deleted:[],unplaceable:[],unchecked:[]},bookmarkReport:{same:0,changed:0,approximate:0,deleted:[],unplaceable:[],unchecked:[]},outlineReport:{same:0,changed:0,deleted:[],unplaceable:[],unchecked:[]}},signal=new AbortController().signal;
     const work=[...annotations.map(item=>({item,field:'annotations',report:result.report})),...bookmarks.map(item=>({item,field:'bookmarks',report:result.bookmarkReport}))];let done=0,total=work.length+outlineEdits.length;
     for(const {item,field,report}of work){
-      if(this.disposed)throw new DOMException('새 판 확인이 취소되었습니다.','AbortError');
+      if(this.disposed)throw new DOMException(t('새 판 확인이 취소되었습니다.'),'AbortError');
       const anchor=item.textAnchor||{quote:item.anchorTarget?.quote||''},quote=anchor.quote?.trim();
       if(!quote){report.unplaceable.push(item);onProgress(++done,total,'search');continue;}
       let progress;await this.searchEngine.run(quote,1,signal,p=>{progress=p;},{limit:2000,deferGeometry:true});
@@ -328,7 +332,7 @@ export class PdfReader{
       result[field].push(next);report.same++;onProgress(++done,total,'search');
     }
     for(const edit of outlineEdits){
-      if(this.disposed)throw new DOMException('새 판 확인이 취소되었습니다.','AbortError');
+      if(this.disposed)throw new DOMException(t('새 판 확인이 취소되었습니다.'),'AbortError');
       const entries=this.entries||[];
       let matched=entries.find((e,i)=>edit.originalTitle&&e.originalTitle===edit.originalTitle&&edit.index===i)
         ||entries.find(e=>edit.originalTitle&&e.originalTitle===edit.originalTitle&&(edit.level==null||e.level===edit.level))
@@ -359,7 +363,7 @@ export class PdfReader{
     const matches=[];
     for(const slot of [...this.slots.values()].sort((a,b)=>a.page-b.page)){await slot.ready;if(this.disposed||signal.aborted||!isCurrent())return null;if(slot.content)matches.push(...findPdfPageMatches(indexPdfSearchPage(slot.content,slot.viewport),query,slot.page,2000-matches.length));if(matches.length>=2000)break;}
     if(this.disposed||signal.aborted||generation!==this.searchGeneration||!isCurrent())return null;
-    r.searchResults=matches.map(match=>({...match,quote:match.page+'쪽 · '+match.before+match.text+match.after}));
+    r.searchResults=matches.map(match=>({...match,quote:pageTitle(match.page)+' · '+match.before+match.text+match.after}));
     if(move&&r.searchResults.length)await this.nextSearch(1);else r.callbacks.onSearchChange?.(r);return r.searchResults;
   }
   clearSearch(){for(const node of this.doc.querySelectorAll('[data-htmlmemo-pdf-search]'))node.remove();}
@@ -368,9 +372,9 @@ export class PdfReader{
     if(!query.trim())return [];
     await this.searchEngine.run(query,this.pageAt(),signal,value=>{progress=value;if(isCurrent())onProgress(value);},{deferGeometry:true});
     if(this.disposed||signal.aborted||!isCurrent())return null;
-    if(progress?.errors)this.reader.callbacks.onNotice?.(progress.errors+'쪽의 글자를 읽지 못했습니다.');
-    if(progress?.limited)this.reader.callbacks.onNotice?.('검색 결과가 2,000개를 넘었습니다. 검색어를 더 구체적으로 입력하세요.');
-    return (progress?.matches||[]).map(match=>({...match,quote:match.page+'쪽 · '+match.before+match.text+match.after}));
+    if(progress?.errors)this.reader.callbacks.onNotice?.(t('{n}쪽의 글자를 읽지 못했습니다.',{n:progress.errors}));
+    if(progress?.limited)this.reader.callbacks.onNotice?.(t('검색 결과가 2,000개를 넘었습니다. 검색어를 더 구체적으로 입력하세요.'));
+    return (progress?.matches||[]).map(match=>({...match,quote:pageTitle(match.page)+' · '+match.before+match.text+match.after}));
   }
   async jumpWhole(match){
     const signal=this.wholeAbort?.signal||new AbortController().signal,generation=this.wholeAbort;if(!await this.go(match.page))return false;const jump=this.jumpVersion;if(this.disposed||signal.aborted||generation!==this.wholeAbort)return false;

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import {validateFolders,folderName,folderPath,folderDescendants,editLibraryFolders,mergeLibraryFolders,documentCopyName,nextStarredAt,LIBRARY_FOLDERS_KEY,LibraryIndex} from '../public/src/library-folders.js';
+import {t} from '../public/src/i18n.js';
 
 const tree=()=>[{id:'books',parentId:'',name:'책'},{id:'study',parentId:'books',name:'공부'},{id:'archive',parentId:'',name:'보관'}];
 test('library folders form a rooted, ordered path and include descendants without reading documents',()=>{
@@ -50,7 +51,7 @@ test('raw copy names are safe, retain the original extension and distinguish sam
   assert.ok(a.endsWith('[one].mhtml'));assert.ok(!/[<>/\\]/.test(a));assert.notEqual(a,b);
 });
 
-const source=(await readFile(new URL('../public/src/storage.js',import.meta.url),'utf8')).replace(/^export /gm,'');
+const source=(await readFile(new URL('../public/src/storage.js',import.meta.url),'utf8')).replace(/^export /gm,'').replace(/^import \{t\} from '\.\/i18n\.js';\n/m,'');
 function storageFixture(){
   let stores=new Map([['settings',new Map([[LIBRARY_FOLDERS_KEY,tree()]])],['documents',new Map([['book',{id:'book',folderId:'study',modified:123,byteSize:10,metadata:{annotations:[{id:'note'}],bookmarks:[],view:{zoom:1}}}]])]]);
   const writes=[],transactions=[],control={};
@@ -60,7 +61,7 @@ function storageFixture(){
     tx.abort=()=>{aborted=true;queueMicrotask(()=>tx.onabort?.());};
     tx.objectStore=name=>{if(!snapshot.has(name))snapshot.set(name,new Map());const map=snapshot.get(name);return {get:key=>request(map.get(key)),getAll:()=>request([...map.values()]),getKey:()=>request('retained'),put:(value,key)=>{if(control.failWrite)throw Error('Disk full');writes.push(name);map.set(key??value.id,structuredClone(value));return request(key??value.id);},index:()=>({openKeyCursor:()=>request({primaryKey:1}),openCursor:()=>request({primaryKey:1,value:map.get('book')?.metadata})})};};return tx;
   }};
-  const context=vm.createContext({connection,structuredClone,Blob,crypto,Date,IDBKeyRange:{only:id=>id}});vm.runInContext(source+'\ndatabase=Promise.resolve(connection);',context);
+  const context=vm.createContext({t,connection,structuredClone,Blob,crypto,Date,IDBKeyRange:{only:id=>id}});vm.runInContext(source+'\ndatabase=Promise.resolve(connection);',context);
   return {api:context,writes,transactions,control,get folders(){return stores.get('settings').get(LIBRARY_FOLDERS_KEY);},get record(){return stores.get('documents').get('book');}};
 }
 test('folder edits atomically update only metadata; stale reader autosaves cannot reverse a document move',async()=>{

@@ -2,6 +2,7 @@ import {normalizeReadingLayout} from './reading-layout.js';
 import { FORMAT_VERSION, validateAnnotations, validateOutlineEdits, cleanSourceStorage,validPDFPosition, normalizeReadingFontFamily, validThumbnail } from './model.js';
 import {validateYouTube} from './youtube.js';
 import {videoNotes,videoNotesHTML,VIDEO_NOTES_CSS} from './youtube-notes.js';
+import {t} from './i18n.js';
 
 export const LAYER_ID = 'htmlmemo-annotation-layer';
 export const DATA_ID = 'htmlmemo-data';
@@ -10,7 +11,7 @@ export const DATA_ID = 'htmlmemo-data';
 export const LOCAL_CSP = "default-src 'none'; frame-src 'self'; img-src data: blob:; style-src 'unsafe-inline' data:; font-src data:; media-src data:; script-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'";
 // Executable source belongs ONLY in an opaque-origin runner, never the reader.
 export const SCRIPT_CSP = "default-src 'none'; frame-src 'self'; img-src data: blob:; style-src 'unsafe-inline' data:; font-src data:; media-src data: blob:; script-src 'unsafe-inline' 'unsafe-eval' data: blob:; worker-src data: blob:; connect-src data: blob:; form-action 'none'; base-uri 'none'";
-export const BOOK_DATA_MISSING = '이 파일에는 책의 목차 제목만 남아 있고 본문 데이터 또는 실행 코드가 빠져 있습니다. 완전한 원본 HTML 파일을 가져와 주세요. 기존 문서와 주석은 보관함에 유지됩니다.';
+export const BOOK_DATA_MISSING = t('이 파일에는 책의 목차 제목만 남아 있고 본문 데이터 또는 실행 코드가 빠져 있습니다. 완전한 원본 HTML 파일을 가져와 주세요. 기존 문서와 주석은 보관함에 유지됩니다.');
 // MemoSuite book exports were renamed from memosuite-book-html-v1 to
 // book-html-v1 on 2026-10-25; files written under either name must open.
 export const BOOK_FORMATS = ['book-html-v1', 'memosuite-book-html-v1'];
@@ -33,7 +34,7 @@ export function inspectBookDocument(doc) {
 // image payloads after decoding them. Export the immutable source bytes instead.
 // Only the small head is read; the book's compressed bodies/images stay Blobs.
 export async function serializeBookSource(source, metadata) {
-  if (!(source instanceof Blob)) throw new Error('보관한 책 원본을 찾지 못했습니다.');
+  if (!(source instanceof Blob)) throw new Error(t('보관한 책 원본을 찾지 못했습니다.'));
   const decoder = new TextDecoder('utf-8', {ignoreBOM:true});
   let header = '', read = 0, end = -1;
   while (read < source.size && end < 0) {
@@ -41,9 +42,9 @@ export async function serializeBookSource(source, metadata) {
     header += decoder.decode(await source.slice(read, next).arrayBuffer(), {stream: next < source.size});
     read = next;
     end = header.search(/<\/head\s*>|<body\b/i);
-    if (end < 0 && read >= 16 * 1024 * 1024) throw new Error('책 원본의 HTML 헤더를 읽지 못했습니다. 완전한 원본 파일을 가져와 주세요.');
+    if (end < 0 && read >= 16 * 1024 * 1024) throw new Error(t('책 원본의 HTML 헤더를 읽지 못했습니다. 완전한 원본 파일을 가져와 주세요.'));
   }
-  if (end < 0) throw new Error('책 원본의 HTML 헤더가 손상되었습니다. 완전한 원본 파일을 가져와 주세요.');
+  if (end < 0) throw new Error(t('책 원본의 HTML 헤더가 손상되었습니다. 완전한 원본 파일을 가져와 주세요.'));
   const encoder = new TextEncoder(), parts = [];
   let offset = 0;
   const head = header.slice(0, end);
@@ -223,7 +224,7 @@ export async function prepareLoadedHTML(doc, defaults = {}, isCancelled = () => 
   const work = prepareHTML(null, defaults, {document:doc,includeMetadata:true,allowScripts:defaults.execution?.allowScripts,serialize,freshAnnotations});
   try {
     for (;;) {
-      if (isCancelled()) throw new DOMException('문서 열기가 취소되었습니다.','AbortError');
+      if (isCancelled()) throw new DOMException(t('문서 열기가 취소되었습니다.'),'AbortError');
       const start = performance.now();
       for (let count=0;count<65536;count++) {
         const step=work.next();if(step.done)return step.value;
@@ -235,13 +236,13 @@ export async function prepareLoadedHTML(doc, defaults = {}, isCancelled = () => 
   } finally { work.return(); }
 }
 function* prepareHTML(html, defaults, {includeMetadata = false, document: loadedDocument = null, allowScripts = undefined, serialize = true, freshAnnotations = false} = {}) {
-  if (!loadedDocument && (typeof html !== 'string' || !html.trim())) throw new Error('HTML 파일이 비어 있습니다.');
+  if (!loadedDocument && (typeof html !== 'string' || !html.trim())) throw new Error(t('HTML 파일이 비어 있습니다.'));
   const doc = loadedDocument || new DOMParser().parseFromString(html, 'text/html');
   let embedded = {};
   const data = doc.getElementById(DATA_ID);
   if (data) {
-    try { embedded = JSON.parse(data.textContent); } catch { throw new Error('LibreMemo 주석 데이터가 손상되었습니다. 원본 파일을 확인해주세요.'); }
-    if (embedded.version !== FORMAT_VERSION) throw new Error('이 파일의 LibreMemo 버전을 지원하지 않습니다.');
+    try { embedded = JSON.parse(data.textContent); } catch { throw new Error(t('LibreMemo 주석 데이터가 손상되었습니다. 원본 파일을 확인해주세요.')); }
+    if (embedded.version !== FORMAT_VERSION) throw new Error(t('이 파일의 LibreMemo 버전을 지원하지 않습니다.'));
     embedded.annotations = validateAnnotations(embedded.annotations);
     if (embedded.outlineEdits !== undefined) embedded.outlineEdits = validateOutlineEdits(embedded.outlineEdits);
   }
@@ -249,7 +250,7 @@ function* prepareHTML(html, defaults, {includeMetadata = false, document: loaded
   try { const url=new URL(source); source=['http:','https:'].includes(url.protocol)&&!url.username&&!url.password?url.href:''; } catch { source=''; }
   allowScripts = (allowScripts ?? defaults.execution?.allowScripts ?? embedded.execution?.allowScripts ?? false) === true;
   const book = inspectBookDocument(doc);
-  if (book?.complete && !allowScripts) throw new Error('이 책은 화면 캡처로 보관하면 본문과 목차가 사라집니다. 완전한 원본 HTML 파일을 가져와 주세요.');
+  if (book?.complete && !allowScripts) throw new Error(t('이 책은 화면 캡처로 보관하면 본문과 목차가 사라집니다. 완전한 원본 HTML 파일을 가져와 주세요.'));
   const mayHaveArtifacts = typeof html !== 'string' || html.includes('htmlmemo-');
   if (mayHaveArtifacts) {
     clearReaderArtifacts(doc);
@@ -298,7 +299,7 @@ function* prepareHTML(html, defaults, {includeMetadata = false, document: loaded
   const bookmarks=Array.isArray(embedded.bookmarks)?embedded.bookmarks.filter(b=>b&&typeof b.id==='string'&&typeof b.title==='string'&&Number.isFinite(b.top)&&Number.isFinite(b.left)).slice(0,10000):[];
   const outlineEdits=freshAnnotations?[]:embedded.outlineEdits||[];
   const metadata = {
-    version: FORMAT_VERSION, title: String(embedded.title || doc.title || defaults.title || 'HTML 문서').slice(0,1000),
+    version: FORMAT_VERSION, title: String(embedded.title || doc.title || defaults.title || t('HTML 문서')).slice(0,1000),
     source, capturedAt: embedded.capturedAt || Date.now(), viewport: {width: Math.min(4096, Math.max(320, Number(viewport.width) || 1100)), height: Number(viewport.height) || 800},
     execution:{allowScripts:!!allowScripts}, annotations: freshAnnotations?[]:embedded.annotations || [], view: {scrollTop:Math.max(0,Number(view.scrollTop)||0),scrollLeft:Math.max(0,Number(view.scrollLeft)||0),zoom:Number.isFinite(view.zoom)?Math.min(8,Math.max(.2,view.zoom)):null,autoFit:view.autoFit==null?!Number.isFinite(view.zoom):view.autoFit!==false,...(Number.isFinite(view.tocWidth)?{tocWidth:Math.min(640,Math.max(8,Math.round(Number(view.tocWidth))))}:{})}, bookmarks:freshAnnotations?[]:bookmarks,
     ...(outlineEdits.length?{outlineEdits}:{}),
@@ -315,8 +316,8 @@ function* prepareHTML(html, defaults, {includeMetadata = false, document: loaded
   if(Number.isFinite(view.mediaTime)&&view.mediaTime>=0&&view.mediaTime<360000)metadata.view.mediaTime=Math.round(view.mediaTime*10)/10;
   const youtube=validateYouTube(embedded.youtube);if(youtube)metadata.youtube=youtube;
   if(embedded.thumbnail&&validThumbnail(embedded.thumbnail))metadata.thumbnail=embedded.thumbnail;
-  if(bookmarks.some(mark=>mark.pdfPosition!=null&&!validPDFPosition(mark.pdfPosition)))throw Error('PDF 북마크 위치가 손상되었습니다.');
-  if(bookmarks.some(mark=>mark.pdfQuoteOffset!=null&&(!Number.isFinite(mark.pdfQuoteOffset)||Math.abs(mark.pdfQuoteOffset)>1)))throw Error('PDF 북마크의 본문 위치가 손상되었습니다.');
+  if(bookmarks.some(mark=>mark.pdfPosition!=null&&!validPDFPosition(mark.pdfPosition)))throw Error(t('PDF 북마크 위치가 손상되었습니다.'));
+  if(bookmarks.some(mark=>mark.pdfQuoteOffset!=null&&(!Number.isFinite(mark.pdfQuoteOffset)||Math.abs(mark.pdfQuoteOffset)>1)))throw Error(t('PDF 북마크의 본문 위치가 손상되었습니다.'));
   // Fixed slide canvases can become wider than the viewport at A+; native
   // scrolling keeps their right edge reachable and survives HTML export.
   const nativeScroll = !!allowScripts || !!loadedDocument || !!doc.querySelector('article[data-office-slides],article[data-office-pages],article[data-ebook]') || html.length >= 4 * 1024 * 1024 || n >= 20000;

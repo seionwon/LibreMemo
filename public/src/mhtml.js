@@ -1,8 +1,9 @@
 // Decode a saved web archive locally. Resource URLs become persistent data URLs,
 // not temporary blob URLs or requests to the original (possibly private) site.
+import {t} from './i18n.js';
 const FALLBACK_BASE = 'https://htmlmemo.invalid/__archive__/index.html';
 const HTML_TYPES = new Set(['text/html','application/xhtml+xml']);
-const malformed = () => new Error('MHTML 파일의 구조가 손상되었거나 본문이 없습니다. 웹 페이지를 다시 단일 파일로 저장해 주세요.');
+const malformed = () => new Error(t('MHTML 파일의 구조가 손상되었거나 본문이 없습니다. 웹 페이지를 다시 단일 파일로 저장해 주세요.'));
 const binaryString = bytes => {
   const chunks=[];
   for(let i=0;i<bytes.length;i+=32768)chunks.push(String.fromCharCode(...bytes.subarray(i,i+32768)));
@@ -15,7 +16,7 @@ function contentType(value='text/plain') {
   return {type,params};
 }
 function parsePart(raw,parts,depth=0) {
-  if(depth>24||parts.length>=50000)throw new Error('MHTML 파일에 중첩된 문서나 리소스가 너무 많습니다. HTML 단일 파일로 저장해 주세요.');
+  if(depth>24||parts.length>=50000)throw new Error(t('MHTML 파일에 중첩된 문서나 리소스가 너무 많습니다. HTML 단일 파일로 저장해 주세요.'));
   const separator=/\r?\n\r?\n/.exec(raw);
   if(!separator||separator.index>8*1024*1024)throw malformed();
   const headers={};
@@ -47,15 +48,15 @@ function partBytes(part) {
   const encoding=(part.headers['content-transfer-encoding']||'8bit').toLowerCase();
   let text=part.body;
   if(encoding==='base64'){
-    try{text=atob(text.replace(/\s/g,''));}catch{throw new Error('MHTML 파일의 Base64 데이터가 손상되었습니다. 파일을 다시 저장해 주세요.');}
+    try{text=atob(text.replace(/\s/g,''));}catch{throw new Error(t('MHTML 파일의 Base64 데이터가 손상되었습니다. 파일을 다시 저장해 주세요.'));}
   }else if(encoding==='quoted-printable')text=text.replace(/=\r?\n/g,'').replace(/=([a-f\d]{2})/gi,(_,hex)=>String.fromCharCode(parseInt(hex,16)));
-  else if(!['7bit','8bit','binary'].includes(encoding))throw new Error('지원하지 않는 MHTML 데이터 인코딩입니다: '+encoding.slice(0,40));
+  else if(!['7bit','8bit','binary'].includes(encoding))throw new Error(t('지원하지 않는 MHTML 데이터 인코딩입니다: {encoding}',{encoding:encoding.slice(0,40)}));
   return part.bytes=binaryBytes(text);
 }
 function partText(part) {
   const bytes=partBytes(part),prefix=binaryString(bytes.subarray(0,4096));
   const charset=bytes[0]===255&&bytes[1]===254?'utf-16le':bytes[0]===254&&bytes[1]===255?'utf-16be':part.params.charset||prefix.match(/(?:charset\s*=\s*["']?|@charset\s+["'])([\w-]+)/i)?.[1]||'utf-8';
-  try{return new TextDecoder(charset).decode(bytes);}catch{throw new Error('지원하지 않는 MHTML 문자 인코딩입니다. UTF-8로 저장한 파일을 열어 주세요.');}
+  try{return new TextDecoder(charset).decode(bytes);}catch{throw new Error(t('지원하지 않는 MHTML 문자 인코딩입니다. UTF-8로 저장한 파일을 열어 주세요.'));}
 }
 function contentID(value='') {
   value=value.replace(/^cid:/i,'').trim().replace(/^<|>$/g,'');
@@ -95,7 +96,7 @@ export async function readMHTML(file) {
   const rootDocument=new DOMParser().parseFromString(partText(root),'text/html');
   const rootBase=resolve(rootDocument.querySelector('base[href]')?.getAttribute('href')||original,original)||original;
   const locations=new Map(),ids=new Map(),cache=new Map(),warnings=new Set();
-  const warn=value=>{if(warnings.size<5000)warnings.add('MHTML에 포함되지 않았거나 읽을 수 없는 리소스: '+String(value).slice(0,500));};
+  const warn=value=>{if(warnings.size<5000)warnings.add(t('MHTML에 포함되지 않았거나 읽을 수 없는 리소스: {resource}',{resource:String(value).slice(0,500)}));};
   const indexParts=(part,parentBase)=>{
     const location=part.headers['content-location']?.replace(/[\t ]/g,'');
     part.location=location?resolve(location,parentBase):parentBase;

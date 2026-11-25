@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 import {applyUIFontStyle} from './ui-fonts.js';
 import { createReadAloud } from './read-aloud.js';
 import {isVideoNote} from './youtube-notes.js';
@@ -47,13 +48,13 @@ export class Reader {
     this.naturalWidth = this.metadata.viewport.width; this.frame.style.height = '100%'; this.frame.style.width = this.naturalWidth + 'px';
     this.sizer.append(this.frame); this.viewport.append(this.sizer); host.append(this.viewport);
     this.loading = document.createElement('div'); this.loading.className = 'reader-loading';
-    this.loading.setAttribute('role', 'status'); this.loading.textContent = '문서를 준비하는 중…'; host.append(this.loading);
+    this.loading.setAttribute('role', 'status'); this.loading.textContent = t('문서를 준비하는 중…'); host.append(this.loading);
     if (this.nativeScroll) this.applyZoom();
     this.ready = new Promise((resolve, reject) => {
       this.frame.addEventListener('load', async () => {
         try {
           this.doc = this.frame.contentDocument;
-          if (!this.doc?.body) throw new Error('HTML 문서를 표시하지 못했습니다.');
+          if (!this.doc?.body) throw new Error(t('HTML 문서를 표시하지 못했습니다.'));
           if(parsed.pdfSource){
             this.pdf=new PdfReader(this,parsed.pdfSource);await this.pdf.open();
             if(this.disposed){resolve(this);return;}
@@ -149,8 +150,8 @@ export class Reader {
       const ready=()=>frame.contentDocument?.body&&frame.contentDocument.URL==='about:srcdoc'&&frame.contentDocument.readyState==='complete';
       if(reload||!ready())await new Promise((resolve,reject)=>{
         let timer;const finish=error=>{clearTimeout(timer);frame.removeEventListener('load',loaded);this.cancelFrameOpen=null;error?reject(error):resolve();};
-        const loaded=()=>{if(ready())finish();};this.cancelFrameOpen=()=>finish(new DOMException('문서 열기가 취소되었습니다.','AbortError'));
-        frame.addEventListener('load',loaded);timer=setTimeout(()=>finish(Error('저장된 본문 프레임을 열지 못했습니다.')),15000);
+        const loaded=()=>{if(ready())finish();};this.cancelFrameOpen=()=>finish(new DOMException(t('문서 열기가 취소되었습니다.'),'AbortError'));
+        frame.addEventListener('load',loaded);timer=setTimeout(()=>finish(Error(t('저장된 본문 프레임을 열지 못했습니다.'))),15000);
         frame.loading='eager';
         if(reload){const prepared=parseHTML(frame.getAttribute('srcdoc'),{source:this.metadata.source},{allowScripts:false,includeMetadata:true});frame.setAttribute('sandbox','allow-same-origin');frame.removeAttribute('src');frame.setAttribute('srcdoc',prepared.html);}
         else if(ready())finish();
@@ -174,7 +175,7 @@ export class Reader {
     return new Promise((resolve, reject) => {
       const finish = error => { observer.disconnect();clearTimeout(timer);this.cancelOpeningWait=null;error ? reject(error) : resolve(); };
       const observer = new this.doc.defaultView.MutationObserver(() => { if (this.disposed || ready()) finish(); });
-      const timer = setTimeout(() => finish(new Error('책 본문 준비를 완료하지 못했습니다. 다시 열어 주세요.')), 30000);
+      const timer = setTimeout(() => finish(new Error(t('책 본문 준비를 완료하지 못했습니다. 다시 열어 주세요.'))), 30000);
       this.cancelOpeningWait = () => finish();
       observer.observe(this.doc.documentElement,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['data-reader-ready']});
       if (this.disposed || ready()) finish();
@@ -944,33 +945,33 @@ export class Reader {
         node.onpointerdown=event=>{if(event.pointerType==='mouse')event.preventDefault();};
         node.onclick=()=>run?run():this.callbacks.onReadingAction?.(action,node);return node;
       };
-      const font=doc.createElement('select');font.setAttribute('aria-label','글꼴');font.title='글꼴 종류';font.dataset.readingFont='';font.setAttribute('data-htmlmemo-ui','');font.setAttribute('data-htmlmemo-reading-font','');
+      const font=doc.createElement('select');font.setAttribute('aria-label',t('글꼴'));font.title=t('글꼴 종류');font.dataset.readingFont='';font.setAttribute('data-htmlmemo-ui','');font.setAttribute('data-htmlmemo-reading-font','');
       for(const [value,label] of READING_FONTS){const option=doc.createElement('option');option.value=value;option.textContent=label;font.append(option);}
       font.onchange=()=>this.setReadingFontFamily(font.value);
       this.fontControl=font;
-      const controls=group('읽기 도구');
-      this.zoomControl=button('zoom','확대 / 축소','');this.zoomControl.setAttribute('aria-haspopup','dialog');
-      this.speechControl=button('speak','소리내어 읽기 (TTS 툴바)','');this.speechControl.innerHTML=icon('speaker',14);
-      this.speechControls=group('소리내어 읽기');this.speechControls.append(this.speechControl);
+      const controls=group(t('읽기 도구'));
+      this.zoomControl=button('zoom',t('확대 / 축소'),'');this.zoomControl.setAttribute('aria-haspopup','dialog');
+      this.speechControl=button('speak',t('소리내어 읽기 (TTS 툴바)'),'');this.speechControl.innerHTML=icon('speaker',14);
+      this.speechControls=group(t('소리내어 읽기'));this.speechControls.append(this.speechControl);
       controls.append(this.zoomControl);
       this.plainReadingButtons=null;
       if(!topbar){
         // Copy the book's reader-head structure; source HTML keeps its own bar.
         controls.classList.add('reader-head','htmlmemo-source-toolbar');
         controls.style.removeProperty('position');
-        const menu=button('toggle-sidebar','목차','☰',()=>{this.callbacks.onReadingAction?.('toggle-sidebar',menu);this.updateReadingControls();});menu.setAttribute('aria-controls','sidebar');
+        const menu=button('toggle-sidebar',t('목차'),'☰',()=>{this.callbacks.onReadingAction?.('toggle-sidebar',menu);this.updateReadingControls();});menu.setAttribute('aria-controls','sidebar');
         const title=doc.createElement('span');title.className='reader-title';title.textContent=this.metadata.title||this.doc.title;title.title=title.textContent;
-        const back=button('reading-back','뒤로','↶',()=>this.back());
-        const previous=button('previous-heading','이전 절','‹',()=>this.moveReadingHeading(-1));
-        const next=button('next-heading','다음 절','›',()=>this.moveReadingHeading(1));
-        const position=doc.createElement('span');position.className='reader-position';position.setAttribute('aria-label','현재 제목 위치');
-        const larger=button('font-larger','글씨 크게','A+',()=>this.setReadingFontScale(this.readingFontScale()*1.1));
-        const reset=button('font-reset','글씨 기본 크기','A',()=>this.resetReadingFontSize());
-        const smaller=button('font-smaller','글씨 작게','A−',()=>this.setReadingFontScale(this.readingFontScale()/1.1));
-        const layout=button('reading-layout','보기 설정 · 저장한 설정, 여백, 쪽 넘김','▤',()=>toggleReadingLayoutPanel(this,layout));layout.setAttribute('aria-haspopup','dialog');
-        const progress=doc.createElement('span');progress.className='reader-position reader-progress';progress.setAttribute('aria-label','읽은 위치');
-        const theme=doc.createElement('select');theme.setAttribute('aria-label','화면 모드');theme.dataset.readingTheme='';
-        for(const [value,label] of [['system','시스템'],['light','밝게'],['sepia','세피아'],['dark','어둡게']]){const option=doc.createElement('option');option.value=value;option.textContent=label;theme.append(option);}
+        const back=button('reading-back',t('뒤로'),'↶',()=>this.back());
+        const previous=button('previous-heading',t('이전 절'),'‹',()=>this.moveReadingHeading(-1));
+        const next=button('next-heading',t('다음 절'),'›',()=>this.moveReadingHeading(1));
+        const position=doc.createElement('span');position.className='reader-position';position.setAttribute('aria-label',t('현재 제목 위치'));
+        const larger=button('font-larger',t('글씨 크게'),'A+',()=>this.setReadingFontScale(this.readingFontScale()*1.1));
+        const reset=button('font-reset',t('글씨 기본 크기'),'A',()=>this.resetReadingFontSize());
+        const smaller=button('font-smaller',t('글씨 작게'),'A−',()=>this.setReadingFontScale(this.readingFontScale()/1.1));
+        const layout=button('reading-layout',t('보기 설정 · 저장한 설정, 여백, 쪽 넘김'),'▤',()=>toggleReadingLayoutPanel(this,layout));layout.setAttribute('aria-haspopup','dialog');
+        const progress=doc.createElement('span');progress.className='reader-position reader-progress';progress.setAttribute('aria-label',t('읽은 위치'));
+        const theme=doc.createElement('select');theme.setAttribute('aria-label',t('화면 모드'));theme.dataset.readingTheme='';
+        for(const [value,label] of [['system',t('시스템')],['light',t('밝게')],['sepia',t('세피아')],['dark',t('어둡게')]]){const option=doc.createElement('option');option.value=value;option.textContent=label;theme.append(option);}
         theme.onchange=()=>this.setReadingTheme(theme.value);
         this.plainReadingButtons={menu,title,back,previous,next,position,larger,reset,smaller,theme,font,layout,progress};
         controls.replaceChildren(menu,title,back,previous,next,position,progress,this.speechControl,larger,reset,smaller,theme,font,layout,this.zoomControl);
@@ -1107,7 +1108,7 @@ export class Reader {
   }
   bookInfo() {
     const data=this.doc.querySelector('article[data-ebook]')?.dataset||{};
-    return [['저자',data.bookAuthor],['출판사',data.bookPublisher],['언어',data.bookLanguage],['출간',data.bookPublished],['소개',data.bookDescription]].filter(([,value])=>value);
+    return [[t('저자'),data.bookAuthor],[t('출판사'),data.bookPublisher],[t('언어'),data.bookLanguage],[t('출간'),data.bookPublished],[t('소개'),data.bookDescription]].filter(([,value])=>value);
   }
   saveReadingLayoutDefault() { this.callbacks.onReadingLayoutDefault?.(this.readingLayout()); }
   scheduleReadingProgress() {
@@ -1120,7 +1121,7 @@ export class Reader {
     if(!supported)return;
     const win=this.doc.defaultView,paged=this.readingLayout().flow==='paged',bottom=this.pager?.contentBottom?.()??0,height=win.innerHeight,top=win.scrollY;
     const {page,pages,percent}=pageNumbers({top,contentHeight:bottom+top,pageHeight:paged?height-PAGE_TOP-PAGE_BOTTOM:height});
-    const text=paged?page+' / '+pages+'쪽 · '+percent+'%':percent+'%';if(node.textContent!==text)node.textContent=text;
+    const text=paged?t('{page} / {pages}쪽 · {percent}%',{page,pages,percent}):percent+'%';if(node.textContent!==text)node.textContent=text;
   }
   handleReadingKey(event) {
     if(!this.supportsReadingLayout())return false;
@@ -1146,8 +1147,8 @@ export class Reader {
         for(const option of this.fontControl.querySelectorAll('option'))if(option.value!==family&&option.selected)option.selected=false;
         for(const option of this.fontControl.querySelectorAll('option'))if(option.value===family)option.selected=true;
       }
-      const fontLabel=READING_FONTS.find(([value])=>value===family)?.[1]||'기본';
-      this.fontControl.title='글꼴 종류: '+fontLabel;
+      const fontLabel=READING_FONTS.find(([value])=>value===family)?.[1]||t('기본');
+      this.fontControl.title=t('글꼴 종류: {name}',{name:fontLabel});
     }
     if(this.topbarNode?.isConnected)this.syncSourceThemeControls();
     if(this.plainReadingButtons){
@@ -1160,7 +1161,7 @@ export class Reader {
         for(const option of theme.querySelectorAll('option'))if(option.value!==this.readingTheme()&&option.selected)option.selected=false;
         for(const option of theme.querySelectorAll('option'))if(option.value===this.readingTheme())option.selected=true;
       }
-      theme.title='화면 모드: '+({system:'시스템',light:'밝게',dark:'어둡게'}[this.readingTheme()]||'시스템');
+      theme.title=t('화면 모드: {name}',{name:{system:t('시스템'),light:t('밝게'),dark:t('어둡게')}[this.readingTheme()]||t('시스템')});
       this.readingControls.dataset.theme=this.resolvedReadingTheme();
     }
     if(this.uiScale&&this.tocResize?.sidebar?.isConnected&&this.readingControls?.ownerDocument!==this.doc&&this.frame?.getBoundingClientRect&&this.viewport?.getBoundingClientRect)this.positionReadingUI(this.viewport.getBoundingClientRect(),this.frame.getBoundingClientRect());
@@ -1325,8 +1326,8 @@ export class Reader {
     const resolved=this.resolvedReadingTheme(mode);
     root.setAttribute('data-htmlmemo-theme',resolved);
     topbar.setAttribute('data-htmlmemo-theme',resolved);
-    const label={system:'시스템',light:'밝게',dark:'어둡게'}[mode]||'시스템';
-    if(select.title!==`화면 모드: ${label}`)select.title=`화면 모드: ${label}`;
+    const label={system:t('시스템'),light:t('밝게'),dark:t('어둡게')}[mode]||t('시스템');
+    const title=t('화면 모드: {name}',{name:label});if(select.title!==title)select.title=title;
   }
   findSourceFontControls(topbar=this.topbarNode) {
     if(!topbar?.isConnected)return null;
@@ -1583,7 +1584,7 @@ export class Reader {
     if(!controls.reset){
       const reset=this.doc.createElement('button');
       reset.type='button';reset.dataset.action='font-reset';reset.setAttribute('data-htmlmemo-ui','');reset.setAttribute('data-htmlmemo-font-reset','');
-      reset.title='글씨 기본 크기';reset.setAttribute('aria-label','글씨 기본 크기');reset.textContent='A';
+      reset.title=t('글씨 기본 크기');reset.setAttribute('aria-label',t('글씨 기본 크기'));reset.textContent='A';
       controls.reset=reset;
     }
     const handleSmaller=event=>{
@@ -2018,7 +2019,7 @@ export class Reader {
     }
     const parts=[unit];
     for(let sibling=unit.nextElementSibling;sibling&&/search|find/i.test((sibling.id||'')+' '+(sibling.className||''))&&!sibling.matches('#reader-tree')&&!sibling.querySelector('#reader-tree');sibling=sibling.nextElementSibling)parts.push(sibling);
-    const host=this.doc.createElement('div');host.setAttribute('data-htmlmemo-book-search','');host.className='sidebar-book-search';host.setAttribute('role','group');host.setAttribute('aria-label','책 전체 검색');host.hidden=true;
+    const host=this.doc.createElement('div');host.setAttribute('data-htmlmemo-book-search','');host.className='sidebar-book-search';host.setAttribute('role','group');host.setAttribute('aria-label',t('책 전체 검색'));host.hidden=true;
     parts.forEach((node,index)=>{
       const key=String(index),slot=this.doc.createElement('span');slot.setAttribute('data-htmlmemo-book-search-slot',key);slot.hidden=true;
       // Source UI text used to contribute to body offsets. Keep its original
@@ -2028,7 +2029,7 @@ export class Reader {
     });
     if(unit===input){
       const field=this.doc.createElement('div');field.className='search-field loaded-search-field';input.before(field);field.append(input);
-      const clear=this.doc.createElement('button');clear.type='button';clear.className='icon-button loaded-search-clear';clear.title='검색어 지우기';clear.setAttribute('aria-label','책 전체 검색어 지우기');clear.innerHTML=icon('close',14);clear.hidden=!input.value;
+      const clear=this.doc.createElement('button');clear.type='button';clear.className='icon-button loaded-search-clear';clear.title=t('검색어 지우기');clear.setAttribute('aria-label',t('책 전체 검색어 지우기'));clear.innerHTML=icon('close',14);clear.hidden=!input.value;
       clear.onclick=()=>{input.value='';input.dispatchEvent(new this.doc.defaultView.Event('input',{bubbles:true}));clear.hidden=true;input.focus?.();};
       input.addEventListener('input',()=>{clear.hidden=!input.value;});field.append(clear);this.documentBookSearchClear=clear;
     }
@@ -2040,12 +2041,12 @@ export class Reader {
     const tree=sidebar.querySelector('#reader-tree');
     if(tree&&!host.contains(tree)){
       this.documentBookSearchTree=tree;
-      const results=this.doc.createElement('section');results.className='sidebar-book-results';results.setAttribute('aria-label','책 전체 검색 결과');results.hidden=true;
-      const hint=this.doc.createElement('p');hint.className='sidebar-book-search-hint';hint.textContent='검색 결과를 누르면 해당 장의 검색어로 이동합니다.';
+      const results=this.doc.createElement('section');results.className='sidebar-book-results';results.setAttribute('aria-label',t('책 전체 검색 결과'));results.hidden=true;
+      const hint=this.doc.createElement('p');hint.className='sidebar-book-search-hint';hint.textContent=t('검색 결과를 누르면 해당 장의 검색어로 이동합니다.');
       const navigation=this.doc.createElement('div');navigation.className='search-navigation';
       const status=this.doc.createElement('span');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
       navigation.append(status);
-      for(const [direction,label,name] of [[-1,'이 장의 이전 검색어','back'],[1,'이 장의 다음 검색어','forward']]){
+      for(const [direction,label,name] of [[-1,t('이 장의 이전 검색어'),'back'],[1,t('이 장의 다음 검색어'),'forward']]){
         const button=this.doc.createElement('button');button.type='button';button.className='icon-button';button.setAttribute('data-book-search-step',String(direction));button.setAttribute('aria-label',label);button.title=label;button.innerHTML=icon(name,14);button.disabled=true;
         button.onclick=()=>this.stepDocumentBookSearch(direction);navigation.append(button);
       }
@@ -2104,17 +2105,17 @@ export class Reader {
     this.clearDocumentBookSearchHighlight();
     const hit=this.bookSearchHit,content=this.doc.getElementById('reader-content');
     if(!hit||hit.query!==this.documentBookSearchInput?.value.trim()||!content)return false;
-    if(hit.section!==currentSection(this.doc)){this.documentBookSearchStatus.textContent='다른 검색 결과를 선택하세요.';this.syncDocumentBookSearchResults();return false;}
+    if(hit.section!==currentSection(this.doc)){this.documentBookSearchStatus.textContent=t('다른 검색 결과를 선택하세요.');this.syncDocumentBookSearchResults();return false;}
     const {index,results:matches}=this.searchCache().query(hit.query,content);
     hit.count=matches.length;
-    if(!matches.length){this.documentBookSearchStatus.textContent='이 장의 제목·검색 정보는 일치하지만 본문에서 검색어를 찾지 못했습니다.';for(const button of this.documentBookSearchResults.querySelectorAll('[data-book-search-step]'))button.disabled=true;return false;}
+    if(!matches.length){this.documentBookSearchStatus.textContent=t('이 장의 제목·검색 정보는 일치하지만 본문에서 검색어를 찾지 못했습니다.');for(const button of this.documentBookSearchResults.querySelectorAll('[data-book-search-step]'))button.disabled=true;return false;}
     hit.position=(hit.position+direction+matches.length)%matches.length;
     const match=matches[hit.position],range=rangeFromOffsets(this.doc,match.start,match.end,index);if(!range)return false;
     const win=this.doc.defaultView;
     if(win.CSS?.highlights&&win.Highlight)win.CSS.highlights.set('htmlmemo-book-search',new win.Highlight(range));
     else this.bookSearchMarks=this.searchCache().mutate(index,()=>wrapOffsets(this.doc,match.start,match.end,{'data-htmlmemo-search':'','data-htmlmemo-book-search-hit':''},'background:#f0a85b80;outline:2px solid #df9057;border-radius:2px;color:inherit',index));
     if(move){this.revealNestedScroll(range);const rect=range.getBoundingClientRect(),origin=this.layerOrigin();this.scrollTop=Math.max(0,(rect.top-origin.top+rect.height/2)*this.zoom-this.viewport.clientHeight/2);this.scrollLeft=Math.max(0,(rect.left-origin.left+rect.width/2)*this.zoom-this.viewport.clientWidth/2);}
-    this.documentBookSearchStatus.textContent=`이 장에서 ${hit.position+1} / ${matches.length}${matches.length===3000?'+':''}`;
+    this.documentBookSearchStatus.textContent=t('이 장에서 {position} / {total}',{position:hit.position+1,total:matches.length+(matches.length===3000?'+':'')});
     for(const button of this.documentBookSearchResults.querySelectorAll('[data-book-search-step]'))button.disabled=matches.length<2;
     return true;
   }
@@ -2122,7 +2123,7 @@ export class Reader {
     this.syncDocumentBookSearchResults();
     this.cancelBookSearchJump?.();const generation=this.bookSearchJumpGeneration=(this.bookSearchJumpGeneration||0)+1;
     if(!query||!this.annotationBookPaths().has(section))return false;
-    this.bookSearchHit=null;this.syncDocumentBookSearchResults();this.documentBookSearchStatus.textContent='검색어가 있는 장을 여는 중…';
+    this.bookSearchHit=null;this.syncDocumentBookSearchResults();this.documentBookSearchStatus.textContent=t('검색어가 있는 장을 여는 중…');
     try{
       if(currentSection(this.doc)!==section){
         const loaded=await new Promise(resolve=>{
@@ -2135,7 +2136,7 @@ export class Reader {
           try{this.doc.defaultView.location.hash=encodeURIComponent(section);if(ready())finish(true);}catch{finish(false);}
         });
         if(this.disposed||generation!==this.bookSearchJumpGeneration||this.documentSidebarMode!=='search'||query!==this.documentBookSearchInput.value.trim())return false;
-        if(!loaded)throw new Error('검색 결과의 장을 불러오지 못했습니다. 결과를 다시 선택해 주세요.');
+        if(!loaded)throw new Error(t('검색 결과의 장을 불러오지 못했습니다. 결과를 다시 선택해 주세요.'));
         this.dynamicRoots?.add(this.doc.getElementById('reader-content'));await this.refreshDynamicDocument();
       }
       if(this.disposed||generation!==this.bookSearchJumpGeneration||this.documentSidebarMode!=='search'||query!==this.documentBookSearchInput.value.trim())return false;
@@ -2517,7 +2518,7 @@ export class Reader {
     input.className = 'outline-edit-input';
     input.setAttribute('data-htmlmemo-ui', '');
     input.setAttribute('data-outline-edit-input', '');
-    input.setAttribute('aria-label', '목차 제목 수정');
+    input.setAttribute('aria-label', t('목차 제목 수정'));
     input.value = currentTitle;
     node.replaceChildren(input);
     node.setAttribute('data-htmlmemo-toc-edited', '');
@@ -3122,7 +3123,7 @@ export class Reader {
       if(this.disposed||this.host?.hidden||currentSection(this.doc)!==section)return false;
       if(!text?.trim()){this.restoreTextSelection(target);return false;}
       const added=this.addText('note',target,text.trim());
-      if(!added)this.callbacks.onNotice?.('선택한 글의 위치를 찾지 못했습니다. 글을 다시 선택해 주세요.');
+      if(!added)this.callbacks.onNotice?.(t('선택한 글의 위치를 찾지 못했습니다. 글을 다시 선택해 주세요.'));
       return added;
     }catch(error){this.restoreTextSelection(target);throw error;}
     finally{this.selectionNotePending=false;}
@@ -3978,7 +3979,7 @@ export class Reader {
     const contentKey=JSON.stringify(drawings);
     const layoutKey=JSON.stringify([this.readingFontScale(),geometry.map(({points,scale})=>({points,scale}))]);
     if(!layer){
-      layer=svg(this.doc,'svg',{id:LAYER_ID,'aria-label':'LibreMemo 주석',style:'position:absolute;top:0;left:0;z-index:2147483000;pointer-events:none;overflow:visible;'});
+      layer=svg(this.doc,'svg',{id:LAYER_ID,'aria-label':t('LibreMemo 주석'),style:'position:absolute;top:0;left:0;z-index:2147483000;pointer-events:none;overflow:visible;'});
       layer.dataset.htmlmemoUi='';hostParent.append(layer);
       this.drawingContentKey=null;this.drawingLayoutKey=null;
     } else if (layer.parentElement!==hostParent) {
@@ -4063,10 +4064,10 @@ export class Reader {
       if(this.preparing&&this.ready)await this.ready;
       if(this.disposed||generation!==this.annotationJumpGeneration)return false;
       if(currentSection(this.doc)!==section){
-        const result=await this.waitForLocationTarget(null,{section,navigate:true,generation,bookmark:true,noticeMessage:'목차의 본문을 준비하는 중…'});
+        const result=await this.waitForLocationTarget(null,{section,navigate:true,generation,bookmark:true,noticeMessage:t('목차의 본문을 준비하는 중…')});
         if(this.disposed||generation!==this.annotationJumpGeneration||result.cancelled)return false;
         if(result.error)throw result.error;
-        if(!result.ready)throw new Error('목차의 본문을 불러오지 못했습니다. 다시 눌러 주세요. 문서와 주석은 보관됩니다.');
+        if(!result.ready)throw new Error(t('목차의 본문을 불러오지 못했습니다. 다시 눌러 주세요. 문서와 주석은 보관됩니다.'));
       }
       // Source scripts run in a separate document: their scrollTo(0, 0) does
       // not move this visible reader, including a re-click of the current chapter.
@@ -4086,21 +4087,21 @@ export class Reader {
       const location=this.annotationLocation(annotation),section=location?.section||location?.startSection||annotation.textAnchor?.section||annotation.anchorTarget?.section;
       const navigate=!!section&&currentSection(this.doc)!==section;
       if(navigate){
-        if(!this.annotationBookPaths().has(section))throw new Error('이 주석의 장을 현재 책 목차에서 찾지 못했습니다. 주석은 보관됩니다.');
+        if(!this.annotationBookPaths().has(section))throw new Error(t('이 주석의 장을 현재 책 목차에서 찾지 못했습니다. 주석은 보관됩니다.'));
       }
       const result=await this.waitForLocationTarget(annotation,{section,location,navigate,generation});
       if(this.disposed||generation!==this.annotationJumpGeneration||result.cancelled)return false;
       if(result.error)throw result.error;
-      if(!result.ready)throw new Error(result.sectionReady?'이 주석의 원문 위치를 찾지 못했습니다. 주석은 보관됩니다.':'주석이 있는 장을 불러오지 못했습니다. 원본 책 목차에서 다시 열어 주세요. 주석은 보관됩니다.');
+      if(!result.ready)throw new Error(result.sectionReady?t('이 주석의 원문 위치를 찾지 못했습니다. 주석은 보관됩니다.'):t('주석이 있는 장을 불러오지 못했습니다. 원본 책 목차에서 다시 열어 주세요. 주석은 보관됩니다.'));
       const element=result.element;
       if(location?.approximate){
         const content=this.doc.getElementById('reader-content');
         const target=element||content?.querySelector('h1,h2,h3')||content;
         if(target)this.jump(target);
         this.selectedId=id;this.callbacks.onView?.();
-        this.callbacks.onNotice?.(`${location.label}으로 이동했습니다. 정확한 주석 위치는 남아 있는 정보만으로 확정하기 어렵습니다.`);return true;
+        this.callbacks.onNotice?.(t('{label}으로 이동했습니다. 정확한 주석 위치는 남아 있는 정보만으로 확정하기 어렵습니다.',{label:location.label}));return true;
       }
-      this.jump(element);this.selectedId=id;this.callbacks.onView?.();if(result.noticeShown)this.callbacks.onNotice?.('주석 위치로 이동했습니다.');return true;
+      this.jump(element);this.selectedId=id;this.callbacks.onView?.();if(result.noticeShown)this.callbacks.onNotice?.(t('주석 위치로 이동했습니다.'));return true;
     }catch(error){if(!this.disposed&&generation===this.annotationJumpGeneration)this.callbacks.onError?.(error);return false;}
   }
   async jumpBookmark(id) {
@@ -4113,18 +4114,18 @@ export class Reader {
       if(this.disposed||generation!==this.annotationJumpGeneration)return false;
       const saved=typeof mark.section==='string'?mark.section:'',section=(saved&&this.annotationLocation({textAnchor:{section:saved}})?.section)||saved,navigate=!!section&&currentSection(this.doc)!==section;
       if(navigate){
-        if(!this.annotationBookPaths().has(section))throw new Error('이 북마크의 장을 현재 책 목차에서 찾지 못했습니다. 북마크는 보관됩니다.');
+        if(!this.annotationBookPaths().has(section))throw new Error(t('이 북마크의 장을 현재 책 목차에서 찾지 못했습니다. 북마크는 보관됩니다.'));
         const result=await this.waitForLocationTarget(mark,{section,navigate,generation,bookmark:true});
         if(this.disposed||generation!==this.annotationJumpGeneration||result.cancelled)return false;
         if(result.error)throw result.error;
-        if(!result.ready)throw new Error('북마크가 있는 장을 불러오지 못했습니다. 원본 책 목차에서 다시 열어 주세요. 북마크는 보관됩니다.');
-        if(result.noticeShown)this.callbacks.onNotice?.('북마크 위치로 이동했습니다.');
+        if(!result.ready)throw new Error(t('북마크가 있는 장을 불러오지 못했습니다. 원본 책 목차에서 다시 열어 주세요. 북마크는 보관됩니다.'));
+        if(result.noticeShown)this.callbacks.onNotice?.(t('북마크 위치로 이동했습니다.'));
       }
       const position=this.bookmarkPosition(mark);
       this.scrollTop=position.top*this.zoom;this.scrollLeft=position.left*this.zoom;this.callbacks.onView?.();
-      if(mark.editionPosition==='section')this.callbacks.onNotice?.('새 판의 해당 장 시작으로 이동했습니다. 이전 북마크의 정확한 본문 위치는 확인하지 못했습니다.');
-      else if(mark.editionPosition==='text'||bookmarkTextAnchor(mark))this.callbacks.onNotice?.(position.located?'북마크의 본문 위치로 이동했습니다.':'북마크의 본문 위치를 확인하지 못해 저장된 화면 위치로 이동했습니다.');
-      if(!section&&this.annotationBookPaths().size)this.callbacks.onNotice?.('이전 북마크에 장 정보가 없어 현재 장의 저장된 화면 위치로 이동했습니다.');
+      if(mark.editionPosition==='section')this.callbacks.onNotice?.(t('새 판의 해당 장 시작으로 이동했습니다. 이전 북마크의 정확한 본문 위치는 확인하지 못했습니다.'));
+      else if(mark.editionPosition==='text'||bookmarkTextAnchor(mark))this.callbacks.onNotice?.(position.located?t('북마크의 본문 위치로 이동했습니다.'):t('북마크의 본문 위치를 확인하지 못해 저장된 화면 위치로 이동했습니다.'));
+      if(!section&&this.annotationBookPaths().size)this.callbacks.onNotice?.(t('이전 북마크에 장 정보가 없어 현재 장의 저장된 화면 위치로 이동했습니다.'));
       return true;
     }catch(error){if(!this.disposed&&generation===this.annotationJumpGeneration)this.callbacks.onError?.(error);return false;}
   }
@@ -4161,7 +4162,7 @@ export class Reader {
       };
       this.cancelAnnotationJump=cancel;observe();
       timer=setTimeout(()=>finish({ready:false,sectionReady:sectionReady()}),15000);
-      notice=setTimeout(()=>{if(!settled){noticeShown=true;this.callbacks.onNotice?.(noticeMessage||(bookmark?'북마크가 있는 본문을 준비하는 중…':'주석이 있는 본문과 위치를 준비하는 중…'));}},250);
+      notice=setTimeout(()=>{if(!settled){noticeShown=true;this.callbacks.onNotice?.(noticeMessage||(bookmark?t('북마크가 있는 본문을 준비하는 중…'):t('주석이 있는 본문과 위치를 준비하는 중…')));}},250);
       try{if(navigate)this.doc.defaultView.location.hash=encodeURIComponent(section);void attempt();}catch(error){finish({error});}
     });
   }
@@ -4214,10 +4215,10 @@ export class Reader {
         if(part>=0)parent=parent.slice(0,part+1);
         else{
           const openingPath=volume[0][1].slice(0,-1);part=openingPath.findIndex(isFirstPart);
-          parent=part>=0?openingPath.slice(0,part+1):[chapterPath[0],{id:JSON.stringify(['part',chapterPath[0].id,1]),title:'1부',order:-1,kind:'category'}];
+          parent=part>=0?openingPath.slice(0,part+1):[chapterPath[0],{id:JSON.stringify(['part',chapterPath[0].id,1]),title:t('1부'),order:-1,kind:'category'}];
         }
         const allowedSections=volume.slice(0,firstChapter).map(([key])=>key);
-        this.annotationOpening={path:[...parent,{id:JSON.stringify(['opening',parent.at(-1).id]),title:'1부 앞부분',order:-1,kind:'opening'}],allowedSections,startSection:allowedSections[0],label:'1부 앞부분',approximate:true};
+        this.annotationOpening={path:[...parent,{id:JSON.stringify(['opening',parent.at(-1).id]),title:t('1부 앞부분'),order:-1,kind:'opening'}],allowedSections,startSection:allowedSections[0],label:t('1부 앞부분'),approximate:true};
       }
     }
     return paths;
@@ -4251,8 +4252,8 @@ export class Reader {
         let common=candidates[0][1].filter(part=>part.kind!=='section');
         for(const [,path] of candidates)common=common.filter((part,index)=>path[index]?.id===part.id);
         if(common.length){
-          const parent=common.at(-1),label=`${parent.title} 내 세부 위치 미확인`;
-          location={path:[...common,{id:JSON.stringify(['partial',parent.id]),title:'세부 위치 미확인',order:Number.MAX_SAFE_INTEGER,kind:'other'}],startSection:candidates[0][0],label,approximate:true};
+          const parent=common.at(-1),label=t('{title} 내 세부 위치 미확인',{title:parent.title});
+          location={path:[...common,{id:JSON.stringify(['partial',parent.id]),title:t('세부 위치 미확인'),order:Number.MAX_SAFE_INTEGER,kind:'other'}],startSection:candidates[0][0],label,approximate:true};
         }
       }
     }
@@ -4273,13 +4274,13 @@ export class Reader {
   annotationTree(contexts=this.annotationContexts()) {
     if(this.pdf)return this.pdf.tree('annotations');
     const paths=this.annotationBookPaths();
-    const preamble=this.outline().some(item=>!this.isInsideTocOrTopbar(item.node))?'목차 밖 주석':'문서 전체';
+    const preamble=this.outline().some(item=>!this.isInsideTocOrTopbar(item.node))?t('목차 밖 주석'):t('문서 전체');
     return this.locationTree(this.metadata.annotations,'annotations',annotation=>{
-      if(isVideoNote(annotation))return [{id:'video-notes',title:'시점 메모',order:-2,kind:'other'}];
+      if(isVideoNote(annotation))return [{id:'video-notes',title:t('시점 메모'),order:-2,kind:'other'}];
       const section=annotation.textAnchor?.section||annotation.anchorTarget?.section;
       let path=this.annotationLocation(annotation)?.path;
       if(!path?.length){
-        path=paths.size||section?[{id:'unlocated',title:'목차 위치 미확인',order:Number.MAX_SAFE_INTEGER,kind:'other'}]
+        path=paths.size||section?[{id:'unlocated',title:t('목차 위치 미확인'),order:Number.MAX_SAFE_INTEGER,kind:'other'}]
           :contexts.get(annotation.id)?.path;
         if(!path?.length)path=[{id:'preamble',title:preamble,order:-1,kind:'other'}];
       }
@@ -4289,14 +4290,14 @@ export class Reader {
   bookmarkTree() {
     if(this.pdf)return this.pdf.tree('bookmarks');
     const paths=this.annotationBookPaths(),contexts=paths.size?new Map():this.bookmarkContexts();
-    const preamble=this.outline().some(item=>!this.isInsideTocOrTopbar(item.node))?'목차 밖 북마크':'문서 전체';
+    const preamble=this.outline().some(item=>!this.isInsideTocOrTopbar(item.node))?t('목차 밖 북마크'):t('문서 전체');
     return this.locationTree([...this.metadata.bookmarks].sort((a,b)=>a.top-b.top||a.left-b.left),'bookmarks',mark=>{
       // Old bookmarks saved only coordinates. Never assign them to whichever
       // chapter happens to be open, or to the annotation-only legacy opening.
       const section=typeof mark.section==='string'?mark.section:'';
       const path=section?this.annotationLocation({textAnchor:{section}})?.path:contexts.get(mark.id);
       const unresolved=!!(paths.size||section);
-      return path?.length?path:[{id:unresolved?'unlocated':'preamble',title:unresolved?'목차 위치 미확인':preamble,order:unresolved?Number.MAX_SAFE_INTEGER:-1,kind:'other'}];
+      return path?.length?path:[{id:unresolved?'unlocated':'preamble',title:unresolved?t('목차 위치 미확인'):preamble,order:unresolved?Number.MAX_SAFE_INTEGER:-1,kind:'other'}];
     });
   }
   locationTree(items,field,pathFor) {
@@ -4680,7 +4681,7 @@ export class Reader {
   }
   readAloudPlayer() {
     if(this.disposed||this.host.hidden)return null;
-    if(!this.host.ownerDocument.defaultView.speechSynthesis){this.callbacks.onError?.(new Error('기기의 음성 읽기를 지원하지 않습니다.'));return null;}
+    if(!this.host.ownerDocument.defaultView.speechSynthesis){this.callbacks.onError?.(new Error(t('기기의 음성 읽기를 지원하지 않습니다.')));return null;}
     return this.readAloud ||= createReadAloud(this);
   }
   speakSelection(anchor=this.selection||this.captureTextSelection()) {

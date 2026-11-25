@@ -1,4 +1,5 @@
 // Formats Chrome can display locally, without a server or an extra decoder.
+import {t} from './i18n.js';
 export const IMAGE_MIMES={
   'image/png':['.png','.apng'],'image/jpeg':['.jpg','.jpeg','.jpe','.jfif'],
   'image/webp':['.webp'],'image/avif':['.avif'],'image/gif':['.gif'],
@@ -13,19 +14,19 @@ export function imageType(file){
   return type==='image/apng'?'image/png':Object.hasOwn(IMAGE_MIMES,type)?type:null;
 }
 export function imageDimensions(width,height){
-  if(!Number.isFinite(width)||!Number.isFinite(height)||width<1||height<1)throw Error('이미지 크기를 확인하지 못했습니다. 원본 파일을 확인해주세요.');
-  if(width>IMAGE_MAX_SIDE||height>IMAGE_MAX_SIDE||width*height>IMAGE_MAX_PIXELS)throw Error('이미지는 4천만 화소, 한 변 32,768픽셀 이하로 나누어 가져와 주세요.');
+  if(!Number.isFinite(width)||!Number.isFinite(height)||width<1||height<1)throw Error(t('이미지 크기를 확인하지 못했습니다. 원본 파일을 확인해주세요.'));
+  if(width>IMAGE_MAX_SIDE||height>IMAGE_MAX_SIDE||width*height>IMAGE_MAX_PIXELS)throw Error(t('이미지는 4천만 화소, 한 변 32,768픽셀 이하로 나누어 가져와 주세요.'));
   return {width,height};
 }
 export function imageFileSize(file){
-  if(!file?.size)throw Error('이미지 파일이 비어 있습니다.');
-  if(file.size>IMAGE_MAX_BYTES)throw Error('이미지는 파일 하나당 2GB 이하로 가져와 주세요.');
+  if(!file?.size)throw Error(t('이미지 파일이 비어 있습니다.'));
+  if(file.size>IMAGE_MAX_BYTES)throw Error(t('이미지는 파일 하나당 2GB 이하로 가져와 주세요.'));
 }
 export function clipboardImageFile(blob,index=0,now=new Date()){
   const type=blob.type==='image/apng'?'image/png':blob.type,ext=IMAGE_MIMES[type]?.[0];
   if(!ext)return null;
   const pad=value=>String(value).padStart(2,'0'),stamp=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+'.'+pad(now.getMinutes())+'.'+pad(now.getSeconds());
-  return new File([blob],'스크린샷 '+stamp+(index?' ('+(index+1)+')':'')+ext,{type,lastModified:now.getTime()});
+  return new File([blob],t('스크린샷 {stamp}',{stamp})+(index?' ('+(index+1)+')':'')+ext,{type,lastModified:now.getTime()});
 }
 // Copy the immutable Files synchronously, while the paste event still owns them.
 export function pastedImages(transfer,now=new Date()){

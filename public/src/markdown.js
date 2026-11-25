@@ -1,5 +1,6 @@
 import {markdownit} from '../vendor/markdown-it.js';
 import {escapeHTML} from './utils.js';
+import {t} from './i18n.js';
 
 function markdownURL(value,source) {
   if(value.startsWith('#'))return value;
@@ -19,12 +20,12 @@ parser.renderer.rules.link_open=(tokens,index,options,env,self)=>{
 };
 parser.renderer.rules.link_close=(tokens,index,options,env)=>env.links.pop()?'</a>':'</span>';
 parser.renderer.rules.image=(tokens,index,options,env,self)=>{
-  const token=tokens[index],src=token.attrGet('src')||'',alt=self.renderInlineAsText(token.children||[],options,env),label=escapeHTML(alt||'이미지');
+  const token=tokens[index],src=token.attrGet('src')||'',alt=self.renderInlineAsText(token.children||[],options,env),label=escapeHTML(alt||t('이미지'));
   if(/^data:image\/(?:png|jpe?g|gif|webp);base64,[a-z\d+/=\s]+$/i.test(src))return '<img src="'+escapeHTML(src)+'" alt="'+escapeHTML(alt)+'">';
   const href=markdownURL(src,env.source);
   // External images remain useful offline as links, without broken image boxes
   // or an implicit request to a third-party server. Respect an enclosing link.
-  if(href&&/^https?:/i.test(href)&&!env.links.some(Boolean))return '<a class="markdown-image-link" href="'+escapeHTML(href)+'" rel="noopener noreferrer">'+label+' (이미지)</a>';
+  if(href&&/^https?:/i.test(href)&&!env.links.some(Boolean))return '<a class="markdown-image-link" href="'+escapeHTML(href)+'" rel="noopener noreferrer">'+label+' ('+t('이미지')+')</a>';
   return label;
 };
 

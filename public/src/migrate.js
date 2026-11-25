@@ -2,6 +2,7 @@
 // same document. A book keeps being edited: sentences are reworded, sections move, some are
 // removed. An annotation follows its text (or the paragraph it was drawn on) to wherever that text
 // now is, survives small rewording, and is dropped only when its text is gone from the new edition.
+import {t} from './i18n.js';
 import { TEXT_TOOLS } from './model.js';
 import { textIndex, rangeFromOffsets, describeDrawingTarget, drawingTargetQuote, bookmarkAnchorTarget, LOCAL_CSP } from './document.js';
 import { IsolatedRuntime,needsIsolatedRuntime } from './isolated-runtime.js';
@@ -32,7 +33,7 @@ export async function unzipEntry(bytes, name) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let end = -1;
   for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) if (view.getUint32(i, true) === 0x06054b50) { end = i; break; }
-  if (end < 0) throw new Error('책 본문 압축을 읽지 못했습니다.');
+  if (end < 0) throw new Error(t('책 본문 압축을 읽지 못했습니다.'));
   const decoder = new TextDecoder();
   let p = view.getUint32(end + 16, true);
   for (let i = 0, count = view.getUint16(end + 10, true); i < count && view.getUint32(p, true) === 0x02014b50; i++) {
@@ -42,7 +43,7 @@ export async function unzipEntry(bytes, name) {
       const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true), data = bytes.subarray(start, start + size);
       if (method === 0) return data;
       if (method === 8) return inflateRaw(data);
-      throw new Error('지원하지 않는 책 본문 압축 방식입니다.');
+      throw new Error(t('지원하지 않는 책 본문 압축 방식입니다.'));
     }
     p += 46 + skip;
   }
@@ -202,21 +203,21 @@ export async function openEditionProbe(snapshot, {timeout = 60000} = {}) {
     check();
   });
   try {
-    await new Promise((resolve, reject) => { frame.onload = resolve; frame.onerror = () => reject(new Error('새 판 문서를 열지 못했습니다.')); frame.src = url; document.body.append(frame); });
+    await new Promise((resolve, reject) => { frame.onload = resolve; frame.onerror = () => reject(new Error(t('새 판 문서를 열지 못했습니다.'))); frame.src = url; document.body.append(frame); });
     const doc = frame.contentDocument;
-    if (!doc?.body) throw new Error('새 판 문서를 열지 못했습니다.');
+    if (!doc?.body) throw new Error(t('새 판 문서를 열지 못했습니다.'));
     if(snapshot.allowScripts!==false&&needsIsolatedRuntime(doc)){runtime=new IsolatedRuntime({host:document.body,doc,source});await runtime.start();}
     const book = bookManifest(doc), content = () => doc.getElementById('reader-content');
     const status = () => doc.getElementById('reader-status')?.textContent.trim() || '';
     const settled = key => content()?.dataset.section === key && !status();
     const failed = book?.labels?.failed;
-    if (book) await until(() => doc.documentElement.dataset.readerReady === 'true', '새 판 책의 본문을 준비하지 못했습니다.');
+    if (book) await until(() => doc.documentElement.dataset.readerReady === 'true', t('새 판 책의 본문을 준비하지 못했습니다.'));
     return {doc, dispose, async show(key) {
       if (!book || !key || settled(key)) return;
       frame.contentWindow.location.hash = '#' + encodeURIComponent(key);
       const title = book.volumes.flatMap(v => v.sections).find(s => s.key === key)?.title || key;
-      await until(() => { if (failed && status() === failed) throw Object.assign(new Error(`새 판의 「${title}」 장을 열지 못했습니다.`), {section: key}); return settled(key); },
-        `새 판의 「${title}」 장을 열지 못했습니다.`);
+      await until(() => { if (failed && status() === failed) throw Object.assign(new Error(t('새 판의 「{title}」 장을 열지 못했습니다.',{title})), {section: key}); return settled(key); },
+        t('새 판의 「{title}」 장을 열지 못했습니다.',{title}));
     }};
   } catch (error) { dispose(); throw error; }
 }

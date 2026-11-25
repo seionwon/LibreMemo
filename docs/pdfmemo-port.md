@@ -1,3 +1,5 @@
+[English](pdfmemo-port.en.md)
+
 # PDFMemo 기능의 LibreMemo 통합
 
 LibreMemo 1.3.0은 PDF에도 기존 HTML·마크다운의 읽기 툴바, 플로팅 주석 도구, 사이드바, 설정과 서재를 사용합니다. 별도 PDF 뷰어 화면이나 PDFMemo의 React·Android UI는 포함하지 않습니다.

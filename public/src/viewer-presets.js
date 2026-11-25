@@ -1,14 +1,15 @@
+import {t} from './i18n.js';
 import {normalizeReadingLayout} from './reading-layout.js';
 // Named viewer settings. Which setting works on which document is computed from
 // the same conditions the reader enforces, so a label can never promise more
 // than applying the preset does.
 export const PRESET_LIMIT=100;
-export const SETTING_LABELS=Object.freeze({layout:'페이지 레이아웃',fontScale:'글자 크기',fontFamily:'글꼴',theme:'화면 모드'});
+export const SETTING_LABELS=Object.freeze({layout:t('페이지 레이아웃'),fontScale:t('글자 크기'),fontFamily:t('글꼴'),theme:t('화면 모드')});
 export const FORMAT_GROUPS=Object.freeze([
   Object.freeze({id:'ebook',label:'EPUB·MOBI·AZW3·FB2',caps:Object.freeze({layout:true,fontScale:true,fontFamily:true,theme:true})}),
-  Object.freeze({id:'document',label:'HTML·Office·한글·문서·자막',caps:Object.freeze({layout:false,fontScale:true,fontFamily:true,theme:true})}),
+  Object.freeze({id:'document',label:t('HTML·Office·한글·문서·자막'),caps:Object.freeze({layout:false,fontScale:true,fontFamily:true,theme:true})}),
   Object.freeze({id:'pdf',label:'PDF',caps:Object.freeze({layout:false,fontScale:true,fontFamily:false,theme:true})}),
-  Object.freeze({id:'image',label:'이미지·CBZ·스캔 DjVu',caps:Object.freeze({layout:false,fontScale:false,fontFamily:false,theme:true})}),
+  Object.freeze({id:'image',label:t('이미지·CBZ·스캔 DjVu'),caps:Object.freeze({layout:false,fontScale:false,fontFamily:false,theme:true})}),
 ]);
 const THEMES=['system','light','sepia','dark'];
 export function normalizeSettings(value){
@@ -48,14 +49,14 @@ export function presetFormats(settings){
 }
 export function presetSummary(settings){
   const parts=[];
-  if(settings.layout)parts.push((settings.layout.flow==='paged'?'쪽 단위':'연속')+' · 여백 '+settings.layout.margin+' · 폭 '+settings.layout.width);
-  if(settings.fontScale!==undefined)parts.push('글자 '+Math.round(settings.fontScale*100)+'%');
-  if(settings.fontFamily)parts.push('글꼴 '+(settings.fontFamily==='default'?'기본':settings.fontFamily));
-  if(settings.theme)parts.push({system:'시스템',light:'밝게',sepia:'세피아',dark:'어둡게'}[settings.theme]);
+  if(settings.layout)parts.push((settings.layout.flow==='paged'?t('쪽 단위'):t('연속'))+' · '+t('여백 {value}',{value:settings.layout.margin})+' · '+t('폭 {value}',{value:settings.layout.width}));
+  if(settings.fontScale!==undefined)parts.push(t('글자 {n}%',{n:Math.round(settings.fontScale*100)}));
+  if(settings.fontFamily)parts.push(t('글꼴 {name}',{name:settings.fontFamily==='default'?t('기본'):settings.fontFamily}));
+  if(settings.theme)parts.push({system:t('시스템'),light:t('밝게'),sepia:t('세피아'),dark:t('어둡게')}[settings.theme]);
   return parts.join(' · ');
 }
 const collator=new Intl.Collator('ko',{numeric:true,sensitivity:'base'});
-export const PRESET_SORTS=Object.freeze([['fit','적용 가능한 것 먼저'],['used','최근 사용순'],['name','이름순'],['created','최근 저장순']]);
+export const PRESET_SORTS=Object.freeze([['fit',t('적용 가능한 것 먼저')],['used',t('최근 사용순')],['name',t('이름순')],['created',t('최근 저장순')]]);
 export function findPresets(presets,{query='',sort='fit',caps}={}){
   const words=query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const rank={full:0,partial:1,none:2},level=preset=>rank[presetFit(preset.settings,caps).level];

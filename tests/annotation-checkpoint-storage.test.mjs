@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
-const source=(await readFile(new URL('../public/src/storage.js',import.meta.url),'utf8')).replace(/^export /gm,'');
+import {t} from '../public/src/i18n.js';
+const source=(await readFile(new URL('../public/src/storage.js',import.meta.url),'utf8')).replace(/^export /gm,'').replace(/^import \{t\} from '\.\/i18n\.js';\n/m,'');
 const record=()=>({id:'book',title:'Book',modified:1000,byteSize:100,metadata:{annotations:[],bookmarks:[],view:{scrollTop:0}}});
 function fixture(){
   let current,history=[],headers=[];const control={},transactions=[];
@@ -16,7 +17,7 @@ function fixture(){
       index:()=>({openKeyCursor:()=>request(rows.length?{primaryKey:rows.at(-1).id}:null),openCursor:()=>request(rows.length?{primaryKey:rows.at(-1).id,value:rows.at(-1)}:null)}),
     });return tx;
   }};
-  const context=vm.createContext({connection,structuredClone,Blob,crypto,Date,IDBKeyRange:{only:id=>id}});vm.runInContext(source+'\ndatabase=Promise.resolve(connection);',context);
+  const context=vm.createContext({t,connection,structuredClone,Blob,crypto,Date,IDBKeyRange:{only:id=>id}});vm.runInContext(source+'\ndatabase=Promise.resolve(connection);',context);
   return {api:context,control,transactions,get current(){return current;},get history(){return history;},get headers(){return headers;},remove(){current=undefined;}};
 }
 test('fast autosave persists every change without a new revision until a checkpoint',async()=>{

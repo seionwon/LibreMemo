@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import {documentFor} from './dom.mjs';
 import {escapeHTML} from '../public/src/utils.js';
+import {t,locale} from '../public/src/i18n.js';
 
 const source=await readFile(new URL('../public/src/app.js',import.meta.url),'utf8');
 const code=source.slice(source.indexOf('async function migrateEdition('),source.indexOf('async function finishTrashChange('));
@@ -15,7 +16,7 @@ function fixture({marks=true,outline=false,available=true}={}){
   let listener,picks=0,disposed=0,saves=0,commits=0,id=0,appliedOutline=0;
   dialog.addEventListener=(_,fn)=>listener=fn;dialog.removeEventListener=()=>listener=null;
   const tab={reader:{ready:Promise.resolve(),metadata:old,doc:{},bookmarksForEdition:()=>structuredClone(old.bookmarks),outlineEditsForEdition:()=>structuredClone(old.outlineEdits||[])},queue:{flush:async()=>{}}};
-  const context=vm.createContext({structuredClone,Set,ANNOTATION_LABELS:{},uid:()=>`new-${++id}`,esc:escapeHTML,icon:()=>'',safely:fn=>fn,$:selector=>doc.querySelector(selector),toast:message=>messages.push(message),
+  const context=vm.createContext({t,locale,structuredClone,Set,ANNOTATION_LABELS:{},uid:()=>`new-${++id}`,esc:escapeHTML,icon:()=>'',safely:fn=>fn,$:selector=>doc.querySelector(selector),toast:message=>messages.push(message),
     pickHTMLFile:async()=>{picks++;return {};},readLocalHTML:async()=>({snapshot:{},name:'edition.html'}),openEditionProbe:async()=>({dispose(){disposed++;}}),
     migrateAnnotations:async({bookmarks,outlineEdits=[]})=>({annotations:[],bookmarks:available?bookmarks:[],outlineEdits:available?outlineEdits:[],report,bookmarkReport:{...report,same:available?bookmarks.length:0,approximate:0,unplaceable:available?[]:bookmarks},outlineReport:{...report,same:available?outlineEdits.length:0,deleted:available?[]:outlineEdits},oldSections:new Map()}),
     modal(html,bind){content.innerHTML=html;bind?.(dialog);},createDocument:async(...args)=>{created.push(args);return {reader:{ready:Promise.resolve(),metadata:next,applyOutlineEdits(){appliedOutline++;},commit(items){next.annotations=items;commits++;}},queue:{flush:async()=>saves++}};}});

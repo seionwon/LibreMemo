@@ -1,24 +1,25 @@
 import {installableLocation} from './install.js';
+import {t} from './i18n.js';
 
 function workerReady(worker,timeout=15000){
   if(!worker||['installed','activated'].includes(worker.state))return Promise.resolve(worker);
   return new Promise((resolve,reject)=>{
     const finish=error=>{clearTimeout(timer);worker.removeEventListener('statechange',changed);error?reject(error):resolve(worker);};
-    const changed=()=>{if(['installed','activated'].includes(worker.state))finish();else if(worker.state==='redundant')finish(Error('새 버전 준비를 끝내지 못했습니다.'));};
-    const timer=setTimeout(()=>finish(Error('새 버전 확인 시간이 초과되었습니다.')),timeout);worker.addEventListener('statechange',changed);changed();
+    const changed=()=>{if(['installed','activated'].includes(worker.state))finish();else if(worker.state==='redundant')finish(Error(t('새 버전 준비를 끝내지 못했습니다.')));};
+    const timer=setTimeout(()=>finish(Error(t('새 버전 확인 시간이 초과되었습니다.'))),timeout);worker.addEventListener('statechange',changed);changed();
   });
 }
 const failure=(message,code)=>Object.assign(Error(message),{code});
-function checkRequest(task,timeout){return new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(failure('새 버전 확인 시간이 초과되었습니다. 현재 버전으로 계속합니다.','UPDATE_CHECK_TIMEOUT')),timeout);Promise.resolve(task).then(value=>{clearTimeout(timer);resolve(value);},error=>{clearTimeout(timer);reject(error);});});}
+function checkRequest(task,timeout){return new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(failure(t('새 버전 확인 시간이 초과되었습니다. 현재 버전으로 계속합니다.'),'UPDATE_CHECK_TIMEOUT')),timeout);Promise.resolve(task).then(value=>{clearTimeout(timer);resolve(value);},error=>{clearTimeout(timer);reject(error);});});}
 function request(worker,message,Channel,timeout=15000){
-  if(!worker||worker.state==='redundant')return Promise.reject(failure('준비된 업데이트가 바뀌었습니다. 앱을 다시 실행해주세요.','UPDATE_WORKER_CHANGED'));
+  if(!worker||worker.state==='redundant')return Promise.reject(failure(t('준비된 업데이트가 바뀌었습니다. 앱을 다시 실행해주세요.'),'UPDATE_WORKER_CHANGED'));
   return new Promise((resolve,reject)=>{
     let settled=false;const channel=new Channel(),finish=(value,error)=>{if(settled)return;settled=true;clearTimeout(timer);worker.removeEventListener?.('statechange',changed);channel.port1.close();channel.port2.close();error?reject(error):resolve(value);};
-    const changed=()=>{if(worker.state==='redundant')finish(null,failure('준비된 업데이트가 바뀌었습니다. 앱을 다시 실행해주세요.','UPDATE_WORKER_CHANGED'));};
-    const timer=setTimeout(()=>finish(null,failure('업데이트 응답을 받지 못했습니다. 앱을 다시 실행해주세요.','UPDATE_TIMEOUT')),timeout);worker.addEventListener?.('statechange',changed);
-    channel.port1.onmessage=event=>event.data?.ok?finish(event.data):finish(null,failure(event.data?.error||'업데이트하지 못했습니다.','UPDATE_REJECTED'));
-    channel.port1.onmessageerror=()=>finish(null,failure('업데이트 응답을 읽지 못했습니다.','UPDATE_COMMUNICATION'));
-    try{worker.postMessage(message,[channel.port2]);}catch(error){finish(null,failure(error.message||'업데이트를 요청하지 못했습니다.','UPDATE_COMMUNICATION'));}
+    const changed=()=>{if(worker.state==='redundant')finish(null,failure(t('준비된 업데이트가 바뀌었습니다. 앱을 다시 실행해주세요.'),'UPDATE_WORKER_CHANGED'));};
+    const timer=setTimeout(()=>finish(null,failure(t('업데이트 응답을 받지 못했습니다. 앱을 다시 실행해주세요.'),'UPDATE_TIMEOUT')),timeout);worker.addEventListener?.('statechange',changed);
+    channel.port1.onmessage=event=>event.data?.ok?finish(event.data):finish(null,failure(event.data?.error||t('업데이트하지 못했습니다.'),'UPDATE_REJECTED'));
+    channel.port1.onmessageerror=()=>finish(null,failure(t('업데이트 응답을 읽지 못했습니다.'),'UPDATE_COMMUNICATION'));
+    try{worker.postMessage(message,[channel.port2]);}catch(error){finish(null,failure(error.message||t('업데이트를 요청하지 못했습니다.'),'UPDATE_COMMUNICATION'));}
   });
 }
 function controlledBy(service,worker,timeout=15000){
@@ -26,7 +27,7 @@ function controlledBy(service,worker,timeout=15000){
   return new Promise((resolve,reject)=>{
     const finish=error=>{clearTimeout(timer);service.removeEventListener('controllerchange',changed);error?reject(error):resolve();};
     const changed=()=>{if(service.controller===worker)finish();};
-    const timer=setTimeout(()=>finish(Error('새 버전으로 전환하지 못했습니다. 앱을 다시 실행해주세요.')),timeout);service.addEventListener('controllerchange',changed);changed();
+    const timer=setTimeout(()=>finish(Error(t('새 버전으로 전환하지 못했습니다. 앱을 다시 실행해주세요.'))),timeout);service.addEventListener('controllerchange',changed);changed();
   });
 }
 // One check per full launch. No focus, online, visibility or periodic update checks.
@@ -59,7 +60,7 @@ export class UpdateController {
     const offered=this.offer.worker,worker=registration?.waiting||(['installed','activating'].includes(offered?.state)?offered:registration?.active)||offered;
     if(worker!==this.offer.worker){
       const current=await request(worker,{type:'HTMLMEMO_UPDATE_INFO'},this.Channel,this.requestTimeout);
-      if(current.build!==info.build)throw failure('준비된 새 버전이 바뀌었습니다. 앱을 다시 실행해 확인해주세요.','UPDATE_WORKER_CHANGED');
+      if(current.build!==info.build)throw failure(t('준비된 새 버전이 바뀌었습니다. 앱을 다시 실행해 확인해주세요.'),'UPDATE_WORKER_CHANGED');
       this.offer.worker=worker;
     }
     return worker;

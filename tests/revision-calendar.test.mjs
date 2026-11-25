@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import {revisionDate,revisionDateRange} from '../public/src/storage.js';
-const source=(await readFile(new URL('../public/src/storage.js',import.meta.url),'utf8')).replace(/^export /gm,'');
+import {t} from '../public/src/i18n.js';
+const source=(await readFile(new URL('../public/src/storage.js',import.meta.url),'utf8')).replace(/^export /gm,'').replace(/^import \{t\} from '\.\/i18n\.js';\n/m,'');
 const compare=(a,b)=>{if(Array.isArray(a)&&Array.isArray(b)){for(let i=0;i<Math.min(a.length,b.length);i++){const result=compare(a[i],b[i]);if(result)return result;}return a.length-b.length;}return a<b?-1:a>b?1:0;};
 function calendar(rows){
   const stats={keys:0,values:0,counts:0,stores:[]};
@@ -21,7 +22,7 @@ function calendar(rows){
       return {openCursor:(range,direction)=>cursor(range,direction,true),openKeyCursor:(range,direction)=>cursor(range,direction,false),count:range=>{stats.counts++;return enqueue(()=>sorted.filter(row=>range.includes(key(row))).length);}};
     }});return tx;
   }};
-  const api=vm.createContext({connection,structuredClone,Blob,Date,IDBKeyRange:{bound}});vm.runInContext(source+'\ndatabase=Promise.resolve(connection);',api);
+  const api=vm.createContext({t,connection,structuredClone,Blob,Date,IDBKeyRange:{bound}});vm.runInContext(source+'\ndatabase=Promise.resolve(connection);',api);
   return {api,stats};
 }
 const header=(id,year,month,day,book='book')=>({id,documentId:book,time:new Date(year,month-1,day,12).getTime(),created:new Date(year,month-1,day,12).getTime(),kind:'edit',annotationCount:id,bookmarkCount:0});

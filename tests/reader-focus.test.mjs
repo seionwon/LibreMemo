@@ -5,6 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {icon} from '../public/src/utils.js';
 import {Reader} from '../public/src/reader.js';
 import {DOMParser} from 'linkedom';
+import {t,locale} from '../public/src/i18n.js';
 const appSource=await readFile(new URL('../public/src/app.js',import.meta.url),'utf8');
 const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');
 const functions=appSource.slice(appSource.indexOf('function handleKey('),appSource.indexOf('async function copyAppURL('));
@@ -17,7 +18,7 @@ function app({native=false,rejected=false,deferred=false,exitDeferred=false}={})
  let finish,finishExit;
  doc.exitFullscreen=async()=>{calls.exited++;if(exitDeferred)await new Promise(resolve=>finishExit=resolve);doc.fullscreenElement=null;doc.dispatchEvent(new doc.defaultView.Event('fullscreenchange'));};
  if(native)root.requestFullscreen=async()=>{calls.requested++;if(rejected)throw Error('Permission denied');if(deferred)await new Promise(resolve=>finish=resolve);doc.fullscreenElement=root;doc.dispatchEvent(new doc.defaultView.Event('fullscreenchange'));};
- const context=vm.createContext({document:doc,$:selector=>doc.querySelector(selector),reader:()=>r,active:()=>({reader:r}),requestAnimationFrame:fn=>fn(),applyToolbarPosition(){},closePopover(){doc.querySelector('#tool-popover').hidden=true;},closeSidebar(){doc.querySelector('#sidebar').hidden=true;},restoreSidebar(){},renderSidebar:value=>calls.search.push(value)});
+ const context=vm.createContext({t,locale,document:doc,$:selector=>doc.querySelector(selector),reader:()=>r,active:()=>({reader:r}),requestAnimationFrame:fn=>fn(),applyToolbarPosition(){},closePopover(){doc.querySelector('#tool-popover').hidden=true;},closeSidebar(){doc.querySelector('#sidebar').hidden=true;},restoreSidebar(){},renderSidebar:value=>calls.search.push(value)});
  new vm.Script('var readerFocused=false,nativeReaderFullscreen=false,focusBusy=false,folderSetupPending=false,startupPending=false;'+functions+'\n'+listener).runInContext(context);
  return {context,doc,root,r,calls,finish:()=>finish(),finishExit:()=>finishExit()};
 }
@@ -194,12 +195,12 @@ test('selected text takes priority over repeat-click mode selection for both tex
 });
 test('saved history, document transfer and freehand area underline have distinct icons from basic toolbar actions',()=>{
  assert.notEqual(icon('history'),icon('undo'));assert.notEqual(icon('file-transfer'),icon('file'));assert.notEqual(icon('area-underline'),icon('underline'));
- assert.match(appSource,/\['history','history','주석 저장 이력'\]/);assert.match(appSource,/\['info','info','문서 정보'\]/);
+ assert.match(appSource,/\['history','history',t\('주석 저장 이력'\)\]/);assert.match(appSource,/\['info','info',t\('문서 정보'\)\]/);
 });
 
 test('document tools and palette window provide an explicit close button and full color selection controls',()=>{
- assert.match(appSource,/data-popover-close aria-label="문서 도구 닫기"/);
- assert.match(appSource,/data-popover-close aria-label="펜과 색상 닫기"/);
+ assert.match(appSource,/data-popover-close aria-label="\$\{t\('문서 도구 닫기'\)\}"/);
+ assert.match(appSource,/data-popover-close aria-label="\$\{t\('펜과 색상 닫기'\)\}"/);
  assert.match(appSource,/id="palette-preset"/);
  assert.match(appSource,/id="add-custom-color"/);
  assert.match(appSource,/id="save-custom-palette"/);
@@ -393,7 +394,7 @@ test('statusbar stays down for routine autosaves and rises for notices and save 
  assert.match(css,/\.statusbar\[data-statusbar-visible\],\.statusbar:hover,\.statusbar:focus-within,\.statusbar:has\(\.save-error,\[data-book-incomplete\],#retry-save\)\{transform:translateY\(0\);opacity:1\}/);
  const doc=new DOMParser().parseFromString(html,'text/html');
  let scheduledFn=null;
- const context=vm.createContext({
+ const context=vm.createContext({t,locale,
   document:doc,
   $:(sel,root=doc)=>root.querySelector(sel),
   tabs:[],

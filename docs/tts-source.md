@@ -1,3 +1,5 @@
+[English](tts-source.en.md)
+
 # MemoSuite TTS 이식 원본
 
 - UI: `packages/shared/src/components/MemoReadAloud.tsx`

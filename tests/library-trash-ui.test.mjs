@@ -5,6 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {documentFor} from './dom.mjs';
 import {escapeHTML} from '../public/src/utils.js';
 import {folderPath} from '../public/src/library-folders.js';
+import {t,locale} from '../public/src/i18n.js';
 
 const source=await readFile(new URL('../public/src/app.js',import.meta.url),'utf8');
 const navigation=source.slice(source.indexOf('function navigateLibraryFolder('),source.indexOf('function toggleLibraryTrash('));
@@ -15,7 +16,7 @@ function fixture({destination='part',folders=[{id:'books',parentId:'',name:'책'
   const record={id:'restored',title:'복원할 책',name:'원본.html',folderId:'part',trashedAt:1000,metadata:{annotations:[{id:'note'}],bookmarks:[{id:'mark'}]}};
   const calls=[],messages=[],errors=[],control={};let saved,focus,scrolled;
   dialog.close=()=>dialog.open=false;
-  const context=vm.createContext({folderPath,esc:escapeHTML,icon:()=>'',formatDate:String,safely:fn=>fn,
+  const context=vm.createContext({t,locale,folderPath,esc:escapeHTML,icon:()=>'',formatDate:String,safely:fn=>fn,
     $:(selector,root=doc)=>root.querySelector(selector),$$:(selector,root=doc)=>[...root.querySelectorAll(selector)],
     modal:(html,bind)=>{dialog.innerHTML=html;dialog.open=true;bind(dialog);},
     restoreDocument:async id=>{calls.push(['restore',id]);await control.restoreWait;if(control.restoreError)throw control.restoreError;saved=structuredClone(record);delete saved.trashedAt;saved.folderId=destination;return saved;},
