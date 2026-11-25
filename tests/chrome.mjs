@@ -56,7 +56,7 @@ export async function launchChrome({firstRun=false}={}){
   for(const path of paths){try{await access(path);executable=path;break;}catch{/* try next platform */}}
   if(!executable)throw new Error('Chrome is required for browser tests. Set CHROME_PATH to its executable.');
   const profile=await mkdtemp(join(tmpdir(),'htmlmemo-chrome-'));
-  const child=spawn(executable,['--headless=new','--no-sandbox','--disable-gpu','--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-component-update','--disable-sync','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'],{stdio:['ignore','ignore','pipe']});
+  const child=spawn(executable,['--headless=new','--no-sandbox','--disable-gpu','--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-component-update','--disable-sync','--remote-debugging-port=0','--lang=ko-KR',`--user-data-dir=${profile}`,'about:blank'],{stdio:['ignore','ignore','pipe']});
   let output='';let endpoint;
   // A fresh CI runner can take longer to start its first browser than later
   // profiles. Keep a finite startup limit without relaxing any page assertions.
@@ -64,6 +64,8 @@ export async function launchChrome({firstRun=false}={}){
   catch(error){child.kill();await rm(profile,{recursive:true,force:true}).catch(()=>{});throw error;}
   const debugURL='http://'+new URL(endpoint).host;
   const targets=await fetch(debugURL+'/json/list').then(response=>response.json());const page=await CDP.connect(targets.find(t=>t.type==='page').webSocketDebuggerUrl);await page.send('Page.enable');await page.send('Runtime.enable');
+  // These checks read the Korean interface; keep it whatever the runner's language is.
+  await page.send('Page.addScriptToEvaluateOnNewDocument',{source:"try{if(!localStorage.getItem('librememo-language'))localStorage.setItem('librememo-language','ko');}catch{}"});
   // Only isolated document frames need Runtime instrumentation. PDF workers and
   // updating service workers must keep their ordinary, unattached lifecycle.
   await page.send('Target.setAutoAttach',{autoAttach:true,waitForDebuggerOnStart:false,flatten:true,filter:[{type:'iframe',exclude:false},{exclude:true}]});

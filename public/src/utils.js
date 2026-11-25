@@ -1,3 +1,4 @@
+import {locale} from './i18n.js';
 export const $ = (selector, root = document) => root.querySelector(selector);
 export const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 export const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -15,8 +16,8 @@ export function normalizeURL(input) {
   return 'https://www.google.com/search?q=' + encodeURIComponent(value);
 }
 export function displayHost(url) { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return '로컬 파일'; } }
-const shortDate=new Intl.DateTimeFormat('ko',{month:'short',day:'numeric'});
-const fullDate=new Intl.DateTimeFormat('ko-KR',{year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'numeric',second:'numeric'});
+const shortDate=new Intl.DateTimeFormat(locale(),{month:'short',day:'numeric'});
+const fullDate=new Intl.DateTimeFormat(locale(),{year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'numeric',second:'numeric'});
 export function formatDate(time,full=false) { return (full?fullDate:shortDate).format(time); }
 export function formatBytes(bytes) { return bytes > 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB'; }
 export function download(content, name, type = 'text/html;charset=utf-8') {
