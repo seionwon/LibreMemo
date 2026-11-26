@@ -1,13 +1,9 @@
-import {HELP_GROUPS as KO_GROUPS,HELP_TOPICS as KO_TOPICS} from './help-content.js';
-import {HELP_GROUPS as EN_GROUPS,HELP_TOPICS as EN_TOPICS} from './help-content.en.js';
 import {escapeHTML as esc,icon} from './utils.js';
 import {APP_VERSION} from './version.js';
 import {t,language} from './i18n.js';
-// Help is written in Korean and English. Other interface languages read the English
-// help; an English topic missing for any reason falls back to the Korean one.
-const english=language()==='en';
-const HELP_GROUPS=english?KO_GROUPS.map(group=>EN_GROUPS.find(item=>item.id===group.id)||group):KO_GROUPS;
-const HELP_TOPICS=english?KO_TOPICS.map(topic=>EN_TOPICS.find(item=>item.id===topic.id)||topic):KO_TOPICS;
+// Help is written in Korean and English with the same topics (a test keeps them in
+// step). Only the language in use is loaded: each is about 210 KB.
+const {HELP_GROUPS,HELP_TOPICS}=language()==='en'?await import('./help-content.en.js'):await import('./help-content.js');
 
 const byId=new Map(HELP_TOPICS.map(topic=>[topic.id,topic]));
 const groupTitle=id=>HELP_GROUPS.find(group=>group.id===id)?.title||'';

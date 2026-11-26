@@ -1,7 +1,6 @@
 // Interface language. The Korean text written in the source is the message key
 // and the Korean translation itself; other languages map that text to theirs.
 // Unknown text falls back to Korean, so a missing entry never breaks the app.
-import {EN} from './locales/en.js';
 
 export const LANGUAGES=Object.freeze([
   Object.freeze({id:'auto',label:'자동 (기기 언어)',native:'Auto (device language)'}),
@@ -9,7 +8,10 @@ export const LANGUAGES=Object.freeze([
   Object.freeze({id:'en',label:'English',native:'English'}),
 ]);
 export const LANGUAGE_KEY='librememo-language';
-const DICTIONARIES={en:EN};
+// A dictionary is loaded only for the language in use: Korean needs none, so a
+// Korean session never downloads or parses the English text.
+const DICTIONARIES={};
+async function loadDictionary(lang){if(lang==='en'&&!DICTIONARIES.en)DICTIONARIES.en=(await import('./locales/en.js')).EN;}
 const LOCALES={ko:'ko-KR',en:'en-US'};
 
 function storedChoice(){
@@ -23,6 +25,8 @@ function detect(){
   return list.length?'en':'ko';
 }
 let current=detect();
+// Written as a direct awaited import so the single-file bundler can inline it.
+if(current==='en')DICTIONARIES.en=(await import('./locales/en.js')).EN;
 
 /** 'ko' or 'en' for this page. Changing it takes effect after a reload. */
 export const language=()=>current;
@@ -35,6 +39,8 @@ export function setLanguageChoice(value){
 }
 /** Tests only: switch the active language without reloading. */
 export function useLanguage(value){current=value==='en'?'en':'ko';}
+/** Switch language after loading its dictionary (workers follow the page's choice). */
+export async function loadLanguage(value){const next=value==='en'?'en':'ko';await loadDictionary(next);current=next;}
 
 /**
  * Translate interface text. `text` is the Korean source string; `{name}`

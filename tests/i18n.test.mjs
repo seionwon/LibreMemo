@@ -5,7 +5,9 @@ import {join,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {DOMParser} from 'linkedom';
 import {EN} from '../public/src/locales/en.js';
-import {t,useLanguage,language,localizeStatic,setLanguageChoice,languageChoice,LANGUAGES} from '../public/src/i18n.js';
+import {t,useLanguage,loadLanguage,language,localizeStatic,setLanguageChoice,languageChoice,LANGUAGES} from '../public/src/i18n.js';
+// The English dictionary loads on demand; fetch it once, then return to Korean.
+await loadLanguage('en');useLanguage('ko');
 
 const root=join(dirname(fileURLToPath(import.meta.url)),'../public');
 const sources=(dir=join(root,'src'))=>readdirSync(dir).flatMap(name=>{const path=join(dir,name);return statSync(path).isDirectory()?sources(path):name.endsWith('.js')?[path]:[];});

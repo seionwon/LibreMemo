@@ -17,6 +17,15 @@ export function bundleModules(sources,entry='src/app.js') {
     if(visiting.has(name))throw new Error('앱 모듈이 서로 순환 참조합니다.');if(!Object.hasOwn(sources,name))throw new Error('앱 모듈이 누락되었습니다: '+name);visiting.add(name);
     const original=assetText(sources[name]);const exports=[...original.matchAll(/\bexport\s+(?:async\s+)?(?:function|class|const|let|var)\s+([$\w]+)/g)].map(match=>match[1]);
     const source=original.replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm,(_,names,relative)=>{if(!relative.startsWith('.'))throw new Error('외부 앱 모듈은 지원하지 않습니다.');const dependency=resolveModule(name,relative),key=JSON.stringify(dependency);compile(dependency,onDemand);return 'const {'+names.trim().replace(/\s+as\s+/g,':')+'}=modules['+key+']'+(onDemand?'??lazy['+key+']()':'')+';';}).replace(/\bexport\s+(?=(?:async\s+)?(?:function|class|const|let|var)\b)/g,'')
+      // An awaited import of an inlined module is simply that module: nothing to wait
+      // for in a single file, and a classic script has no top-level await.
+      .replace(/\bawait\s+import\(\s*(['"])(\.[^'"]+)\1\s*\)/g,(whole,quote,relative)=>{
+        const dependency=resolveModule(name,relative),key=JSON.stringify(dependency);
+        if(!Object.hasOwn(sources,dependency)||visiting.has(dependency))return whole;
+        const saved={compiled:new Set(compiled),lazied:new Set(lazied),visiting:new Set(visiting),length:output.length};
+        try{compile(dependency,true);}catch{compiled=saved.compiled;lazied=saved.lazied;visiting=saved.visiting;output.length=saved.length;return whole;}
+        return '(modules['+key+']??lazy['+key+']())';
+      })
       .replace(/\bimport\(\s*(['"])(\.[^'"]+)\1\s*\)/g,(whole,quote,relative)=>{
         const dependency=resolveModule(name,relative),key=JSON.stringify(dependency);
         if(!Object.hasOwn(sources,dependency)||visiting.has(dependency))return whole;
