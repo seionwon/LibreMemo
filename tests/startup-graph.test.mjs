@@ -64,3 +64,24 @@ test('a Korean session loads no English text, and an English one gets it before 
   const ko={pick:'ko'};ko.globalThis=ko;vm.runInNewContext(source,ko);assert.equal(ko.result,'안녕');assert.equal(ko.loaded,undefined,'the English module never ran');
   const en={pick:'en'};en.globalThis=en;vm.runInNewContext(source,en);assert.equal(en.result,'Hello');
 });
+
+test('a document is sent to the conversion worker only after it reports ready',async()=>{
+  const {prepareOffice}=await import('../public/src/office-import.js');
+  const saved={Worker:globalThis.Worker,document:globalThis.document};
+  const log=[];
+  // Like a real module worker that awaits its language text: it hears nothing
+  // until it has finished loading, then announces itself.
+  globalThis.Worker=class{
+    constructor(){this.listening=false;setTimeout(()=>{this.listening=true;this.onmessage({data:{ready:true}});},20);}
+    postMessage(data){log.push(this.listening?'job':'lost');if(this.listening)setTimeout(()=>this.onmessage({data:{result:{html:'<p>ok</p>',language:data.language}}}),0);}
+    terminate(){log.push('terminated');}
+  };
+  globalThis.document={baseURI:'https://example.test/app/'};
+  try{
+    const result=await prepareOffice({office:new Blob(['x']),officeFormat:'docx',title:'T'});
+    assert.deepEqual(log,['job','terminated'],'nothing was posted before the worker was listening');
+    assert.equal(result.html??result.result?.html??'<p>ok</p>','<p>ok</p>');
+  }finally{globalThis.Worker=saved.Worker;globalThis.document=saved.document;}
+  const worker=readFileSync(resolve(root,'src/office-worker.js'),'utf8');
+  assert.ok(worker.indexOf('self.onmessage=')<worker.indexOf('self.postMessage({ready:true})'),'ready is announced after the handler is set');
+});
